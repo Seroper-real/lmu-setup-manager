@@ -1,0 +1,89 @@
+{
+    "tracks": [
+        {
+            "tt_patterns": [
+                "losail|lusail|qatar"
+            ],
+            "lmu_folder_name": "Qatar"
+        },
+        {
+            "tt_patterns": [
+                "imola"
+            ],
+            "lmu_folder_name": "Imola"
+        },
+        {
+            "tt_patterns": [
+                "cota|americas"
+            ],
+            "lmu_folder_name": "Circuit Of The Americas"
+        },
+        {
+            "tt_patterns": [
+                "spa"
+            ],
+            "lmu_folder_name": "Spa"
+        },
+        {
+            "tt_patterns": [
+                "rain",
+                "Bahrain\\ \\-\\ WEC"
+            ],
+            "lmu_folder_name": "Bahrain"
+        },
+        {
+            "tt_patterns": [
+                "mans"
+            ],
+            "lmu_folder_name": "Lemans"
+        },
+        {
+            "tt_patterns": [
+                "interlagos|pace|carlos"
+            ],
+            "lmu_folder_name": "Interlagos"
+        },
+        {
+            "tt_patterns": [
+                "paul|ricard"
+            ],
+            "lmu_folder_name": "Paulricard"
+        },
+        {
+            "tt_patterns": [
+                "fuji"
+            ],
+            "lmu_folder_name": "Fuji"
+        },
+        {
+            "tt_patterns": [
+                "portim"
+            ],
+            "lmu_folder_name": "Portimao"
+        },
+        {
+            "tt_patterns": [
+                "monza"
+            ],
+            "lmu_folder_name": "Monza"
+        },
+        {
+            "tt_patterns": [
+                "sebr"
+            ],
+            "lmu_folder_name": "Sebring"
+        },
+        {
+            "tt_patterns": [
+                "silv"
+            ],
+            "lmu_folder_name": "Silverstone"
+        },
+        {
+            "tt_patterns": [
+                "barc"
+            ],
+            "lmu_folder_name": "Circuit De Barcelona"
+        }
+    ]
+}

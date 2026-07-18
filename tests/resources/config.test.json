@@ -1,0 +1,45 @@
+{
+    "mode": "full",
+    "logging": {
+        "console": {
+            "level": "CRITICAL",
+            "format": "%(message)s"
+        },
+        "file": {
+            "level": "CRITICAL",
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        }
+    },
+    "network": {
+        "base_url": "https://services.example.invalid/api",
+        "consumer_id": "trackTitan",
+        "page_size": 64,
+        "min_delay": 0.0,
+        "max_delay": 0.0,
+        "timeout": 5
+    },
+    "paths": {
+        "download": {
+            "base_path": "downloads",
+            "clean_download_after_copy": true
+        },
+        "setups": {
+            "overwrite": true,
+            "delete_previous_version": true,
+            "lmu_base_path": "lmu",
+            "file_extensions": [
+                ".svm"
+            ]
+        }
+    },
+    "remote_tracks": {
+        "enabled": false,
+        "url": "https://example.invalid/tracks.json",
+        "timeout": 5
+    },
+    "dropbox": {
+        "folder": "/lmu-setups-test",
+        "timeout": 5,
+        "upload_workers": 4
+    }
+}

@@ -1,0 +1,25 @@
+from dataclasses import dataclass
+from enum import Enum
+from typing import Callable, Optional
+
+
+class ProgressKind(str, Enum):
+    START = "start"
+    INSTALL = "install"
+    FINISH = "finish"
+    STOPPED = "stopped"
+    ERROR = "error"
+
+
+@dataclass(frozen=True)
+class ProgressEvent:
+    kind: ProgressKind
+    title: str
+    meta: Optional[str] = None
+    # Set on ERROR events raised from an AuthError (expired/invalid TrackTitan or
+    # Dropbox credentials): the GUI shows these as a dedicated popup with a link
+    # to Settings instead of folding them into the plain activity log.
+    is_auth_error: bool = False
+
+
+ProgressCallback = Callable[[ProgressEvent], None]

@@ -1,0 +1,75 @@
+name: Build and Release Windows Exe
+
+on:
+  push:
+    tags:
+      - 'v*' # Si attiva quando fai il push di un tag (es. v1.0.1)
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configura Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.3'
+
+      - name: Installa dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Esegui test
+        run: pytest tests/ -v --tb=short
+        env:
+          ACCESS_TOKEN_LIST: test-token-list
+          ACCESS_TOKEN_DOWNLOAD: test-token-download
+          USER_ID: test-user-id
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configura Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.3'
+
+      - name: Installa dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+
+      - name: Compila con PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name "lmu-setup-manager" --icon=assets\icon.ico --paths=src --collect-all dropbox --collect-all webview src\main.py
+
+      - name: Prepara il pacchetto Release
+        shell: cmd
+        run: |
+          if not exist release_pkg mkdir release_pkg
+          if not exist release_pkg\config mkdir release_pkg\config
+          copy dist\lmu-setup-manager.exe release_pkg\
+          copy config\tracks.json release_pkg\config\
+          copy readme.md release_pkg\
+          copy readme.it.md release_pkg\
+          xcopy /Y /E /I src\gui\web release_pkg\gui\web\
+          powershell -Command "Compress-Archive -Path 'release_pkg\*' -DestinationPath 'lmu-setup-manager_Windows.zip' -Force"
+
+      - name: Crea Release e carica Asset
+        uses: softprops/action-gh-release@v3
+        with:
+          files: lmu-setup-manager_Windows.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

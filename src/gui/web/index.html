@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>LMU Setup Manager</title>
+<link rel="stylesheet" href="styles.css">
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l4-9 4 6 3-4 5 7"></path></svg></span>
+      <span class="logo-text">
+        <span class="logo-mark">LMU</span>
+        <span class="logo-sub" id="logo-sub"></span>
+      </span>
+    </div>
+
+    <nav class="sidebar-nav" id="nav"></nav>
+
+    <div class="sidebar-footer">
+      <div class="mode-badge" id="mode-badge"></div>
+      <div class="installed-count" id="installed-count"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section class="view" id="view-setups"></section>
+    <section class="view" id="view-download"></section>
+    <section class="view" id="view-settings"></section>
+  </main>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root" class="toast-root"></div>
+
+<script src="i18n.js"></script>
+<script src="app.js"></script>

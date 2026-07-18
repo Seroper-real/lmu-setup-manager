@@ -1,0 +1,176 @@
+import pytest
+from domain.setup_db import InstalledSetup
+
+
+def _setup(id="s1", track="Spa", car="Ferrari", last_updated=1000):
+    from domain.setup import Setup
+    return Setup({
+        "id": id,
+        "title": "T",
+        "setupCombos": [{"car": {"name": car}, "track": {"name": track}}],
+        "hotlapLink": None,
+        "lastUpdatedAt": last_updated,
+        "isBundle": False,
+    })
+
+
+def test_create_tables_idempotent(in_memory_db):
+    in_memory_db.create_tables()  # seconda chiamata non deve sollevare
+
+
+def test_not_installed_on_empty_db(in_memory_db):
+    assert in_memory_db.is_setup_installed_last_version(_setup()) is False
+
+
+def test_add_then_installed(in_memory_db, tmp_path):
+    s = _setup(id="abc", last_updated=5000)
+    in_memory_db.add_installed_setup(s, [], True, tmp_path / "Spa")
+    assert in_memory_db.is_setup_installed_last_version(s) is True
+
+
+def test_newer_version_not_installed(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="abc", last_updated=1000), [], True, tmp_path / "Spa")
+    assert in_memory_db.is_setup_installed_last_version(_setup(id="abc", last_updated=9999)) is False
+
+
+def test_add_performs_upsert(in_memory_db, tmp_path):
+    dir_ = tmp_path / "Spa"
+    in_memory_db.add_installed_setup(_setup(id="abc", last_updated=100), [], True, dir_)
+    in_memory_db.add_installed_setup(_setup(id="abc", last_updated=200), [], True, dir_)
+    cur = in_memory_db.conn.execute("SELECT COUNT(*) FROM installed_setups WHERE setup_id='abc'")
+    assert cur.fetchone()[0] == 1
+
+
+def test_fetch_setup_files_returns_names(in_memory_db, tmp_path):
+    files = [tmp_path / "a.svm", tmp_path / "b.svm"]
+    in_memory_db.add_installed_setup(_setup(id="xyz"), files, True, tmp_path / "T")
+    assert set(in_memory_db.fetch_setup_files("xyz")) == {"a.svm", "b.svm"}
+
+
+def test_fetch_setup_files_missing_id(in_memory_db):
+    assert in_memory_db.fetch_setup_files("ghost") == []
+
+
+def test_is_track_found_true(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="t1"), [], True, tmp_path / "T")
+    assert in_memory_db.is_track_found("t1") is True
+
+
+def test_is_track_found_false(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="t2"), [], False, tmp_path / "T")
+    assert in_memory_db.is_track_found("t2") is False
+
+
+def test_is_track_found_missing_id(in_memory_db):
+    assert in_memory_db.is_track_found("ghost") is False
+
+
+def test_fetch_tracks_not_found(in_memory_db, tmp_path):
+    dir_ = tmp_path / "T"
+    in_memory_db.add_installed_setup(_setup(id="found"), [], True, dir_)
+    in_memory_db.add_installed_setup(_setup(id="notfound"), [], False, dir_)
+    ids = [r.setup_id for r in in_memory_db.fetch_tracks_not_found()]
+    assert "notfound" in ids
+    assert "found" not in ids
+
+
+def test_update_installed_setup(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="upd"), [], False, tmp_path / "Old")
+    row = in_memory_db.fetch_tracks_not_found()[0]
+    row.track_found = True
+    row.installation_folder = "New"
+    in_memory_db.update_installed_setup(row)
+    assert in_memory_db.is_track_found("upd") is True
+
+
+def test_is_installed_last_version_by_id_ts(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="zz", last_updated=500), [], True, tmp_path / "T")
+    assert in_memory_db.is_installed_last_version("zz", 500) is True
+    assert in_memory_db.is_installed_last_version("zz", 400) is True
+    assert in_memory_db.is_installed_last_version("zz", 600) is False
+    assert in_memory_db.is_installed_last_version("absent", 1) is False
+
+
+def test_fetch_all_installed_setups_includes_all_rows(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="found", track="Spa"), [], True, tmp_path / "T")
+    in_memory_db.add_installed_setup(_setup(id="notfound", track="Imola"), [], False, tmp_path / "T")
+
+    ids = [r.setup_id for r in in_memory_db.fetch_all_installed_setups()]
+
+    assert "found" in ids
+    assert "notfound" in ids
+
+
+def test_fetch_all_installed_setups_orders_by_track_then_car(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="z", track="Zolder", car="Ferrari"), [], True, tmp_path / "T")
+    in_memory_db.add_installed_setup(_setup(id="a2", track="Imola", car="Porsche"), [], True, tmp_path / "T")
+    in_memory_db.add_installed_setup(_setup(id="a1", track="Imola", car="Ferrari"), [], True, tmp_path / "T")
+
+    rows = in_memory_db.fetch_all_installed_setups()
+
+    assert [(r.track, r.car) for r in rows] == [
+        ("Imola", "Ferrari"),
+        ("Imola", "Porsche"),
+        ("Zolder", "Ferrari"),
+    ]
+
+
+def test_fetch_all_installed_setups_empty_db(in_memory_db):
+    assert in_memory_db.fetch_all_installed_setups() == []
+
+
+def test_installed_setup_from_row():
+    row = (
+        "id1", "Spa", "Ferrari", 1000, 2000, "http://lap",
+        '{"x":1}', '["a.svm"]', 1, "/base", "folder", "Spa"
+    )
+    s = InstalledSetup.from_row(row)
+    assert s.setup_id == "id1"
+    assert s.api_data == {"x": 1}
+    assert s.file_names == ["a.svm"]
+    assert s.track_found is True
+    assert s.matched_track_id == "Spa"
+
+
+def test_add_installed_setup_stores_matched_track_id(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="m1", track="Bahrain - WEC"), [], True, tmp_path / "Bahrain", "Bahrain")
+    row = in_memory_db.fetch_all_installed_setups()[0]
+    assert row.matched_track_id == "Bahrain"
+
+
+def test_add_installed_setup_defaults_matched_track_id_to_none(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="m2", track="Mystery"), [], False, tmp_path / "Mystery-HYMO")
+    row = in_memory_db.fetch_all_installed_setups()[0]
+    assert row.matched_track_id is None
+
+
+def test_update_installed_setup_persists_matched_track_id(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="m3", track="Mystery"), [], False, tmp_path / "Mystery-HYMO")
+    row = in_memory_db.fetch_all_installed_setups()[0]
+    row.matched_track_id = "Imola"
+    row.track_found = True
+    in_memory_db.update_installed_setup(row)
+    updated = in_memory_db.fetch_all_installed_setups()[0]
+    assert updated.matched_track_id == "Imola"
+
+
+def test_fetch_installed_setup_returns_the_matching_row(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="s1", track="Spa"), [], True, tmp_path / "Spa")
+    setup = in_memory_db.fetch_installed_setup("s1")
+    assert setup is not None
+    assert setup.setup_id == "s1"
+    assert setup.track == "Spa"
+
+
+def test_fetch_installed_setup_missing_id_returns_none(in_memory_db):
+    assert in_memory_db.fetch_installed_setup("ghost") is None
+
+
+def test_delete_installed_setup_removes_the_row(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="s1"), [], True, tmp_path / "Spa")
+    in_memory_db.delete_installed_setup("s1")
+    assert in_memory_db.fetch_installed_setup("s1") is None
+
+
+def test_delete_installed_setup_missing_id_is_a_noop(in_memory_db):
+    in_memory_db.delete_installed_setup("ghost")  # must not raise

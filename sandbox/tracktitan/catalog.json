@@ -1,0 +1,618 @@
+{
+  "data": {
+    "setups": [
+      {
+        "id": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+        "title": "Spa Qualifying",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Porsche 963"
+            },
+            "track": {
+              "name": "Spa - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+        "lastUpdatedAt": 1700000000,
+        "isBundle": false
+      },
+      {
+        "id": "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+        "title": "Unmapped Track Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Ferrari 499P"
+            },
+            "track": {
+              "name": "Nordschleife"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+        "lastUpdatedAt": 1700000100,
+        "isBundle": false
+      },
+      {
+        "id": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+        "title": "Season Bundle",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Porsche 963"
+            },
+            "track": {
+              "name": "Imola"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+        "lastUpdatedAt": 1700000200,
+        "isBundle": true
+      },
+      {
+        "id": "3d4e5f6a-7b8c-4d9e-8f0a-2b3c4d5e6f70",
+        "title": "Nested Archive Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Cadillac V-Series.R"
+            },
+            "track": {
+              "name": "Monza"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/3d4e5f6a-7b8c-4d9e-8f0a-2b3c4d5e6f70",
+        "lastUpdatedAt": 1700000300,
+        "isBundle": false
+      },
+      {
+        "id": "4386d008-9b2c-4fc8-b497-ad345ae5a7ec",
+        "title": "Autódromo José Carlos Pace (Interlagos) - Alpine A424 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Alpine A424"
+            },
+            "track": {
+              "name": "Autódromo José Carlos Pace (Interlagos)"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/4386d008-9b2c-4fc8-b497-ad345ae5a7ec",
+        "lastUpdatedAt": 1700000400,
+        "isBundle": false
+      },
+      {
+        "id": "4eea4208-e25c-4b82-b416-e98965dfca2a",
+        "title": "Bahrain - WEC - Aston Martin Valkyrie LMH Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Aston Martin Valkyrie LMH"
+            },
+            "track": {
+              "name": "Bahrain - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/4eea4208-e25c-4b82-b416-e98965dfca2a",
+        "lastUpdatedAt": 1700000500,
+        "isBundle": false
+      },
+      {
+        "id": "68d7c4e0-e71f-4d2f-add6-085e62e747ad",
+        "title": "Bahrain International Circuit - Aston Martin Vantage AMR LMGT3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Aston Martin Vantage AMR LMGT3"
+            },
+            "track": {
+              "name": "Bahrain International Circuit"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/68d7c4e0-e71f-4d2f-add6-085e62e747ad",
+        "lastUpdatedAt": 1700000600,
+        "isBundle": false
+      },
+      {
+        "id": "b9c968e8-0143-47f8-ae2a-ee4597226777",
+        "title": "COTA - WEC - Aston Martin Vantage GTE Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Aston Martin Vantage GTE"
+            },
+            "track": {
+              "name": "COTA - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/b9c968e8-0143-47f8-ae2a-ee4597226777",
+        "lastUpdatedAt": 1700000700,
+        "isBundle": false
+      },
+      {
+        "id": "eb91b764-0d12-4c18-8a35-b59c2cd50178",
+        "title": "Circuit de Barcelona - BMW M Hybrid V8 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "BMW M Hybrid V8"
+            },
+            "track": {
+              "name": "Circuit de Barcelona"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/eb91b764-0d12-4c18-8a35-b59c2cd50178",
+        "lastUpdatedAt": 1700000800,
+        "isBundle": false
+      },
+      {
+        "id": "03153f8a-81c0-4e4c-9efa-ae0e1d89dee7",
+        "title": "Fuji - WEC - BMW M4 LMGT3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "BMW M4 LMGT3"
+            },
+            "track": {
+              "name": "Fuji - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/03153f8a-81c0-4e4c-9efa-ae0e1d89dee7",
+        "lastUpdatedAt": 1700000900,
+        "isBundle": false
+      },
+      {
+        "id": "736b9a17-9f1b-498a-87a4-a1c7a34ff7d1",
+        "title": "Fuji International Speedway - Cadillac V-Series.R Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Cadillac V-Series.R"
+            },
+            "track": {
+              "name": "Fuji International Speedway"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/736b9a17-9f1b-498a-87a4-a1c7a34ff7d1",
+        "lastUpdatedAt": 1700001000,
+        "isBundle": false
+      },
+      {
+        "id": "197dae55-a428-4357-91aa-2cffd28f8a4f",
+        "title": "Imola - Corvette C8.R GTE Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Corvette C8.R GTE"
+            },
+            "track": {
+              "name": "Imola"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/197dae55-a428-4357-91aa-2cffd28f8a4f",
+        "lastUpdatedAt": 1700001100,
+        "isBundle": false
+      },
+      {
+        "id": "d1174bad-338a-4deb-a11a-18a3851fa73f",
+        "title": "Imola - WEC - Corvette Z06 GT3R Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Corvette Z06 GT3R"
+            },
+            "track": {
+              "name": "Imola - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/d1174bad-338a-4deb-a11a-18a3851fa73f",
+        "lastUpdatedAt": 1700001200,
+        "isBundle": false
+      },
+      {
+        "id": "6b78054c-fd3f-4d55-bd4b-d3cc6d9dc641",
+        "title": "Interlagos - WEC - Duqueine D09 LMP3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Duqueine D09 LMP3"
+            },
+            "track": {
+              "name": "Interlagos - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/6b78054c-fd3f-4d55-bd4b-d3cc6d9dc641",
+        "lastUpdatedAt": 1700001300,
+        "isBundle": false
+      },
+      {
+        "id": "c86b83c2-243e-4e9e-af08-334a4e71c6fd",
+        "title": "Le Mans - WEC - Ferrari 296 GT3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Ferrari 296 GT3"
+            },
+            "track": {
+              "name": "Le Mans - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/c86b83c2-243e-4e9e-af08-334a4e71c6fd",
+        "lastUpdatedAt": 1700001400,
+        "isBundle": false
+      },
+      {
+        "id": "d2320e98-aced-4260-88b4-d2dd4540b6bf",
+        "title": "Le Mans La Sarthe - Ferrari 488 GTE Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Ferrari 488 GTE"
+            },
+            "track": {
+              "name": "Le Mans La Sarthe"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/d2320e98-aced-4260-88b4-d2dd4540b6bf",
+        "lastUpdatedAt": 1700001500,
+        "isBundle": false
+      },
+      {
+        "id": "c286d95e-6b25-4a2c-adfb-7b4f5718a76b",
+        "title": "Losail - Ferrari 499P Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Ferrari 499P"
+            },
+            "track": {
+              "name": "Losail"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/c286d95e-6b25-4a2c-adfb-7b4f5718a76b",
+        "lastUpdatedAt": 1700001600,
+        "isBundle": false
+      },
+      {
+        "id": "ec6a5052-2f4a-4b0c-aed8-ce67fe0015ba",
+        "title": "Lusail International Circuit - Ford Mustang LMGT3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Ford Mustang LMGT3"
+            },
+            "track": {
+              "name": "Lusail International Circuit"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/ec6a5052-2f4a-4b0c-aed8-ce67fe0015ba",
+        "lastUpdatedAt": 1700001700,
+        "isBundle": false
+      },
+      {
+        "id": "d4a27820-ebc1-4715-8781-f45b6c1d1de4",
+        "title": "Monza - Genesis GMR-001 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Genesis GMR-001"
+            },
+            "track": {
+              "name": "Monza"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/d4a27820-ebc1-4715-8781-f45b6c1d1de4",
+        "lastUpdatedAt": 1700001800,
+        "isBundle": false
+      },
+      {
+        "id": "98a46b90-26f9-4a0a-a95c-4fb6da636622",
+        "title": "Monza - WEC - Ginetta G61-LT-P325 EVO Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Ginetta G61-LT-P325 EVO"
+            },
+            "track": {
+              "name": "Monza - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/98a46b90-26f9-4a0a-a95c-4fb6da636622",
+        "lastUpdatedAt": 1700001900,
+        "isBundle": false
+      },
+      {
+        "id": "415ec1c5-26a8-4c60-bbd2-94a3c1ecc511",
+        "title": "Paul Ricard - ELMS - Glickenhaus SCG 007 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Glickenhaus SCG 007"
+            },
+            "track": {
+              "name": "Paul Ricard - ELMS"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/415ec1c5-26a8-4c60-bbd2-94a3c1ecc511",
+        "lastUpdatedAt": 1700002000,
+        "isBundle": false
+      },
+      {
+        "id": "f6642e6c-33f8-4118-bd3f-9aab09f05ca2",
+        "title": "Portimao - WEC - Isotta Fraschini Tipo 6 LMH-C Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Isotta Fraschini Tipo 6 LMH-C"
+            },
+            "track": {
+              "name": "Portimao - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/f6642e6c-33f8-4118-bd3f-9aab09f05ca2",
+        "lastUpdatedAt": 1700002100,
+        "isBundle": false
+      },
+      {
+        "id": "c3c91305-f20a-4f25-9f25-afb2cc622845",
+        "title": "Sebring - WEC - Lamborghini Huracan LMGT3 EVO2 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Lamborghini Huracan LMGT3 EVO2"
+            },
+            "track": {
+              "name": "Sebring - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/c3c91305-f20a-4f25-9f25-afb2cc622845",
+        "lastUpdatedAt": 1700002200,
+        "isBundle": false
+      },
+      {
+        "id": "c77a544f-7a6b-4b42-b662-ba94ce704e47",
+        "title": "Silverstone Grand Prix Circuit - ELMS - Lamborghini SC63 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Lamborghini SC63"
+            },
+            "track": {
+              "name": "Silverstone Grand Prix Circuit - ELMS"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/c77a544f-7a6b-4b42-b662-ba94ce704e47",
+        "lastUpdatedAt": 1700002300,
+        "isBundle": false
+      },
+      {
+        "id": "f7cdd787-1e26-48b4-8321-6cd1d0382335",
+        "title": "Spa - WEC - Lexus RCF LMGT3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Lexus RCF LMGT3"
+            },
+            "track": {
+              "name": "Spa - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/f7cdd787-1e26-48b4-8321-6cd1d0382335",
+        "lastUpdatedAt": 1700002400,
+        "isBundle": false
+      },
+      {
+        "id": "202435a6-dad0-4475-ab77-63ee73c4186b",
+        "title": "Spa-Francorchamps - Ligier JS P325 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Ligier JS P325"
+            },
+            "track": {
+              "name": "Spa-Francorchamps"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/202435a6-dad0-4475-ab77-63ee73c4186b",
+        "lastUpdatedAt": 1700002500,
+        "isBundle": false
+      },
+      {
+        "id": "8d4fe28d-1fa7-4a90-b88d-0f82485ded4d",
+        "title": "Autódromo José Carlos Pace (Interlagos) - McLaren 720S Evo GT3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "McLaren 720S Evo GT3"
+            },
+            "track": {
+              "name": "Autódromo José Carlos Pace (Interlagos)"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/8d4fe28d-1fa7-4a90-b88d-0f82485ded4d",
+        "lastUpdatedAt": 1700002600,
+        "isBundle": false
+      },
+      {
+        "id": "97196ed6-0e1e-4e20-b7d0-b310c34d836c",
+        "title": "Bahrain - WEC - Mercedes-AMG LMGT3 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Mercedes-AMG LMGT3"
+            },
+            "track": {
+              "name": "Bahrain - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/97196ed6-0e1e-4e20-b7d0-b310c34d836c",
+        "lastUpdatedAt": 1700002700,
+        "isBundle": false
+      },
+      {
+        "id": "d667f24d-ac6c-468c-9645-7999ccccc16d",
+        "title": "Bahrain International Circuit - Oreca 07 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Oreca 07"
+            },
+            "track": {
+              "name": "Bahrain International Circuit"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/d667f24d-ac6c-468c-9645-7999ccccc16d",
+        "lastUpdatedAt": 1700002800,
+        "isBundle": false
+      },
+      {
+        "id": "33fbb0a7-07d4-43d8-82a0-22e4cadb3cac",
+        "title": "COTA - WEC - Oreca 07 Gibson 2024 (ELMS) Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Oreca 07 Gibson 2024 (ELMS)"
+            },
+            "track": {
+              "name": "COTA - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/33fbb0a7-07d4-43d8-82a0-22e4cadb3cac",
+        "lastUpdatedAt": 1700002900,
+        "isBundle": false
+      },
+      {
+        "id": "2f6cf5f6-190b-43a3-8772-8ad9b037593f",
+        "title": "Circuit de Barcelona - Peugeot 9X8 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Peugeot 9X8"
+            },
+            "track": {
+              "name": "Circuit de Barcelona"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/2f6cf5f6-190b-43a3-8772-8ad9b037593f",
+        "lastUpdatedAt": 1700003000,
+        "isBundle": false
+      },
+      {
+        "id": "653fd726-c5d9-4ee6-9408-82e3bcaba1b0",
+        "title": "Fuji - WEC - Peugeot 9X8 Evo Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Peugeot 9X8 Evo"
+            },
+            "track": {
+              "name": "Fuji - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/653fd726-c5d9-4ee6-9408-82e3bcaba1b0",
+        "lastUpdatedAt": 1700003100,
+        "isBundle": false
+      },
+      {
+        "id": "787db9f9-c79c-4c00-9a03-9af8ee61b478",
+        "title": "Fuji International Speedway - Porsche 911 RSR-19 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Porsche 911 RSR-19"
+            },
+            "track": {
+              "name": "Fuji International Speedway"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/787db9f9-c79c-4c00-9a03-9af8ee61b478",
+        "lastUpdatedAt": 1700003200,
+        "isBundle": false
+      },
+      {
+        "id": "7185a701-f2d9-4665-8b5b-091a4fb008d8",
+        "title": "Imola - Porsche 963 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Porsche 963"
+            },
+            "track": {
+              "name": "Imola"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/7185a701-f2d9-4665-8b5b-091a4fb008d8",
+        "lastUpdatedAt": 1700003300,
+        "isBundle": false
+      },
+      {
+        "id": "68264748-70ac-4fa1-ae2b-4f064c9de30f",
+        "title": "Imola - WEC - Porsche 992 LMGT3R Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Porsche 992 LMGT3R"
+            },
+            "track": {
+              "name": "Imola - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/68264748-70ac-4fa1-ae2b-4f064c9de30f",
+        "lastUpdatedAt": 1700003400,
+        "isBundle": false
+      },
+      {
+        "id": "2337e6f6-7d52-439d-a30c-b1c793cfaaaf",
+        "title": "Interlagos - WEC - Toyota GR010 Setup",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Toyota GR010"
+            },
+            "track": {
+              "name": "Interlagos - WEC"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/2337e6f6-7d52-439d-a30c-b1c793cfaaaf",
+        "lastUpdatedAt": 1700003500,
+        "isBundle": false
+      }
+    ]
+  }
+}

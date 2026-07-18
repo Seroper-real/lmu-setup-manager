@@ -1,0 +1,182 @@
+import argparse, logging, os, sys, threading
+from typing import Optional
+
+from core.progress import ProgressCallback, ProgressEvent, ProgressKind
+
+
+def _apply_cli_env(argv: Optional[list[str]] = None) -> None:
+    """Translate CLI flags into the env vars config.py reads.
+
+    Must run before `config` is imported, since config.py reads the environment at
+    import time. A flag only ever *sets* a variable, never clears one, so an
+    already-exported MOCK_* still wins: the CLI and the environment compose.
+
+    These flags no longer select a headless execution path (there isn't one): they
+    only preconfigure the sandbox/mode state the GUI opens with.
+    """
+    parser = argparse.ArgumentParser(prog="lmu-setup-manager")
+    parser.add_argument("--sandbox", action="store_true", help="mock every external system (TrackTitan, LMU, Dropbox)")
+    parser.add_argument("--mock-tracktitan", action="store_true", help="serve setups from the local fixture catalog")
+    parser.add_argument("--mock-lmu", action="store_true", help="install into the sandbox folder instead of the game")
+    parser.add_argument("--mock-dropbox", action="store_true", help="use a local folder instead of Dropbox")
+    parser.add_argument("--mock-base-path", metavar="PATH", help="root for the sandbox directories (default: sandbox)")
+    parser.add_argument("--mode", choices=sorted({"full", "master", "slave"}), help="override the mode from config.json")
+    args = parser.parse_args(argv)
+
+    if args.sandbox or args.mock_tracktitan:
+        os.environ["MOCK_TRACKTITAN"] = "true"
+    if args.sandbox or args.mock_lmu:
+        os.environ["MOCK_LMU"] = "true"
+    if args.sandbox or args.mock_dropbox:
+        os.environ["MOCK_DROPBOX"] = "true"
+    if args.mock_base_path:
+        os.environ["MOCK_BASE_PATH"] = args.mock_base_path
+    if args.mode:
+        os.environ["MODE"] = args.mode
+
+
+def setup_logging() -> logging.Logger:
+    from core.config import LOG_FORMAT_CONSOLE, LOG_FORMAT_FILE, LOG_LEVEL_CONSOLE, LOG_LEVEL_FILE
+
+    levels = logging.getLevelNamesMapping()
+
+    lvl_c = levels.get(LOG_LEVEL_CONSOLE.upper(), logging.INFO)
+    lvl_f = levels.get(LOG_LEVEL_FILE.upper(), logging.DEBUG)
+
+    logger = logging.getLogger("TrackTitanDownloader")
+    logger.setLevel(min(lvl_c, lvl_f))
+
+    # --- Console Handler ---
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(lvl_c)
+    console_handler.setFormatter(logging.Formatter(LOG_FORMAT_CONSOLE))
+
+    # --- File Handler ---
+    file_handler = logging.FileHandler('app_debug.log', mode='a', encoding='utf-8')
+    file_handler.setLevel(lvl_f)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT_FILE))
+
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+def _log_sandbox(log: logging.Logger) -> None:
+    """Record in every log whether this run touched the real world."""
+    from core.config import MOCK_TRACKTITAN, MOCK_LMU, MOCK_DROPBOX, SANDBOX_ENABLED
+
+    if not SANDBOX_ENABLED:
+        return
+    active = [
+        name for name, on in (
+            ("TrackTitan", MOCK_TRACKTITAN),
+            ("LMU", MOCK_LMU),
+            ("Dropbox", MOCK_DROPBOX),
+        ) if on
+    ]
+    log.warning(f"SANDBOX ACTIVE - faking: {', '.join(active)}")
+
+
+def run_full(
+    log: logging.Logger,
+    *,
+    on_progress: Optional[ProgressCallback] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> None:
+    from domain.setup_db import SetupDb
+    from processing.track_manager import TrackManager
+    from orchestration.download_manager import DownloadManager
+    from processing.setup_manager import SetupManager
+    from clients.protocols import build_track_titan_client
+
+    database = SetupDb()
+    track_manager = TrackManager()
+    download_manager = DownloadManager(database=database, client=build_track_titan_client(), cancel_event=cancel_event)
+    setup_manager = SetupManager(track_manager=track_manager, database=database)
+
+    setup_manager.update_tracks_not_found()
+
+    def _emit(event: ProgressEvent) -> None:
+        if on_progress is not None:
+            on_progress(event)
+
+    while setups := download_manager.get_setups_list():
+        for setup in setups:
+            if cancel_event is not None and cancel_event.is_set():
+                _emit(ProgressEvent(ProgressKind.STOPPED, "Download stopped"))
+                return
+
+            log.info(f"#################")
+            log.info(f"{setup.title}")
+            log.info(f"  ID: {setup.id}")
+            log.info(f"  Car: {setup.car}")
+            log.info(f"  Track: {setup.track}")
+            _emit(ProgressEvent(ProgressKind.START, setup.title, meta=f"{setup.track} - {setup.car}"))
+
+            if setup.is_bundle:
+                log.info(f"Skipping bundle.")
+                continue  # Non scarichiamo i bundle
+            path = download_manager.download(setup)
+
+            if path:
+                setup_manager.install_setup(path, setup)
+                _emit(ProgressEvent(ProgressKind.INSTALL, setup.title, meta=f"{setup.track} - {setup.car}"))
+
+    _emit(ProgressEvent(ProgressKind.FINISH, "Download completed"))
+
+
+def run_master(
+    log: logging.Logger,
+    *,
+    on_progress: Optional[ProgressCallback] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> None:
+    from orchestration.download_manager import DownloadManager
+    from orchestration.master_manager import MasterManager
+    from clients.protocols import build_dropbox_client, build_track_titan_client
+
+    download_manager = DownloadManager(database=None, client=build_track_titan_client(), cancel_event=cancel_event)
+    dropbox_client = build_dropbox_client()
+    # The factory gives each upload worker its own client instead of sharing one.
+    MasterManager(
+        download_manager=download_manager,
+        dropbox_client=dropbox_client,
+        client_factory=build_dropbox_client,
+        on_progress=on_progress,
+        cancel_event=cancel_event,
+    ).run()
+
+
+def run_slave(
+    log: logging.Logger,
+    *,
+    on_progress: Optional[ProgressCallback] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> None:
+    from domain.setup_db import SetupDb
+    from processing.track_manager import TrackManager
+    from processing.setup_manager import SetupManager
+    from orchestration.slave_manager import SlaveManager
+    from clients.protocols import build_dropbox_client
+
+    database = SetupDb()
+    track_manager = TrackManager()
+    setup_manager = SetupManager(track_manager=track_manager, database=database)
+    dropbox_client = build_dropbox_client()
+    SlaveManager(
+        dropbox_client=dropbox_client,
+        setup_manager=setup_manager,
+        database=database,
+        on_progress=on_progress,
+        cancel_event=cancel_event,
+    ).run()
+
+
+if __name__ == "__main__":
+    _apply_cli_env()
+    from gui.window import launch
+    launch()

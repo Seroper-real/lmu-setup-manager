@@ -1,0 +1,73 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Pytest cache
+.pytest_cache/
+
+# MyPy cache
+.mypy_cache/
+
+# VSCode settings (ignore the folder's contents, but keep the shared launch profiles).
+.vscode/*
+!.vscode/launch.json
+
+# JetBrains IDEs (PyCharm, etc.)
+.idea/
+
+# Local configuration files
+*.env
+
+# Downloads and temporary files
+*.zip
+*.tar.gz
+*.tmp
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+downloads
+lmu-setup-manager.spec
+data
+
+# Sandbox: runtime output is throwaway, the TrackTitan fixtures are tracked.
+sandbox/lmu/
+sandbox/dropbox/
+sandbox/data/
+!sandbox/tracktitan/setups/*.zip
+
+.claude/worktrees/
+.claude/settings.local.json
+.claude/todos/
+
+tmp
+
+# Claude Code project instructions - not meant for the public repo.
+CLAUDE.md

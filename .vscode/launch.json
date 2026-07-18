@@ -1,0 +1,53 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Full — sandbox (all mocked)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "args": ["--sandbox"]
+        },
+        {
+            "name": "Master — sandbox (all mocked)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "args": ["--sandbox", "--mode", "master"]
+        },
+        {
+            "name": "Slave — sandbox (all mocked)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "args": ["--sandbox", "--mode", "slave"]
+        },
+        {
+            "name": "Master — mock TrackTitan + LMU, real Dropbox",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "args": ["--mock-tracktitan", "--mock-lmu", "--mode", "master"]
+        },
+        {
+            "name": "Master — mock LMU, real TrackTitan and Dropbox",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "args": ["--mock-lmu", "--mode", "master"]
+        },
+        {
+            "name": "Full — live (real everything)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "args": []
+        }
+    ]
+}

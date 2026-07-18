@@ -1,0 +1,140 @@
+"""Shared harness for sandbox-backed integration tests.
+
+Everything below drives the *real* DownloadManager / MasterManager / SlaveManager /
+SetupManager / TrackManager and the real archive extraction. Only the three external
+systems are replaced: the TrackTitan API, the Dropbox share and the LMU game folder.
+"""
+import json
+import zipfile
+from pathlib import Path
+from typing import Optional
+
+
+# The fixtures shipped with the app, used by tests that assert on them specifically.
+REPO_FIXTURES: Path = Path(__file__).resolve().parents[2] / "sandbox" / "tracktitan"
+
+
+def make_setup(
+    setup_id: str,
+    track: str,
+    car: str = "Porsche 963",
+    ts: int = 1700000000,
+    is_bundle: bool = False,
+    title: Optional[str] = None,
+) -> dict:
+    """One entry of the TrackTitan /setups payload."""
+    return {
+        "id": setup_id,
+        "title": title or f"Setup for {track}",
+        "setupCombos": [{"car": {"name": car}, "track": {"name": track}}],
+        "hotlapLink": None,
+        "lastUpdatedAt": ts,
+        "isBundle": is_bundle,
+    }
+
+
+class Sandbox:
+    """A disposable app root: mock catalog, mock share, mock game folder."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.downloads = root / "downloads"
+        self.share = root / "share"
+        self.lmu = root / "lmu"
+        self.catalog_dir = root / "tracktitan"
+        self.tracks_file = root / "tracks.json"
+
+        self.downloads.mkdir(parents=True, exist_ok=True)
+        self.lmu.mkdir(parents=True, exist_ok=True)
+        (self.catalog_dir / "setups").mkdir(parents=True, exist_ok=True)
+
+        self.write_catalog([])
+        self.set_tracks([])
+
+    # ----- fixture authoring -------------------------------------------------
+
+    def write_catalog(self, setups: list[dict]) -> None:
+        (self.catalog_dir / "catalog.json").write_text(
+            json.dumps({"data": {"setups": setups}}), encoding="utf-8"
+        )
+
+    def add_archive(self, setup_id: str, members: dict[str, str]) -> Path:
+        """Write sandbox/tracktitan/setups/{id}.zip holding the given members."""
+        path = self.catalog_dir / "setups" / f"{setup_id}.zip"
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in members.items():
+                zf.writestr(name, content)
+        return path
+
+    def set_tracks(self, mapping: list[tuple[str, str]]) -> None:
+        """mapping is a list of (regex pattern, lmu folder name), in priority order."""
+        self.tracks_file.write_text(
+            json.dumps({
+                "tracks": [{"tt_patterns": [p], "lmu_folder_name": f} for p, f in mapping],
+            }),
+            encoding="utf-8",
+        )
+
+    # ----- inspection --------------------------------------------------------
+
+    def installed_files(self) -> set[str]:
+        """Every installed file, as posix paths relative to the mock LMU root."""
+        return {p.relative_to(self.lmu).as_posix() for p in self.lmu.rglob("*") if p.is_file()}
+
+    def share_names(self) -> set[str]:
+        return {p.name for p in self.share.glob("**/*.zip")} if self.share.exists() else set()
+
+    # ----- clients -----------------------------------------------------------
+
+    def tracktitan(self, base_path: Optional[Path] = None):
+        from clients.mocks.mock_track_titan_client import MockTrackTitanClient
+        return MockTrackTitanClient(base_path=base_path or self.catalog_dir)
+
+    def dropbox(self):
+        from clients.mocks.mock_dropbox_client import MockDropboxClient
+        return MockDropboxClient(folder=self.share)
+
+    # ----- orchestrators -----------------------------------------------------
+
+    def run_master(self, base_path: Optional[Path] = None):
+        from orchestration.download_manager import DownloadManager
+        from orchestration.master_manager import MasterManager
+
+        dbx = self.dropbox()
+        dm = DownloadManager(database=None, client=self.tracktitan(base_path))
+        MasterManager(download_manager=dm, dropbox_client=dbx).run()
+        return dbx
+
+    def run_slave(self, database) -> None:
+        from orchestration.slave_manager import SlaveManager
+        SlaveManager(
+            dropbox_client=self.dropbox(),
+            setup_manager=self.setup_manager(database),
+            database=database,
+        ).run()
+
+    def run_full(self, database, base_path: Optional[Path] = None) -> None:
+        """Mirrors main.run_full: paginate, skip bundles, download, install."""
+        from orchestration.download_manager import DownloadManager
+
+        dm = DownloadManager(database=database, client=self.tracktitan(base_path))
+        sm = self.setup_manager(database)
+        sm.update_tracks_not_found()
+
+        while setups := dm.get_setups_list():
+            for setup in setups:
+                if setup.is_bundle:
+                    continue
+                path = dm.download(setup)
+                if path:
+                    sm.install_setup(path, setup)
+
+    def setup_manager(self, database):
+        from processing.setup_manager import SetupManager
+        from processing.track_manager import TrackManager
+
+        return SetupManager(
+            database=database,
+            track_manager=TrackManager(),
+            lmu_setups_base_path=self.lmu,
+        )
