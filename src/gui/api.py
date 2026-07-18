@@ -3,6 +3,7 @@ import json
 import logging
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
 from typing import Callable, Optional, TYPE_CHECKING
@@ -63,6 +64,18 @@ class Api:
         self._cancel_event: Optional[threading.Event] = None
         self._running: bool = False
         self._last_error: Optional[str] = None
+        # State for the TrackTitan automatic token-fetch flow (a second pywebview
+        # window + cookie polling) - separate from the download bookkeeping above
+        # since the two can't run concurrently but aren't the same operation.
+        self._tt_lock = threading.Lock()
+        self._tt_window: Optional[webview.Window] = None
+        self._tt_thread: Optional[threading.Thread] = None
+        self._tt_cancel_event: Optional[threading.Event] = None
+        # Mirrors the frontend's Settings-form dirty state (see app.js's
+        # pushSettingsDirty()) - there is no manual Save button anymore, so
+        # this is what the native window-close handler below checks before
+        # letting the app quit with unsaved edits.
+        self._settings_dirty: bool = False
 
     # ----- mode -----------------------------------------------------------
 
@@ -108,10 +121,7 @@ class Api:
                 "DROPBOX_REFRESH_TOKEN": config.DROPBOX_REFRESH_TOKEN or "",
             },
             "config": {
-                "logging": {
-                    "console": {"level": config.LOG_LEVEL_CONSOLE},
-                    "file": {"level": config.LOG_LEVEL_FILE},
-                },
+                "logging": {"level": config.LOG_LEVEL},
                 "network": {
                     "min_delay": config.MIN_DELAY,
                     "max_delay": config.MAX_DELAY,
@@ -240,8 +250,17 @@ class Api:
     # ----- download tab ------------------------------------------------------
 
     def validate_start(self, mode: str) -> list[str]:
-        from core.config import check_credentials, MOCK_TRACKTITAN, MOCK_DROPBOX
-        return check_credentials(mode, MOCK_TRACKTITAN, MOCK_DROPBOX)
+        from core.config import check_credentials, MOCK_TRACKTITAN, MOCK_DROPBOX, MOCK_LMU, LMU_SETUPS_BASE_PATH
+        errors = check_credentials(mode, MOCK_TRACKTITAN, MOCK_DROPBOX)
+        # Only Full and Slave install setups locally, so only they depend on
+        # LMU_SETUPS_BASE_PATH existing - Master only ever uploads to Dropbox.
+        # Kept out of check_credentials(), which validates secrets, not paths.
+        if mode in {"full", "slave"} and not MOCK_LMU and not Path(LMU_SETUPS_BASE_PATH).exists():
+            errors.append("Invalid or missing LMU_PATH")
+        return errors
+
+    def check_lmu_path(self, path: str) -> bool:
+        return bool(path) and Path(path).exists()
 
     def start_download(self, mode: str) -> dict[str, object]:
         with self._lock:
@@ -324,6 +343,32 @@ class Api:
         if config_patch:
             save_config(config_patch)
         self._reload_config()
+        self._settings_dirty = False
+
+    def mark_settings_dirty(self, dirty: bool) -> None:
+        self._settings_dirty = dirty
+
+    def _handle_window_closing(self) -> bool:
+        """Bound to webview's `events.closing` (window.py), which fires on the
+        native FormClosing event. Returning False cancels the close; with
+        unsaved Settings edits pending, cancel it and ask the frontend to
+        confirm save/discard first - confirm_close() below re-fires the actual
+        close once the user resolves that prompt (setting Cancel = False and
+        letting FormClosing continue to completion this second time around).
+        """
+        if not self._settings_dirty:
+            return True
+        if self._window is not None:
+            try:
+                self._window.evaluate_js("window.onRequestCloseConfirmation && window.onRequestCloseConfirmation()")
+            except Exception as e:
+                log.debug(f"Failed to request close confirmation: {e}")
+        return False
+
+    def confirm_close(self) -> None:
+        self._settings_dirty = False
+        if self._window is not None:
+            self._window.destroy()
 
     def _reload_config(self) -> None:
         """Refresh every module's config-derived globals in place, so a settings
@@ -341,6 +386,9 @@ class Api:
             module = sys.modules.get(name)
             if module is not None:
                 importlib.reload(module)
+
+        import main
+        main.apply_log_level(config.LOG_LEVEL)
 
     def set_language(self, language: str) -> None:
         # No relaunch needed: the frontend re-renders instantly against the other
@@ -370,3 +418,100 @@ class Api:
         except Exception as e:
             log.warning(f"Failed to exchange Dropbox authorization code: {e}")
             return {"error": str(e)}
+
+    # ----- TrackTitan automatic token fetch ------------------------------------
+    # Unlike the Dropbox flow above (system browser + a code the user pastes
+    # back), TrackTitan's tokens are never shown to the user anywhere - they
+    # live in Cognito-style session cookies set after login. So instead this
+    # opens a second pywebview window on the login page, lets the user log in
+    # normally, and polls that window's cookies in a background thread until
+    # the three expected ones show up (or the user cancels, or it times out).
+
+    _TT_POLL_INTERVAL_SECONDS = 1.0
+    _TT_TIMEOUT_SECONDS = 300.0
+
+    def tracktitan_fetch_tokens_start(self) -> dict[str, object]:
+        from clients.track_titan_client import TRACKTITAN_LOGIN_URL
+
+        with self._tt_lock:
+            if self._tt_thread is not None and self._tt_thread.is_alive():
+                return {"started": False, "reason": "already-running"}
+
+            cancel_event = threading.Event()
+            self._tt_cancel_event = cancel_event
+            child = webview.create_window(
+                title="TrackTitan Login",
+                url=TRACKTITAN_LOGIN_URL,
+                width=480,
+                height=760,
+                on_top=True,
+            )
+            self._tt_window = child
+            # Covers the user closing the popup by hand (as opposed to
+            # tracktitan_fetch_tokens_cancel(), the "Annulla" button) - either
+            # way the poll loop below treats it the same, as a cancellation.
+            child.events.closed += lambda: cancel_event.set()
+
+            thread = threading.Thread(
+                target=self._run_tracktitan_fetch, args=(child, cancel_event), daemon=True
+            )
+            self._tt_thread = thread
+            thread.start()
+        return {"started": True}
+
+    def tracktitan_fetch_tokens_cancel(self) -> None:
+        # Destroys the window immediately (rather than waiting for the poll
+        # loop's next iteration) so the "Annulla" button feels instant.
+        if self._tt_cancel_event is not None:
+            self._tt_cancel_event.set()
+        self._close_tt_window()
+
+    def _run_tracktitan_fetch(self, child: webview.Window, cancel_event: threading.Event) -> None:
+        from clients.track_titan_client import extract_tokens_from_cookies
+
+        deadline = time.monotonic() + self._TT_TIMEOUT_SECONDS
+        tokens: Optional[dict[str, str]] = None
+        reason = "timeout"
+        while time.monotonic() < deadline:
+            if cancel_event.is_set():
+                reason = "cancelled"
+                break
+            try:
+                raw_cookies = child.get_cookies()
+            except Exception:
+                # The window is gone (destroyed by the user or by us mid-poll).
+                reason = "cancelled"
+                break
+            cookies = {key: morsel.value for cookie in raw_cookies for key, morsel in cookie.items()}
+            tokens = extract_tokens_from_cookies(cookies)
+            if tokens is not None:
+                reason = "ok"
+                break
+            cancel_event.wait(self._TT_POLL_INTERVAL_SECONDS)
+
+        # Destroy child directly - self._tt_window may already be cleared if
+        # tracktitan_fetch_tokens_cancel() got there first.
+        try:
+            child.destroy()
+        except Exception:
+            pass
+        if self._tt_window is child:
+            self._tt_window = None
+        self._push_tracktitan_tokens(reason, tokens)
+
+    def _close_tt_window(self) -> None:
+        if self._tt_window is not None:
+            try:
+                self._tt_window.destroy()
+            except Exception:
+                pass
+            self._tt_window = None
+
+    def _push_tracktitan_tokens(self, reason: str, tokens: Optional[dict[str, str]]) -> None:
+        if self._window is None:
+            return
+        payload: str = json.dumps({"ok": reason == "ok", "reason": reason, "tokens": tokens or {}})
+        try:
+            self._window.evaluate_js(f"window.onTrackTitanTokens && window.onTrackTitanTokens({payload})")
+        except Exception as e:
+            log.debug(f"Failed to push TrackTitan tokens to the window: {e}")

@@ -17,10 +17,7 @@ SETTINGS_DB_PATH: Path = get_data_dir() / "settings.db"
 # and dismissed=False are the real first-run behavior.
 DEFAULT_CONFIG: dict[str, Any] = {
     "mode": "full",
-    "logging": {
-        "console": {"level": "INFO", "format": "%(message)s"},
-        "file": {"level": "DEBUG", "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"},
-    },
+    "logging": {"level": "DEBUG"},
     "network": {
         "base_url": "https://services.tracktitan.io/api",
         "consumer_id": "trackTitan",
@@ -30,10 +27,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "timeout": 30,
     },
     "paths": {
-        "download": {"base_path": "downloads", "clean_download_after_copy": False},
+        "download": {"base_path": "downloads", "clean_download_after_copy": True},
         "setups": {
             "overwrite": False,
-            "delete_previous_version": False,
+            "delete_previous_version": True,
             "lmu_base_path": r"C:\Program Files (x86)\Steam\steamapps\common\Le Mans Ultimate\UserData\player\Settings",
             "file_extensions": [".svm"],
         },

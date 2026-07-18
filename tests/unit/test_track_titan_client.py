@@ -166,3 +166,58 @@ def test_requests_send_a_timeout(client, mocker):
     assert mock_get.call_args_list[0].kwargs["timeout"] > 0
     assert mock_get.call_args_list[1].kwargs["timeout"] > 0
     assert mock_post.call_args.kwargs["timeout"] > 0
+
+
+# ----- extract_tokens_from_cookies (the GUI's automatic token-fetch flow) -------
+
+
+def test_extract_tokens_from_cookies_matches_by_cognito_suffix():
+    from clients.track_titan_client import extract_tokens_from_cookies
+
+    cookies = {
+        "CognitoIdentityServiceProvider.abc123.someuser.accessToken": "list-token-value",
+        "CognitoIdentityServiceProvider.abc123.someuser.idToken": "download-token-value",
+        "CognitoIdentityServiceProvider.abc123.LastAuthUser": "someuser",
+    }
+
+    assert extract_tokens_from_cookies(cookies) == {
+        "ACCESS_TOKEN_LIST": "list-token-value",
+        "ACCESS_TOKEN_DOWNLOAD": "download-token-value",
+        "USER_ID": "someuser",
+    }
+
+
+def test_extract_tokens_from_cookies_ignores_unrelated_cookies():
+    from clients.track_titan_client import extract_tokens_from_cookies
+
+    cookies = {
+        "CognitoIdentityServiceProvider.abc123.someuser.accessToken": "list-token-value",
+        "CognitoIdentityServiceProvider.abc123.someuser.idToken": "download-token-value",
+        "CognitoIdentityServiceProvider.abc123.LastAuthUser": "someuser",
+        "_ga": "GA1.2.12345",
+        "cookie-consent": "accepted",
+    }
+
+    assert extract_tokens_from_cookies(cookies) == {
+        "ACCESS_TOKEN_LIST": "list-token-value",
+        "ACCESS_TOKEN_DOWNLOAD": "download-token-value",
+        "USER_ID": "someuser",
+    }
+
+
+def test_extract_tokens_from_cookies_returns_none_when_one_is_missing():
+    from clients.track_titan_client import extract_tokens_from_cookies
+
+    cookies = {
+        "CognitoIdentityServiceProvider.abc123.someuser.accessToken": "list-token-value",
+        "CognitoIdentityServiceProvider.abc123.someuser.idToken": "download-token-value",
+        # no .LastAuthUser cookie - login not finished yet
+    }
+
+    assert extract_tokens_from_cookies(cookies) is None
+
+
+def test_extract_tokens_from_cookies_returns_none_for_no_cookies():
+    from clients.track_titan_client import extract_tokens_from_cookies
+
+    assert extract_tokens_from_cookies({}) is None

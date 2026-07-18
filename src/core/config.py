@@ -78,15 +78,9 @@ if not MOCK_LMU:
         print(f"[INFO] Migrated existing database to {DB_PATH}")
 
 # ===== LOGGING CONFIG =====
-_log_cfg = _config.get("logging", {})
-
-# Console config
-LOG_LEVEL_CONSOLE = _log_cfg.get("console", {}).get("level", "INFO")
-LOG_FORMAT_CONSOLE = _log_cfg.get("console", {}).get("format", "%(message)s")
-
-# File config
-LOG_LEVEL_FILE = _log_cfg.get("file", {}).get("level", "DEBUG")
-LOG_FORMAT_FILE = _log_cfg.get("file", {}).get("format", "%(asctime)s - %(levelname)s - %(message)s")
+# Single level driving both the file and (dev-only, invisible in the
+# --windowed build) console handlers - see main.py's setup_logging().
+LOG_LEVEL: str = str(_config.get("logging", {}).get("level", "DEBUG")).strip().upper()
 
 # ===== ENV =====
 # All six secrets load unconditionally, whether present or not: the GUI's

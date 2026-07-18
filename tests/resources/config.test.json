@@ -1,14 +1,7 @@
 {
     "mode": "full",
     "logging": {
-        "console": {
-            "level": "CRITICAL",
-            "format": "%(message)s"
-        },
-        "file": {
-            "level": "CRITICAL",
-            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        }
+        "level": "CRITICAL"
     },
     "network": {
         "base_url": "https://services.example.invalid/api",

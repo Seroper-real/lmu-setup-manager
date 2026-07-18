@@ -1,4 +1,5 @@
 import ctypes
+import logging
 import sys
 import traceback
 
@@ -23,7 +24,9 @@ def launch() -> None:
     # This is now the only place a startup crash can surface: there is no console
     # fallback left anywhere in the app once GUI-only lands.
     try:
-        import core.config  # noqa: F401 - forces a settings.db open/seed inside this try
+        from main import setup_logging, _log_sandbox  # also forces a settings.db open/seed
+        log = setup_logging()
+        _log_sandbox(log)
         api = Api()
         window = webview.create_window(
             title="LMU Setup Manager",
@@ -38,9 +41,16 @@ def launch() -> None:
         # be bound after this point (standard pywebview idiom). Must stay
         # underscore-prefixed (Api._window) - see the comment on Api.__init__.
         api._window = window
+        # Lets the user save/discard pending Settings edits instead of losing
+        # them silently when they close the window - see Api._handle_window_closing.
+        window.events.closing += api._handle_window_closing
         webview.start()
     except Exception as e:
         message = f"LMU Setup Manager failed to start:\n\n{e}\n\n{traceback.format_exc()}"
+        # A fresh getLogger() call, not the `log` local: if setup_logging() itself
+        # raised, `log` was never assigned, and referencing it would raise
+        # NameError and mask the real error. Absorbed silently if no handlers got attached.
+        logging.getLogger("TrackTitanDownloader").exception("Fatal startup error")
         try:
             ctypes.windll.user32.MessageBoxW(None, message, "LMU Setup Manager - Fatal error", 0x10)
         except Exception:

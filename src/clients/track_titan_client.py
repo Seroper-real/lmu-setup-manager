@@ -1,5 +1,5 @@
 from typing import Any, Optional
-import requests, time, random, logging
+import re, requests, time, random, logging
 from core.config import (
     BASE_URL,
     ACCESS_TOKEN_LIST,
@@ -13,6 +13,35 @@ from core.config import (
 from core.errors import AuthError
 
 log = logging.getLogger("TrackTitanDownloader")
+
+# The page the GUI's automatic token-fetch flow opens in its own window for the
+# user to log into - see gui.api.Api.tracktitan_fetch_tokens_start().
+TRACKTITAN_LOGIN_URL = "https://app.tracktitan.io"
+
+# Cognito cookie name suffixes, e.g.
+# "CognitoIdentityServiceProvider.<clientId>.<username>.accessToken" - the
+# client/username segments vary per account, so only the suffix is stable.
+# Kept in sync with the readme.md bookmarklet, which reads document.cookie with
+# the same three patterns.
+_COOKIE_PATTERNS: dict[str, re.Pattern[str]] = {
+    "ACCESS_TOKEN_LIST": re.compile(r"\.accessToken$"),
+    "ACCESS_TOKEN_DOWNLOAD": re.compile(r"\.idToken$"),
+    "USER_ID": re.compile(r"\.LastAuthUser$"),
+}
+
+
+def extract_tokens_from_cookies(cookies: dict[str, str]) -> Optional[dict[str, str]]:
+    """Finds the three TrackTitan credential values among a browser's cookies,
+    matching names by suffix rather than an exact key. Returns None unless all
+    three are present - a partial login (e.g. caught mid-redirect) isn't usable."""
+    found: dict[str, str] = {}
+    for name, pattern in _COOKIE_PATTERNS.items():
+        match = next((value for key, value in cookies.items() if pattern.search(key)), None)
+        if match is None:
+            return None
+        found[name] = match
+    return found
+
 
 class TrackTitanClient:
     def __init__(self):
