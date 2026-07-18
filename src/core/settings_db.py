@@ -30,10 +30,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "timeout": 30,
     },
     "paths": {
-        "download": {"base_path": "downloads", "clean_download_after_copy": False},
+        "download": {"base_path": "downloads", "clean_download_after_copy": True},
         "setups": {
             "overwrite": False,
-            "delete_previous_version": False,
+            "delete_previous_version": True,
             "lmu_base_path": r"C:\Program Files (x86)\Steam\steamapps\common\Le Mans Ultimate\UserData\player\Settings",
             "file_extensions": [".svm"],
         },

@@ -71,6 +71,11 @@ class Api:
         self._tt_window: Optional[webview.Window] = None
         self._tt_thread: Optional[threading.Thread] = None
         self._tt_cancel_event: Optional[threading.Event] = None
+        # Mirrors the frontend's Settings-form dirty state (see app.js's
+        # pushSettingsDirty()) - there is no manual Save button anymore, so
+        # this is what the native window-close handler below checks before
+        # letting the app quit with unsaved edits.
+        self._settings_dirty: bool = False
 
     # ----- mode -----------------------------------------------------------
 
@@ -341,6 +346,32 @@ class Api:
         if config_patch:
             save_config(config_patch)
         self._reload_config()
+        self._settings_dirty = False
+
+    def mark_settings_dirty(self, dirty: bool) -> None:
+        self._settings_dirty = dirty
+
+    def _handle_window_closing(self) -> bool:
+        """Bound to webview's `events.closing` (window.py), which fires on the
+        native FormClosing event. Returning False cancels the close; with
+        unsaved Settings edits pending, cancel it and ask the frontend to
+        confirm save/discard first - confirm_close() below re-fires the actual
+        close once the user resolves that prompt (setting Cancel = False and
+        letting FormClosing continue to completion this second time around).
+        """
+        if not self._settings_dirty:
+            return True
+        if self._window is not None:
+            try:
+                self._window.evaluate_js("window.onRequestCloseConfirmation && window.onRequestCloseConfirmation()")
+            except Exception as e:
+                log.debug(f"Failed to request close confirmation: {e}")
+        return False
+
+    def confirm_close(self) -> None:
+        self._settings_dirty = False
+        if self._window is not None:
+            self._window.destroy()
 
     def _reload_config(self) -> None:
         """Refresh every module's config-derived globals in place, so a settings

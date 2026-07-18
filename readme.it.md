@@ -1,4 +1,4 @@
-# LMU Setup Manager for Le Mans Ultimate
+# LMU Setup Manager
 
 🇬🇧 [Read this README in English](readme.md)
 
@@ -51,26 +51,26 @@ Senza un abbonamento attivo, il programma **non funzionerà**.
 
 Apri la tab **Impostazioni** (o il selettore modalità nella tab Download) e scegli:
 
-| Modalità             | Cosa fa                                                                        | Ti serve                                          |
-| :-------------------- | :-------------------------------------------------------------------------------- | :--------------------------------------------------- |
-| `full` (predefinita) | Scarica da TrackTitan e installa direttamente in LMU su questo PC                 | Token TrackTitan + percorso LMU                     |
-| `master`             | Scarica da TrackTitan e carica sul tuo Dropbox (nessuna installazione locale)     | Token TrackTitan + credenziali Dropbox               |
-| `slave`              | Scarica i setup dal tuo Dropbox e installa in LMU su questo PC                    | Credenziali Dropbox (sola lettura) + percorso LMU     |
+| Modalità             | Nome                   | Cosa fa                                                                        | Ti serve                                          |
+| :-------------------- | :---------------------- | :-------------------------------------------------------------------------------- | :--------------------------------------------------- |
+| `full` (predefinita) | **Diretta**            | Scarica da TrackTitan e installa direttamente in LMU su questo PC                 | Token TrackTitan + percorso LMU                     |
+| `master`             | **Solo Upload**        | Scarica da TrackTitan e carica sul tuo Dropbox (nessuna installazione locale)     | Token TrackTitan + credenziali Dropbox               |
+| `slave`              | **Solo installazione** | Scarica i setup dal tuo Dropbox e installa in LMU su questo PC                    | Credenziali Dropbox (sola lettura) + percorso LMU     |
 
-La scelta ha effetto immediato, senza bisogno di riavviare. `master`/`slave` sono utili solo se usi LMU su più di un tuo PC — vedi [Modalità nel dettaglio](#modalità-nel-dettaglio) più sotto. Su un solo PC, resta su `full`.
+La scelta ha effetto immediato, senza bisogno di riavviare. **Solo Upload** (`master`) / **Solo installazione** (`slave`) sono utili solo se usi LMU su più di un tuo PC — vedi [Modalità nel dettaglio](#modalità-nel-dettaglio) più sotto. Su un solo PC, resta su **Diretta** (`full`).
 
 ### 3. Inserisci le tue credenziali
 
 Sempre nella tab **Impostazioni**, incolla i tuoi token nei campi corrispondenti:
 
-- **Token TrackTitan** (`full`/`master`) — vedi la [guida dedicata](#token-tracktitan) più sotto
-- **Credenziali Dropbox** (`master`/`slave`) — vedi la [guida dedicata](#credenziali-dropbox) più sotto
+- **Token TrackTitan** (Diretta/Solo Upload) — vedi la [guida dedicata](#token-tracktitan) più sotto
+- **Credenziali Dropbox** (Solo Upload/Solo installazione) — vedi la [guida dedicata](#credenziali-dropbox) più sotto
 
-Ogni campo nelle Impostazioni ha anche un link "Guarda qui" che ti porta direttamente alla guida corrispondente.
+Ogni campo nelle Impostazioni ha anche un link "Guida alla compilazione" che ti porta direttamente alla guida corrispondente.
 
 ### 4. Imposta il percorso LMU
 
-Necessario per `full`/`slave`. Controlla il campo del percorso LMU nelle Impostazioni — usa il pulsante **Sfoglia** se è sbagliato o il gioco non è installato nel percorso predefinito.
+Necessario per Diretta/Solo installazione. Controlla il campo del percorso LMU nelle Impostazioni — usa il pulsante **Sfoglia** se è sbagliato o il gioco non è installato nel percorso predefinito.
 
 ### 5. Avvia il programma
 
@@ -82,14 +82,13 @@ Premi **Start** nella tab Download 🚀
 
 ## 🔑 Come ottenere i token TrackTitan
 
-Necessari per le modalità `full` e `master`.
+Necessari per le modalità Diretta e Solo Upload.
 
 **Consigliato: dall'app**
 
 1. Apri la tab Impostazioni e clicca **Ottieni automaticamente** accanto ai campi dei token TrackTitan — si apre una finestra di login TrackTitan dentro l'app.
 2. Effettua il login in quella finestra, esattamente come faresti in un browser.
-3. Una volta effettuato l'accesso, la finestra si chiude da sola e `ACCESS_TOKEN_LIST`, `ACCESS_TOKEN_DOWNLOAD` e `USER_ID` vengono compilati automaticamente.
-4. Clicca **Salva** e hai finito, non serve il metodo manuale qui sotto.
+3. Una volta effettuato l'accesso, la finestra si chiude da sola e `ACCESS_TOKEN_LIST`, `ACCESS_TOKEN_DOWNLOAD` e `USER_ID` vengono compilati e salvati automaticamente — non serve il metodo manuale qui sotto.
 
 <details>
 <summary>Alternativa: estraili manualmente</summary>
@@ -112,7 +111,7 @@ ACCESS_TOKEN_DOWNLOAD=eyJraWQiOiI3MEoyS3lmVHZQXC9ocUJ0...
 USER_ID=123cdvf-34fd...
 ```
 
-5. Incolla ogni valore nel campo TrackTitan corrispondente nella tab Impostazioni dell'app e premi **Salva**.
+5. Incolla ogni valore nel campo TrackTitan corrispondente nella tab Impostazioni dell'app. Non c'è un pulsante Salva — l'app chiede se salvare quando esci dalla tab Impostazioni o chiudi il programma.
 
 </details>
 
@@ -124,7 +123,7 @@ USER_ID=123cdvf-34fd...
 
 ## 📦 Crea e ottieni le credenziali Dropbox
 
-Necessarie per le modalità `master` e `slave`. Richiede circa cinque minuti e va fatto una volta sola (il refresh token non scade).
+Necessarie per le modalità Solo Upload e Solo installazione. Richiede circa cinque minuti e va fatto una volta sola (il refresh token non scade).
 
 ### 1. Crea l'app
 
@@ -144,9 +143,9 @@ Apri la tab **Permissions** e spunta:
 
 | Scope                  | Serve a                                    |
 | :---------------------- | :------------------------------------------- |
-| `files.metadata.read` | MASTER + SLAVE (elenco della cartella)       |
-| `files.content.read`  | SLAVE (download dei setup)                   |
-| `files.content.write` | MASTER (upload e sostituzione dei setup)     |
+| `files.metadata.read` | Solo Upload + Solo installazione (elenco della cartella) |
+| `files.content.read`  | Solo installazione (download dei setup)      |
+| `files.content.write` | Solo Upload (upload e sostituzione dei setup) |
 
 Premi **Submit** in fondo alla pagina, altrimenti le modifiche non vengono salvate.
 
@@ -159,7 +158,7 @@ Premi **Submit** in fondo alla pagina, altrimenti le modifiche non vengono salva
 3. Autorizza l'app. Dropbox mostra un breve **codice di accesso**.
 4. Torna nell'app, incolla il codice nella finestra appena comparsa e clicca **Conferma**.
 
-L'app scambia il codice per te e compila automaticamente `DROPBOX_REFRESH_TOKEN` — clicca **Salva** e hai finito, non serve il metodo manuale qui sotto.
+L'app scambia il codice per te, compila `DROPBOX_REFRESH_TOKEN` e lo salva automaticamente — non serve il metodo manuale qui sotto.
 
 <details>
 <summary>Alternativa: generalo manualmente</summary>
@@ -223,15 +222,15 @@ Nel JSON di risposta, il campo `refresh_token` è il tuo `DROPBOX_REFRESH_TOKEN`
 
 </details>
 
-### 4. Token di sola lettura per il PC SLAVE (opzionale)
+### 4. Token di sola lettura per il PC in Solo installazione (opzionale)
 
-Se stai configurando un secondo PC in modalità `slave`, non riusare lì il token del MASTER: generane uno secondo, di sola lettura. Il pulsante **Ottieni automaticamente** nell'app richiede sempre l'accesso completo, quindi questo va fatto a mano: ripeti i passaggi sopra aggiungendo il parametro `scope` ridotto nell'URL di autorizzazione:
+Se stai configurando un secondo PC in modalità Solo installazione (`slave`), non riusare lì il token di Solo Upload (`master`): generane uno secondo, di sola lettura. Il pulsante **Ottieni automaticamente** nell'app richiede sempre l'accesso completo, quindi questo va fatto a mano: ripeti i passaggi sopra aggiungendo il parametro `scope` ridotto nell'URL di autorizzazione:
 
 ```
 https://www.dropbox.com/oauth2/authorize?client_id=<SOSTITUISCI_CON_APP_KEY>&token_access_type=offline&response_type=code&scope=files.metadata.read%20files.content.read
 ```
 
-Il refresh token che ne risulta porta con sé solo quei due scope, e in fase di rinnovo gli scope non possono mai essere ampliati: questa credenziale non potrà mai scrivere nella tua cartella. Usa il token completo su MASTER e questo di sola lettura su SLAVE.
+Il refresh token che ne risulta porta con sé solo quei due scope, e in fase di rinnovo gli scope non possono mai essere ampliati: questa credenziale non potrà mai scrivere nella tua cartella. Usa il token completo su Solo Upload e questo di sola lettura su Solo installazione.
 
 ### 5. Inserisci le credenziali nell'app
 
@@ -243,7 +242,7 @@ DROPBOX_APP_SECRET=...
 DROPBOX_REFRESH_TOKEN=...
 ```
 
-Infine imposta la cartella Dropbox nelle Impostazioni (default `/lmu-setups`) — deve essere la stessa su MASTER e SLAVE. Premi **Salva**.
+Infine imposta la cartella Dropbox nelle Impostazioni (default `/lmu-setups`) — deve essere la stessa su Solo Upload e Solo installazione.
 
 > Mantieni private queste credenziali, esattamente come i token TrackTitan.
 
@@ -276,12 +275,12 @@ Tutto quello che segue è materiale di approfondimento — non ti serve per far 
 
 ### Modalità nel dettaglio
 
-Per impostazione predefinita il tool gira in modalità **FULL** e fa tutto su una sola macchina: scarica da TrackTitan e installa in LMU.
+Per impostazione predefinita il tool gira in modalità **Diretta** (`full`) e fa tutto su una sola macchina: scarica da TrackTitan e installa in LMU.
 
 Se usi Le Mans Ultimate su **più di un tuo PC**, puoi spostare i tuoi setup tramite il **tuo Dropbox** invece di estrarre i token e interrogare TrackTitan su ogni macchina. Due modalità aggiuntive lo rendono possibile:
 
-- **MASTER** — da eseguire sul PC che ha i tuoi token TrackTitan. Scarica i tuoi setup e li copia in una cartella del **tuo** Dropbox (uno zip per setup, con nome `{track}_{car}_{id}_{timestamp}.zip`). Quando un setup viene aggiornato, la vecchia copia viene sostituita automaticamente.
-- **SLAVE** — da eseguire sull'altro tuo PC. Installa i setup direttamente dalla tua cartella Dropbox in LMU. **Qui non servono i token TrackTitan** — basta l'accesso in lettura alla tua cartella Dropbox.
+- **Solo Upload** (`master`) — da eseguire sul PC che ha i tuoi token TrackTitan. Scarica i tuoi setup e li copia in una cartella del **tuo** Dropbox (uno zip per setup, con nome `{track}_{car}_{id}_{timestamp}.zip`). Quando un setup viene aggiornato, la vecchia copia viene sostituita automaticamente.
+- **Solo installazione** (`slave`) — da eseguire sull'altro tuo PC. Installa i setup direttamente dalla tua cartella Dropbox in LMU. **Qui non servono i token TrackTitan** — basta l'accesso in lettura alla tua cartella Dropbox.
 
 ### Mapping piste
 

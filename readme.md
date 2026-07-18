@@ -1,4 +1,4 @@
-# LMU Setup Manager for Le Mans Ultimate
+# LMU Setup Manager
 
 🇮🇹 [Leggi questo README in Italiano](readme.it.md)
 
@@ -51,26 +51,26 @@ Without an active subscription, this tool **will not work**.
 
 Open the **Settings** tab (or the mode picker on the Download tab) and choose:
 
-| Mode              | What it does                                                               | You'll need                                |
-| :---------------- | :-------------------------------------------------------------------------- | :------------------------------------------- |
-| `full` (default) | Download from TrackTitan and install straight into LMU on this PC          | TrackTitan tokens + LMU path               |
-| `master`         | Download from TrackTitan and push into your own Dropbox (no local install) | TrackTitan tokens + Dropbox credentials    |
-| `slave`          | Pull setups from your own Dropbox and install into LMU on this PC          | Dropbox credentials (read-only) + LMU path |
+| Mode              | Name             | What it does                                                               | You'll need                                |
+| :---------------- | :---------------- | :-------------------------------------------------------------------------- | :------------------------------------------- |
+| `full` (default) | **Direct**       | Download from TrackTitan and install straight into LMU on this PC          | TrackTitan tokens + LMU path               |
+| `master`         | **Upload only**  | Download from TrackTitan and push into your own Dropbox (no local install) | TrackTitan tokens + Dropbox credentials    |
+| `slave`          | **Install only** | Pull setups from your own Dropbox and install into LMU on this PC          | Dropbox credentials (read-only) + LMU path |
 
-The choice takes effect immediately, no restart needed. `master`/`slave` are only useful if you run LMU on more than one of your own PCs — see [Modes in detail](#modes-in-detail) below. On a single PC, stick with `full`.
+The choice takes effect immediately, no restart needed. **Upload only** (`master`) / **Install only** (`slave`) are only useful if you run LMU on more than one of your own PCs — see [Modes in detail](#modes-in-detail) below. On a single PC, stick with **Direct** (`full`).
 
 ### 3. Enter your credentials
 
 Still in the **Settings** tab, paste your tokens into the matching fields:
 
-- **TrackTitan tokens** (`full`/`master`) — see the [dedicated guide](#tracktitan-tokens) below
-- **Dropbox credentials** (`master`/`slave`) — see the [dedicated guide](#dropbox-credentials) below
+- **TrackTitan tokens** (Direct/Upload only) — see the [dedicated guide](#tracktitan-tokens) below
+- **Dropbox credentials** (Upload only/Install only) — see the [dedicated guide](#dropbox-credentials) below
 
-Each field in Settings also has a "Look here" link that jumps straight to the relevant guide.
+Each field in Settings also has a "Setup guide" link that jumps straight to the relevant guide.
 
 ### 4. Set the LMU install path
 
-Needed for `full`/`slave`. Check the LMU path field in Settings — use the **Browse** button if it's wrong or the game isn't at the default location.
+Needed for Direct/Install only. Check the LMU path field in Settings — use the **Browse** button if it's wrong or the game isn't at the default location.
 
 ### 5. Run it
 
@@ -82,14 +82,13 @@ Hit **Start** on the Download tab 🚀
 
 ## 🔑 Getting your TrackTitan tokens
 
-Needed for `full` and `master` modes.
+Needed for Direct and Upload only modes.
 
 **Recommended: from the app**
 
 1. Open the Settings tab and click **Get automatically** next to the TrackTitan token fields — this opens a TrackTitan login window inside the app.
 2. Log in normally in that window, exactly as you would in a browser.
-3. Once you're signed in, the window closes on its own and `ACCESS_TOKEN_LIST`, `ACCESS_TOKEN_DOWNLOAD` and `USER_ID` are filled in for you.
-4. Click **Save** and you're done, no need for the manual method below.
+3. Once you're signed in, the window closes on its own and `ACCESS_TOKEN_LIST`, `ACCESS_TOKEN_DOWNLOAD` and `USER_ID` are filled in and saved for you automatically — no need for the manual method below.
 
 <details>
 <summary>Alternative: extract them manually</summary>
@@ -112,7 +111,7 @@ ACCESS_TOKEN_DOWNLOAD=eyJraWQiOiI3MEoyS3lmVHZQXC9ocUJ0...
 USER_ID=123cdvf-34fd...
 ```
 
-5. Paste each value into the matching TrackTitan field in the app's Settings tab and click **Save**.
+5. Paste each value into the matching TrackTitan field in the app's Settings tab. There's no Save button — the app prompts you to save when you leave the Settings tab or close the app.
 
 </details>
 
@@ -124,7 +123,7 @@ USER_ID=123cdvf-34fd...
 
 ## 📦 Creating your Dropbox app & tokens
 
-Needed for `master` and `slave` modes. Takes about five minutes and only needs to be done once (the refresh token doesn't expire).
+Needed for Upload only and Install only modes. Takes about five minutes and only needs to be done once (the refresh token doesn't expire).
 
 ### 1. Create the app
 
@@ -144,9 +143,9 @@ Open the **Permissions** tab and tick:
 
 | Scope                  | Needed by                                |
 | :---------------------- | :---------------------------------------- |
-| `files.metadata.read` | MASTER + SLAVE (listing the folder)      |
-| `files.content.read`  | SLAVE (downloading setups)               |
-| `files.content.write` | MASTER (uploading and replacing setups)  |
+| `files.metadata.read` | Upload only + Install only (listing the folder) |
+| `files.content.read`  | Install only (downloading setups)        |
+| `files.content.write` | Upload only (uploading and replacing setups) |
 
 Press **Submit** at the bottom of the page, otherwise the changes are not saved.
 
@@ -159,7 +158,7 @@ Press **Submit** at the bottom of the page, otherwise the changes are not saved.
 3. Approve the app. Dropbox shows a short **access code**.
 4. Back in the app, paste that code into the dialog that just appeared and click **Confirm**.
 
-The app exchanges the code for you and fills in `DROPBOX_REFRESH_TOKEN` automatically — click **Save** and you're done, no need for the manual method below.
+The app exchanges the code for you, fills in `DROPBOX_REFRESH_TOKEN` and saves it automatically — no need for the manual method below.
 
 <details>
 <summary>Alternative: generate it manually</summary>
@@ -223,15 +222,15 @@ In the JSON response, the `refresh_token` field is your `DROPBOX_REFRESH_TOKEN`.
 
 </details>
 
-### 4. Read-only token for the SLAVE PC (optional)
+### 4. Read-only token for the Install only PC (optional)
 
-If you're setting up a second PC in `slave` mode, don't reuse the MASTER token there — generate a second, read-only one instead. The **Get automatically** button in the app always requests full access, so this one has to be done manually: repeat the steps above with a reduced `scope` parameter in the authorization URL:
+If you're setting up a second PC in Install only (`slave`) mode, don't reuse the Upload only (`master`) token there — generate a second, read-only one instead. The **Get automatically** button in the app always requests full access, so this one has to be done manually: repeat the steps above with a reduced `scope` parameter in the authorization URL:
 
 ```
 https://www.dropbox.com/oauth2/authorize?client_id=<REPLACE_WITH_APP_KEY>&token_access_type=offline&response_type=code&scope=files.metadata.read%20files.content.read
 ```
 
-The resulting refresh token carries only those two scopes, and scopes can never be widened later — so this credential can never write to your folder. Use the full-scope token on MASTER and this read-only one on SLAVE.
+The resulting refresh token carries only those two scopes, and scopes can never be widened later — so this credential can never write to your folder. Use the full-scope token on Upload only (`master`) and this read-only one on Install only (`slave`).
 
 ### 5. Enter the credentials in the app
 
@@ -243,7 +242,7 @@ DROPBOX_APP_SECRET=...
 DROPBOX_REFRESH_TOKEN=...
 ```
 
-Finally, set the Dropbox folder in Settings (default `/lmu-setups`) — it must be the same on MASTER and SLAVE. Click **Save**.
+Finally, set the Dropbox folder in Settings (default `/lmu-setups`) — it must be the same on Upload only and Install only.
 
 > Keep these credentials private, exactly like the TrackTitan tokens.
 
@@ -276,12 +275,12 @@ Everything below is background material — you don't need it to get the tool ru
 
 ### Modes in detail
 
-By default the tool runs in **FULL** mode and does everything on one machine: download from TrackTitan and install into LMU.
+By default the tool runs in **Direct** mode (`full`) and does everything on one machine: download from TrackTitan and install into LMU.
 
 If you run Le Mans Ultimate on **more than one of your own PCs**, you can move your setups through **your own Dropbox** instead of extracting tokens and querying TrackTitan on every machine. Two extra modes make this possible:
 
-- **MASTER** — run on the PC that has your TrackTitan tokens. It downloads your setups and mirrors them into a folder in **your** Dropbox (one zip per setup, named `{track}_{car}_{id}_{timestamp}.zip`). When a setup is updated, the old copy is replaced automatically.
-- **SLAVE** — run on your other PC. It installs the setups straight from your Dropbox folder into LMU. **No TrackTitan tokens are needed here** — only read access to your own Dropbox folder.
+- **Upload only** (`master`) — run on the PC that has your TrackTitan tokens. It downloads your setups and mirrors them into a folder in **your** Dropbox (one zip per setup, named `{track}_{car}_{id}_{timestamp}.zip`). When a setup is updated, the old copy is replaced automatically.
+- **Install only** (`slave`) — run on your other PC. It installs the setups straight from your Dropbox folder into LMU. **No TrackTitan tokens are needed here** — only read access to your own Dropbox folder.
 
 ### Track mapping
 

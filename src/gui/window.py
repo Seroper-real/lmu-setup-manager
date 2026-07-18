@@ -38,6 +38,9 @@ def launch() -> None:
         # be bound after this point (standard pywebview idiom). Must stay
         # underscore-prefixed (Api._window) - see the comment on Api.__init__.
         api._window = window
+        # Lets the user save/discard pending Settings edits instead of losing
+        # them silently when they close the window - see Api._handle_window_closing.
+        window.events.closing += api._handle_window_closing
         webview.start()
     except Exception as e:
         message = f"LMU Setup Manager failed to start:\n\n{e}\n\n{traceback.format_exc()}"

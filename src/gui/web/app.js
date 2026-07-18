@@ -7,7 +7,11 @@ const state = {
   language: "it",
   bootstrap: null,
   selectedMode: "full",
-  showSecrets: false,
+  // Independent per-section visibility toggles (replacing a single global
+  // show/hide) so revealing TrackTitan tokens doesn't also reveal Dropbox
+  // credentials and vice versa.
+  showTokenSecrets: false,
+  showDropboxSecrets: false,
   advancedOpen: false,
   running: false,
   runStatus: "idle", // idle | running | completed | stopped | error
@@ -33,6 +37,12 @@ const state = {
   authErrorMessage: null,
   showWarning: false,
   settingsForm: null,
+  // JSON snapshot of settingsForm as of the last successful save/load, used to
+  // detect unsaved edits now that there is no manual Save button.
+  settingsSavedSnapshot: null,
+  // { reason: "nav", target } | { reason: "close" } | null - set when the user
+  // tries to leave Settings (or close the app) with unsaved edits pending.
+  unsavedChangesPrompt: null,
 };
 
 // ----- helpers --------------------------------------------------------------
@@ -68,7 +78,6 @@ const ICONS = {
   eyeClosed: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 10.7a2.6 2.6 0 0 0 3.6 3.6M6.6 6.7C4.5 8 3 12 3 12s3.5 7 9 7c1.6 0 3-.5 4.2-1.2M9.9 5.2A9.8 9.8 0 0 1 12 5c5.5 0 9 7 9 7a13.7 13.7 0 0 1-2.4 3.3"></path></svg>`,
   externalLink: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"></path><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path></svg>`,
   info: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg>`,
-  save: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v5h8V4M8 20v-6h8v6"></path></svg>`,
   trash: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path></svg>`,
   copy: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>`,
   play: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5v15l13-7.5Z"></path></svg>`,
@@ -97,6 +106,15 @@ function tFn(key, ...args) {
   if (key in dict) return dict[key](...args);
   const extra = EXTRA[state.language] || EXTRA.it;
   return extra[key](...args);
+}
+
+// Maps the internal mode key ("full"/"master"/"slave" - unchanged in
+// settings.db, the CLI --mode flag and orchestration/tests) to its
+// user-facing display name (Diretta/Solo Upload/Solo installazione, or the
+// English equivalent).
+const MODE_TITLE_KEYS = { full: "modeFullTitle", master: "modeMasterTitle", slave: "modeSlaveTitle" };
+function modeDisplayName(modeKey) {
+  return t(MODE_TITLE_KEYS[modeKey] || modeKey);
 }
 
 function readmeUrl(anchor) {
@@ -203,6 +221,7 @@ async function init() {
     state.selectedMode = bootstrap.mode || "full";
     state.showWarning = !bootstrap.hymoWarningDismissed;
     state.settingsForm = buildSettingsForm(bootstrap);
+    state.settingsSavedSnapshot = JSON.stringify(state.settingsForm);
     await refreshInstalled();
   } catch (e) {
     console.error("Failed to load bootstrap", e);
@@ -256,7 +275,7 @@ window.onProgress = function onProgress(event) {
 // Result push channel for the TrackTitan automatic token-fetch flow (the
 // second pywebview window opened by tracktitan_fetch_tokens_start()) - see
 // its click handler and the waiting modal in renderModals().
-window.onTrackTitanTokens = function onTrackTitanTokens(result) {
+window.onTrackTitanTokens = async function onTrackTitanTokens(result) {
   state.tracktitanFetch = null;
   renderModals();
   if (result.ok) {
@@ -264,12 +283,22 @@ window.onTrackTitanTokens = function onTrackTitanTokens(result) {
       const input = document.getElementById(`f-${key}`);
       if (input) input.value = value;
     });
+    await persistSettings();
     showToast(t("tracktitanFetchSuccessToast"), "success");
   } else if (result.reason === "timeout") {
     showToast(t("tracktitanFetchTimeoutToast"), "error");
   }
   // "cancelled" (user closed the popup or hit Annulla) stays silent - it's an
   // ordinary user action, not a failure worth a toast.
+};
+
+// Python's events.closing handler (webview's FormClosing) cancels the native
+// close and calls this when Settings has unsaved edits, since it can't cross
+// the JS/native boundary synchronously to ask - Api.confirm_close() re-fires
+// the actual close once the user resolves the prompt below.
+window.onRequestCloseConfirmation = function onRequestCloseConfirmation() {
+  state.unsavedChangesPrompt = { reason: "close" };
+  renderModals();
 };
 
 // ----- top-level render ---------------------------------------------------
@@ -290,6 +319,22 @@ function applyActiveView() {
   document.querySelectorAll(".nav-item").forEach((el) => {
     el.classList.toggle("active", el.dataset.view === state.view);
   });
+}
+
+// applyActiveView() only toggles which view is visible - it never re-renders
+// one, so navigating to Setups showed whatever was last rendered there (e.g.
+// still empty from init(), or missing setups installed by a run watched from
+// the Download tab). Refresh from the DB on every visit so newly installed
+// setups show up immediately.
+function goToView(target) {
+  state.view = target;
+  applyActiveView();
+  if (state.view === "setups") {
+    refreshInstalled().then(() => {
+      renderSetupsView();
+      renderSidebar();
+    });
+  }
 }
 
 // ----- sidebar --------------------------------------------------------------
@@ -314,19 +359,15 @@ function renderSidebar() {
     .join("");
   nav.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
-      state.view = btn.dataset.view;
-      applyActiveView();
-      // applyActiveView() only toggles which view is visible - it never
-      // re-renders one, so navigating to Setups showed whatever was last
-      // rendered there (e.g. still empty from init(), or missing setups
-      // installed by a run watched from the Download tab). Refresh from the
-      // DB on every visit so newly installed setups show up immediately.
-      if (state.view === "setups") {
-        refreshInstalled().then(() => {
-          renderSetupsView();
-          renderSidebar();
-        });
+      const target = btn.dataset.view;
+      // Leaving Settings with unsaved edits: hold off navigating until the
+      // user resolves the prompt (see resolveUnsavedChangesPrompt()).
+      if (state.view === "settings" && target !== "settings" && isSettingsDirty()) {
+        state.unsavedChangesPrompt = { reason: "nav", target };
+        renderModals();
+        return;
       }
+      goToView(target);
     });
   });
 
@@ -337,7 +378,7 @@ function renderSidebar() {
   // since bootstrap is only fetched once - the bug this fixes.
   document.getElementById("mode-badge").innerHTML = `
     <span>${escapeHtml(t("sidebarMode"))}</span>
-    <span class="tag tag-accent">${escapeHtml((state.selectedMode || "").toUpperCase())}</span>
+    <span class="tag tag-accent">${escapeHtml(modeDisplayName(state.selectedMode))}</span>
     ${state.bootstrap && state.bootstrap.sandboxActive ? `<span class="tag tag-warning">SANDBOX</span>` : ""}
   `;
 
@@ -477,7 +518,10 @@ function renderTrackGroup(group) {
         </button>
         <div class="track-group-actions">
           ${unmappedTag}
-          <button type="button" class="btn btn-ghost text-danger" data-delete-track="${escapeHtml(group.track)}" data-delete-track-ids="${escapeHtml(JSON.stringify(setupIds))}" title="${escapeHtml(t("deleteAllButton"))}">${ICONS.trash}</button>
+          <span class="tooltip">
+            <button type="button" class="btn btn-ghost text-danger" data-delete-track="${escapeHtml(group.track)}" data-delete-track-ids="${escapeHtml(JSON.stringify(setupIds))}">${ICONS.trash}</button>
+            <span class="tooltip-text">${escapeHtml(t("deleteAllButton"))}</span>
+          </span>
           <span class="tag tag-outline group-count">${group.setups.length}</span>
         </div>
       </div>
@@ -509,7 +553,10 @@ function renderCarRow(s, group) {
         ${s.hotlapLink
           ? `<a class="btn btn-ghost" href="#" data-open-link="${escapeHtml(s.hotlapLink)}" title="${escapeHtml(t("hotlapTitle"))}">${ICONS.hotlap}${escapeHtml(t("hotlapLabel"))}</a>`
           : ""}
-        <button type="button" class="btn btn-ghost text-danger" data-delete-setup="${escapeHtml(s.setupId)}" data-car="${escapeHtml(s.car)}" data-track="${escapeHtml(group.track)}" title="${escapeHtml(t("deleteButton"))}">${ICONS.trash}</button>
+        <span class="tooltip">
+          <button type="button" class="btn btn-ghost text-danger" data-delete-setup="${escapeHtml(s.setupId)}" data-car="${escapeHtml(s.car)}" data-track="${escapeHtml(group.track)}">${ICONS.trash}</button>
+          <span class="tooltip-text">${escapeHtml(t("deleteButton"))}</span>
+        </span>
       </div>
       ${carExpanded ? `<div class="setup-files">${files}</div>` : ""}
     </div>
@@ -529,9 +576,9 @@ async function openCorreggiModal(track) {
 function renderDownloadView() {
   const el = document.getElementById("view-download");
   const modes = [
-    { key: "full", title: "Full", desc: t("fullDesc") },
-    { key: "master", title: "Master", desc: t("masterDesc") },
-    { key: "slave", title: "Slave", desc: t("slaveDesc") },
+    { key: "full", title: t("modeFullTitle"), desc: t("fullDesc") },
+    { key: "master", title: t("modeMasterTitle"), desc: t("masterDesc") },
+    { key: "slave", title: t("modeSlaveTitle"), desc: t("slaveDesc") },
   ];
 
   const cards = modes
@@ -568,7 +615,7 @@ function renderDownloadView() {
     <div class="view-header">
       <div>
         <h2>${escapeHtml(t("downloadTitle"))}</h2>
-        <p>${escapeHtml(t("downloadDescPre"))}<strong>${escapeHtml(state.selectedMode.toUpperCase())}</strong>${escapeHtml(t("downloadDescPost"))}</p>
+        <p>${escapeHtml(t("downloadDescPre"))}<strong>${escapeHtml(modeDisplayName(state.selectedMode))}</strong>${escapeHtml(t("downloadDescPost"))}</p>
       </div>
     </div>
     <div>
@@ -656,7 +703,8 @@ async function onStartStopClick() {
 // renderSettingsView() does a full innerHTML replace of the view (same as
 // every other render*() in this file), which throws away whatever the user
 // typed but hasn't saved yet. Any handler that re-renders the settings view
-// without an intervening save (toggle-secrets, advanced-toggle, language)
+// without an intervening save (toggle-token-secrets, toggle-dropbox-secrets,
+// advanced-toggle, language)
 // must call this first so state.settingsForm - the data the next render
 // reads from - reflects the live DOM instead of the stale bootstrap/last-save
 // snapshot. input.value always holds the real string regardless of the
@@ -679,19 +727,43 @@ function captureSettingsForm() {
   if (state.advancedOpen && document.getElementById("f-logLevelConsole")) {
     f.logLevelConsole = getVal("f-logLevelConsole");
     f.logLevelFile = getVal("f-logLevelFile");
-    f.pageSize = getVal("f-pageSize");
-    f.timeout = getVal("f-timeout");
-    f.minDelay = getVal("f-minDelay");
-    f.maxDelay = getVal("f-maxDelay");
+    // Numeric fields are read back as Number, not the raw input string -
+    // buildSettingsForm() populates these from config as numbers, so leaving
+    // them as strings here made isSettingsDirty() report a false positive
+    // (type mismatch, not a real edit) any time the advanced section was
+    // simply opened and closed again.
+    f.pageSize = Number(getVal("f-pageSize"));
+    f.timeout = Number(getVal("f-timeout"));
+    f.minDelay = Number(getVal("f-minDelay"));
+    f.maxDelay = Number(getVal("f-maxDelay"));
     f.cleanDownload = getChecked("f-cleanDownload");
     f.overwrite = getChecked("f-overwrite");
     f.deletePreviousVersion = getChecked("f-deletePreviousVersion");
     f.remoteTracksEnabled = getChecked("f-remoteTracksEnabled");
     f.remoteTracksUrl = getVal("f-remoteTracksUrl");
-    f.remoteTracksTimeout = getVal("f-remoteTracksTimeout");
-    f.dropboxTimeout = getVal("f-dropboxTimeout");
-    f.dropboxUploadWorkers = getVal("f-dropboxUploadWorkers");
+    f.remoteTracksTimeout = Number(getVal("f-remoteTracksTimeout"));
+    f.dropboxTimeout = Number(getVal("f-dropboxTimeout"));
+    f.dropboxUploadWorkers = Number(getVal("f-dropboxUploadWorkers"));
   }
+}
+
+// Whether the live Settings form differs from the last persisted snapshot.
+// Always captures first so edits sitting in currently-visible fields (the
+// advanced section included, when open) are accounted for before comparing.
+function isSettingsDirty() {
+  if (!state.settingsForm || !state.settingsSavedSnapshot) return false;
+  captureSettingsForm();
+  return JSON.stringify(state.settingsForm) !== state.settingsSavedSnapshot;
+}
+
+// Mirrors the dirty flag to the Python side, which cannot otherwise tell -
+// when the user hits the native window close button, Api.handle_window_closing
+// checks this mirrored flag directly rather than reaching back into JS
+// synchronously mid-close.
+function pushSettingsDirty() {
+  const dirty = isSettingsDirty();
+  api().mark_settings_dirty(dirty);
+  return dirty;
 }
 
 // Credential keys are stored/looked-up by their real env var name (e.g.
@@ -704,8 +776,9 @@ function displayKey(key) {
 // A masked field's real value is always readable via input.value (masking is
 // purely a rendering thing), so the copy button sources from there directly
 // instead of depending on however this webview's Ctrl+C/selection handling
-// treats a type="password" field.
-function secretField(id, label, value, type, titleAction) {
+// treats a type="password" field. Used for every text/password field in
+// Settings, masked or not, for a standardized copy affordance.
+function copyField(id, label, value, type, titleAction) {
   const labelHtml = titleAction
     ? `<div class="field-label-row"><label>${escapeHtml(label)}</label>${titleAction}</div>`
     : `<label>${escapeHtml(label)}</label>`;
@@ -727,7 +800,8 @@ function renderSettingsView() {
     return;
   }
   const f = state.settingsForm;
-  const secretType = state.showSecrets ? "text" : "password";
+  const tokenSecretType = state.showTokenSecrets ? "text" : "password";
+  const dropboxSecretType = state.showDropboxSecrets ? "text" : "password";
   const tokenUrl = readmeUrl(state.language === "en" ? "tracktitan-tokens" : "token-tracktitan");
   const dropboxUrl = readmeUrl(state.language === "en" ? "dropbox-credentials" : "credenziali-dropbox");
 
@@ -737,7 +811,6 @@ function renderSettingsView() {
         <h2>${escapeHtml(t("settingsTitle"))}</h2>
         <p>${escapeHtml(t("settingsDesc"))}</p>
       </div>
-      <button type="button" class="btn btn-ghost" id="toggle-secrets">${state.showSecrets ? ICONS.eyeOpen : ICONS.eyeClosed}${escapeHtml(state.showSecrets ? t("hideValues") : t("showValues"))}</button>
     </div>
 
     <div>
@@ -760,6 +833,7 @@ function renderSettingsView() {
           <label>${escapeHtml(t("lmuFieldLabel"))}</label>
           <div class="input-group">
             <input class="input" id="lmu-path-input" value="${escapeHtml(f.lmuPath)}">
+            <button type="button" class="btn btn-secondary" data-copy="lmu-path-input" title="${escapeHtml(t("copyButton"))}">${ICONS.copy}</button>
             <button type="button" class="btn btn-secondary" id="browse-btn">${ICONS.folderBrowse}${escapeHtml(t("browseButton"))}</button>
           </div>
           <div class="field-warning" id="lmu-path-warning" style="${f.lmuPathValid ? "display:none;" : ""}">${ICONS.fieldWarning}${escapeHtml(t("lmuPathInvalidWarning"))}</div>
@@ -770,43 +844,40 @@ function renderSettingsView() {
 
     <div class="hr"></div>
     <div>
-      <h6 class="text-muted">${escapeHtml(t("tokenHeading"))}</h6>
+      <div class="section-heading-row">
+        <button type="button" class="btn btn-ghost" id="toggle-token-secrets" title="${escapeHtml(state.showTokenSecrets ? t("hideValues") : t("showValues"))}">${state.showTokenSecrets ? ICONS.eyeOpen : ICONS.eyeClosed}</button>
+        <h6 class="text-muted">${escapeHtml(t("tokenHeading"))}</h6>
+      </div>
       <p class="text-muted" style="font-size:13px;">${escapeHtml(t("tokenHelp"))}</p>
-      ${secretField(
+      ${copyField(
         "f-ACCESS_TOKEN_LIST",
         displayKey("ACCESS_TOKEN_LIST"),
         f.env.ACCESS_TOKEN_LIST,
-        secretType,
+        tokenSecretType,
         `<a href="#" class="field-hint-link" id="tracktitan-fetch-start-btn">${ICONS.externalLink}${escapeHtml(t("tracktitanFetchButton"))}</a>`
       )}
-      ${secretField("f-ACCESS_TOKEN_DOWNLOAD", displayKey("ACCESS_TOKEN_DOWNLOAD"), f.env.ACCESS_TOKEN_DOWNLOAD, secretType)}
-      <div class="field">
-        <label>${displayKey("USER_ID")}</label>
-        <input class="input" type="text" id="f-USER_ID" value="${escapeHtml(f.env.USER_ID)}">
-      </div>
+      ${copyField("f-ACCESS_TOKEN_DOWNLOAD", displayKey("ACCESS_TOKEN_DOWNLOAD"), f.env.ACCESS_TOKEN_DOWNLOAD, tokenSecretType)}
+      ${copyField("f-USER_ID", displayKey("USER_ID"), f.env.USER_ID, "text")}
       <a href="#" class="readme-link" data-open-link="${tokenUrl}">${ICONS.externalLink}${escapeHtml(t("tokenLinkText"))}</a>
     </div>
 
     <div class="hr"></div>
     <div>
-      <h6 class="text-muted">${escapeHtml(t("dropboxHeading"))}</h6>
-      <p class="text-muted" style="font-size:13px;">${escapeHtml(t("dropboxHelp"))}</p>
-      <div class="field">
-        <label>${displayKey("DROPBOX_APP_KEY")}</label>
-        <input class="input" type="text" id="f-DROPBOX_APP_KEY" value="${escapeHtml(f.env.DROPBOX_APP_KEY)}">
+      <div class="section-heading-row">
+        <button type="button" class="btn btn-ghost" id="toggle-dropbox-secrets" title="${escapeHtml(state.showDropboxSecrets ? t("hideValues") : t("showValues"))}">${state.showDropboxSecrets ? ICONS.eyeOpen : ICONS.eyeClosed}</button>
+        <h6 class="text-muted">${escapeHtml(t("dropboxHeading"))}</h6>
       </div>
-      ${secretField("f-DROPBOX_APP_SECRET", displayKey("DROPBOX_APP_SECRET"), f.env.DROPBOX_APP_SECRET, secretType)}
-      ${secretField(
+      <p class="text-muted" style="font-size:13px;">${escapeHtml(t("dropboxHelp"))}</p>
+      ${copyField("f-DROPBOX_APP_KEY", displayKey("DROPBOX_APP_KEY"), f.env.DROPBOX_APP_KEY, "text")}
+      ${copyField("f-DROPBOX_APP_SECRET", displayKey("DROPBOX_APP_SECRET"), f.env.DROPBOX_APP_SECRET, dropboxSecretType)}
+      ${copyField(
         "f-DROPBOX_REFRESH_TOKEN",
         displayKey("DROPBOX_REFRESH_TOKEN"),
         f.env.DROPBOX_REFRESH_TOKEN,
-        secretType,
+        dropboxSecretType,
         `<a href="#" class="field-hint-link" id="dropbox-oauth-start-btn">${ICONS.externalLink}${escapeHtml(t("dropboxOauthButton"))}</a>`
       )}
-      <div class="field">
-        <label>${escapeHtml(t("dropboxFolderLabel"))}</label>
-        <input class="input" type="text" id="f-dropboxFolder" value="${escapeHtml(f.dropboxFolder)}">
-      </div>
+      ${copyField("f-dropboxFolder", t("dropboxFolderLabel"), f.dropboxFolder, "text")}
       <a href="#" class="readme-link" data-open-link="${dropboxUrl}">${ICONS.externalLink}${escapeHtml(t("dropboxLinkText"))}</a>
     </div>
 
@@ -818,15 +889,17 @@ function renderSettingsView() {
       </div>
       ${state.advancedOpen ? `<div class="card elev-sm">${renderAdvancedFields(f)}</div>` : ""}
     </div>
-
-    <div>
-      <button type="button" class="btn btn-primary" id="save-settings-btn">${ICONS.save}${escapeHtml(t("saveButton"))}</button>
-    </div>
   `;
 
-  document.getElementById("toggle-secrets").addEventListener("click", () => {
+  document.getElementById("toggle-token-secrets").addEventListener("click", () => {
     captureSettingsForm();
-    state.showSecrets = !state.showSecrets;
+    state.showTokenSecrets = !state.showTokenSecrets;
+    renderSettingsView();
+  });
+
+  document.getElementById("toggle-dropbox-secrets").addEventListener("click", () => {
+    captureSettingsForm();
+    state.showDropboxSecrets = !state.showDropboxSecrets;
     renderSettingsView();
   });
 
@@ -904,6 +977,7 @@ function renderSettingsView() {
       f.lmuPathValid = true;
       const warning = document.getElementById("lmu-path-warning");
       if (warning) warning.style.display = "none";
+      pushSettingsDirty();
     }
   });
 
@@ -912,15 +986,16 @@ function renderSettingsView() {
     state.advancedOpen = !state.advancedOpen;
     renderSettingsView();
   });
-
-  document.getElementById("save-settings-btn").addEventListener("click", onSaveSettings);
 }
 
 function renderAdvancedFields(f) {
   const textField = (id, labelKey, tipKey, value, type) => `
     <div class="field">
       <label>${escapeHtml(t(labelKey))} ${infoTip(t(tipKey))}</label>
-      <input class="input" type="${type || "text"}" id="${id}" value="${escapeHtml(value)}">
+      <div class="input-group">
+        <input class="input" type="${type || "text"}" id="${id}" value="${escapeHtml(value)}">
+        <button type="button" class="btn btn-secondary" data-copy="${id}" title="${escapeHtml(t("copyButton"))}">${ICONS.copy}</button>
+      </div>
     </div>
   `;
   const checkField = (id, labelKey, tipKey, checked) => `
@@ -962,63 +1037,76 @@ function renderAdvancedFields(f) {
   `;
 }
 
-async function onSaveSettings() {
-  const envValues = {
-    ACCESS_TOKEN_LIST: getVal("f-ACCESS_TOKEN_LIST"),
-    ACCESS_TOKEN_DOWNLOAD: getVal("f-ACCESS_TOKEN_DOWNLOAD"),
-    USER_ID: getVal("f-USER_ID"),
-    DROPBOX_APP_KEY: getVal("f-DROPBOX_APP_KEY"),
-    DROPBOX_APP_SECRET: getVal("f-DROPBOX_APP_SECRET"),
-    DROPBOX_REFRESH_TOKEN: getVal("f-DROPBOX_REFRESH_TOKEN"),
-  };
+// The single settings-persistence path, now that there is no manual Save
+// button: called after an automatic token retrieval completes, and from the
+// unsaved-changes prompt's "Save" action (nav-away or app-close). Reads from
+// state.settingsForm (post-capture) rather than gating each section's DOM
+// lookup on state.advancedOpen, since a value edited earlier in the session
+// and then collapsed must still be included.
+async function persistSettings() {
+  captureSettingsForm();
+  const f = state.settingsForm;
 
-  const lmuPath = document.getElementById("lmu-path-input").value;
+  const envValues = { ...f.env };
   const configPatch = {
     paths: {
       setups: {
-        lmu_base_path: lmuPath,
-        overwrite: getChecked("f-overwrite"),
-        delete_previous_version: getChecked("f-deletePreviousVersion"),
+        lmu_base_path: f.lmuPath,
+        overwrite: !!f.overwrite,
+        delete_previous_version: !!f.deletePreviousVersion,
       },
       download: {
-        clean_download_after_copy: getChecked("f-cleanDownload"),
+        clean_download_after_copy: !!f.cleanDownload,
       },
     },
     dropbox: {
-      folder: getVal("f-dropboxFolder"),
+      folder: f.dropboxFolder,
+      timeout: parseInt(f.dropboxTimeout, 10),
+      upload_workers: parseInt(f.dropboxUploadWorkers, 10),
+    },
+    logging: {
+      console: { level: f.logLevelConsole },
+      file: { level: f.logLevelFile },
+    },
+    network: {
+      min_delay: parseFloat(f.minDelay),
+      max_delay: parseFloat(f.maxDelay),
+      timeout: parseInt(f.timeout, 10),
+      page_size: parseInt(f.pageSize, 10),
+    },
+    remote_tracks: {
+      enabled: !!f.remoteTracksEnabled,
+      url: f.remoteTracksUrl,
+      timeout: parseInt(f.remoteTracksTimeout, 10),
     },
   };
 
-  if (state.advancedOpen) {
-    configPatch.logging = {
-      console: { level: getVal("f-logLevelConsole") },
-      file: { level: getVal("f-logLevelFile") },
-    };
-    configPatch.network = {
-      min_delay: parseFloat(getVal("f-minDelay")),
-      max_delay: parseFloat(getVal("f-maxDelay")),
-      timeout: parseInt(getVal("f-timeout"), 10),
-      page_size: parseInt(getVal("f-pageSize"), 10),
-    };
-    configPatch.remote_tracks = {
-      enabled: getChecked("f-remoteTracksEnabled"),
-      url: getVal("f-remoteTracksUrl"),
-      timeout: parseInt(getVal("f-remoteTracksTimeout"), 10),
-    };
-    configPatch.dropbox.timeout = parseInt(getVal("f-dropboxTimeout"), 10);
-    configPatch.dropbox.upload_workers = parseInt(getVal("f-dropboxUploadWorkers"), 10);
-  }
-
   await api().save_settings(envValues, configPatch);
 
-  // Settings now hot-reload instead of relaunching the process: re-fetch
-  // bootstrap so the form (and the mode badge/sandbox tag, in case anything
-  // else changed underneath) reflects exactly what was just persisted.
+  // Settings hot-reload instead of relaunching the process: re-fetch bootstrap
+  // so the form (and the mode badge/sandbox tag, in case anything else
+  // changed underneath) reflects exactly what was just persisted, and reset
+  // the dirty snapshot to that new baseline.
   state.bootstrap = await api().get_bootstrap();
   state.settingsForm = buildSettingsForm(state.bootstrap);
+  state.settingsSavedSnapshot = JSON.stringify(state.settingsForm);
   renderSettingsView();
   renderSidebar();
-  showToast(t("savedToast"), "success");
+  await api().mark_settings_dirty(false);
+}
+
+// The unsaved-changes prompt's "Discard" action: reverts the form to whatever
+// is actually persisted in settings.db. Re-fetches bootstrap rather than
+// reusing the in-memory state.bootstrap, since that cached copy can predate
+// changes made outside this form (e.g. set_mode()/set_language() update the
+// DB directly without refreshing it) - discarding must restore the real DB
+// state, not a stale in-memory guess at it.
+async function discardSettingsChanges() {
+  state.bootstrap = await api().get_bootstrap();
+  state.settingsForm = buildSettingsForm(state.bootstrap);
+  state.settingsSavedSnapshot = JSON.stringify(state.settingsForm);
+  renderSettingsView();
+  api().mark_settings_dirty(false);
 }
 
 // ----- modals (warning / correggi / validation) --------------------------------
@@ -1028,7 +1116,7 @@ async function onSaveSettings() {
 // a run can be short on both TrackTitan and Dropbox credentials at once. Pick
 // the matching real sentence(s) for whichever family of fields shows up.
 function validationBody(errors, mode) {
-  const modeLabel = mode.toUpperCase();
+  const modeLabel = modeDisplayName(mode);
   const hasTrackTitan = errors.some((e) => e.includes("ACCESS_TOKEN") || e.includes("USER_ID"));
   const hasDropbox = errors.some((e) => e.includes("DROPBOX"));
   const hasLmuPath = errors.some((e) => e.includes("LMU_PATH"));
@@ -1127,6 +1215,22 @@ function renderModals() {
           <div class="dialog-body">${escapeHtml(t("tracktitanFetchDialogBody"))}</div>
           <div class="dialog-actions">
             <button type="button" class="btn btn-ghost" id="tracktitan-fetch-cancel">${escapeHtml(t("mapFolderCancel"))}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state.unsavedChangesPrompt) {
+    html += `
+      <div class="dialog-backdrop" data-modal="unsaved-changes">
+        <div class="dialog elev-lg">
+          <div class="dialog-title">${ICONS.warning}${escapeHtml(t("unsavedChangesTitle"))}</div>
+          <div class="dialog-body">${escapeHtml(t("unsavedChangesBody"))}</div>
+          <div class="dialog-actions">
+            <button type="button" class="btn btn-ghost" id="unsaved-cancel" style="margin-right:auto;">${escapeHtml(t("mapFolderCancel"))}</button>
+            <button type="button" class="btn btn-secondary" id="unsaved-discard">${escapeHtml(t("unsavedChangesDiscard"))}</button>
+            <button type="button" class="btn btn-primary" id="unsaved-save">${escapeHtml(t("unsavedChangesSave"))}</button>
           </div>
         </div>
       </div>
@@ -1251,8 +1355,24 @@ function renderModals() {
       renderModals();
       const tokenInput = document.getElementById("f-DROPBOX_REFRESH_TOKEN");
       if (tokenInput) tokenInput.value = result.refreshToken;
+      await persistSettings();
       showToast(t("dropboxOauthSuccessToast"), "success");
     });
+  }
+
+  const unsavedCancel = document.getElementById("unsaved-cancel");
+  if (unsavedCancel) {
+    unsavedCancel.addEventListener("click", () => resolveUnsavedChangesPrompt("cancel"));
+  }
+
+  const unsavedDiscard = document.getElementById("unsaved-discard");
+  if (unsavedDiscard) {
+    unsavedDiscard.addEventListener("click", () => resolveUnsavedChangesPrompt("discard"));
+  }
+
+  const unsavedSave = document.getElementById("unsaved-save");
+  if (unsavedSave) {
+    unsavedSave.addEventListener("click", () => resolveUnsavedChangesPrompt("save"));
   }
 
   const tracktitanFetchCancel = document.getElementById("tracktitan-fetch-cancel");
@@ -1301,6 +1421,21 @@ function renderModals() {
   }
 }
 
+// Resolves the unsaved-changes prompt raised by either the nav guard (leaving
+// Settings) or window.onRequestCloseConfirmation (closing the app). "cancel"
+// just dismisses it and leaves the user where they were; "save"/"discard"
+// resolve the form first, then carry out whichever action was pending.
+async function resolveUnsavedChangesPrompt(action) {
+  const prompt = state.unsavedChangesPrompt;
+  state.unsavedChangesPrompt = null;
+  renderModals();
+  if (action === "save") await persistSettings();
+  else if (action === "discard") await discardSettingsChanges();
+  if (!prompt || action === "cancel") return;
+  if (prompt.reason === "nav") goToView(prompt.target);
+  else if (prompt.reason === "close") await api().confirm_close();
+}
+
 // ----- global delegated handlers (survive re-renders) --------------------------
 
 document.addEventListener("click", (e) => {
@@ -1310,5 +1445,14 @@ document.addEventListener("click", (e) => {
     api().open_external_link(link.dataset.openLink);
   }
 });
+
+// Mirrors Settings' dirty state to Python on every edit, scoped to the
+// Settings view so typing elsewhere (search boxes, dialog inputs) doesn't
+// trigger a needless IPC round trip - see pushSettingsDirty().
+function onSettingsFieldChanged(e) {
+  if (e.target.closest("#view-settings")) pushSettingsDirty();
+}
+document.addEventListener("input", onSettingsFieldChanged);
+document.addEventListener("change", onSettingsFieldChanged);
 
 window.addEventListener("DOMContentLoaded", init);
