@@ -1,0 +1,11 @@
+# Project Tasks: Settings & Dropbox Auth
+
+- [ ] **Feature: Advanced Dropbox Token Retrieval Dialog**
+    - **Description:** Replace the generic retrieval flow with a dedicated selection window.
+    - **UI Requirements:**
+        - Create a modal dialog triggered by "Ottieni automaticamente token".
+        - Include a clear warning: "È necessario l'accesso all'account Dropbox per poter ottenere i token."
+        - Provide two distinct action buttons with descriptions:
+            - **Token Lettura/Scrittura:** For "Solo Upload" mode.
+            - **Token Sola Lettura:** For "Solo installazione" mode.
+    - **Logic:** Based on the user's selection, trigger the specific OAuth flow to generate the appropriate scope-based token.
