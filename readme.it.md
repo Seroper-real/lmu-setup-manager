@@ -140,6 +140,18 @@ Premi **Submit** in fondo alla pagina, altrimenti le modifiche non vengono salva
 
 ### 3. Genera il refresh token
 
+**Consigliato: dall'app**
+
+1. Incolla `DROPBOX_APP_KEY` e `DROPBOX_APP_SECRET` nei campi corrispondenti nella tab Impostazioni dell'app.
+2. Clicca **Ottieni automaticamente** accanto al campo Refresh Token — si apre la pagina di autorizzazione Dropbox nel browser.
+3. Autorizza l'app. Dropbox mostra un breve **codice di accesso**.
+4. Torna nell'app, incolla il codice nella finestra appena comparsa e clicca **Conferma**.
+
+L'app scambia il codice per te e compila automaticamente `DROPBOX_REFRESH_TOKEN` — clicca **Salva** e hai finito, non serve il metodo manuale qui sotto.
+
+<details>
+<summary>Alternativa: generalo manualmente</summary>
+
 Apri questo URL nel browser, sostituendo `<SOSTITUISCI_CON_APP_KEY>` con la tua:
 
 ```
@@ -197,9 +209,11 @@ Nel JSON di risposta, il campo `refresh_token` è il tuo `DROPBOX_REFRESH_TOKEN`
 
 </details>
 
+</details>
+
 ### 4. Token di sola lettura per il PC SLAVE (opzionale)
 
-Se stai configurando un secondo PC in modalità `slave`, non riusare lì il token del MASTER: generane uno secondo, di sola lettura. Ripeti il passaggio 3 aggiungendo il parametro `scope` ridotto nell'URL di autorizzazione:
+Se stai configurando un secondo PC in modalità `slave`, non riusare lì il token del MASTER: generane uno secondo, di sola lettura. Il pulsante **Ottieni automaticamente** nell'app richiede sempre l'accesso completo, quindi questo va fatto a mano: ripeti i passaggi sopra aggiungendo il parametro `scope` ridotto nell'URL di autorizzazione:
 
 ```
 https://www.dropbox.com/oauth2/authorize?client_id=<SOSTITUISCI_CON_APP_KEY>&token_access_type=offline&response_type=code&scope=files.metadata.read%20files.content.read
