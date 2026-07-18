@@ -84,7 +84,17 @@ Hit **Start** on the Download tab 🚀
 
 Needed for `full` and `master` modes.
 
-1. Log in to https://app.tracktitan.io
+**Recommended: from the app**
+
+1. Open the Settings tab and click **Get automatically** next to the TrackTitan token fields — this opens a TrackTitan login window inside the app.
+2. Log in normally in that window, exactly as you would in a browser.
+3. Once you're signed in, the window closes on its own and `ACCESS_TOKEN_LIST`, `ACCESS_TOKEN_DOWNLOAD` and `USER_ID` are filled in for you.
+4. Click **Save** and you're done, no need for the manual method below.
+
+<details>
+<summary>Alternative: extract them manually</summary>
+
+1. Log in to https://app.tracktitan.io in your own browser.
 2. Open the browser developer tools
    - Windows/Linux: `F12` or `Ctrl + Shift + I`
    - macOS: `Cmd + Option + I`
@@ -104,7 +114,9 @@ USER_ID=123cdvf-34fd...
 
 5. Paste each value into the matching TrackTitan field in the app's Settings tab and click **Save**.
 
-> ⚠️ Tokens **expire**. If you get a `401 Unauthorized` popup, just repeat these 5 steps and save again.
+</details>
+
+> ⚠️ Tokens **expire**. If you get a `401 Unauthorized` popup, just repeat the steps above and save again.
 
 ---
 

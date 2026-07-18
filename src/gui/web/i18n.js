@@ -30,6 +30,7 @@ const TRANSLATIONS = {
     langHeading: "Lingua", langFieldLabel: "Lingua dell'interfaccia",
     lmuHeading: "CARTELLA SETUP Le Mans ultimate", lmuFieldLabel: "Dove installare i setup in Le Mans Ultimate",
     lmuHelp: "Il percorso di installazione dei setup su LMU, è normalmente in:\n\"C:\\Program Files (x86)\\Steam\\steamapps\\common\\Le Mans Ultimate\\UserData\\player\\Settings\"\nper una installazione standard da Steam. Obbligatorio per le modalità Full e Slave.",
+    lmuPathInvalidWarning: "Il percorso selezionato non è valido",
     tokenHeading: "Token TrackTitan", tokenHelp: "Obbligatori per le modalità Full e Master.",
     tokenLinkText: "Non sai come recuperarli? Guarda qui.",
     dropboxHeading: "Credenziali Dropbox", dropboxHelp: "Obbligatorie per le modalità Master e Slave.",
@@ -82,6 +83,7 @@ const TRANSLATIONS = {
     validationMissingTrackTitan: (mode) => `La modalità ${mode} richiede i token TrackTitan. Vai su Impostazioni e compila ACCESS_TOKEN_LIST, ACCESS_TOKEN_DOWNLOAD e USER_ID, poi riprova.`,
     validationInvalidTrackTitan: "I token TrackTitan inseriti non sembrano validi o sono scaduti. Recuperali di nuovo da app.tracktitan.io e aggiornali nelle Impostazioni.",
     validationMissingDropbox: (mode) => `La modalità ${mode} richiede le credenziali Dropbox. Vai su Impostazioni e compila DROPBOX_APP_KEY, DROPBOX_APP_SECRET e DROPBOX_REFRESH_TOKEN, poi riprova.`,
+    validationInvalidLmuPath: (mode) => `La modalità ${mode} richiede un percorso LMU valido. Vai su Impostazioni e correggi il percorso, poi riprova.`,
     validationGoSettings: "Vai alle Impostazioni", validationClose: "Chiudi",
   },
   en: {
@@ -104,6 +106,7 @@ const TRANSLATIONS = {
     langHeading: "Language", langFieldLabel: "Interface language",
     lmuHeading: "LE MANS ULTIMATE SETUP FOLDER", lmuFieldLabel: "Where to install setups in Le Mans Ultimate",
     lmuHelp: "The setup install path in LMU is normally at:\n\"C:\\Program Files (x86)\\Steam\\steamapps\\common\\Le Mans Ultimate\\UserData\\player\\Settings\"\nfor a standard Steam installation. Required for Full and Slave modes.",
+    lmuPathInvalidWarning: "The selected path is not valid",
     tokenHeading: "TrackTitan tokens", tokenHelp: "Required for Full and Master modes.",
     tokenLinkText: "Don't know how to get them? Look here.",
     dropboxHeading: "Dropbox credentials", dropboxHelp: "Required for Master and Slave modes.",
@@ -156,6 +159,7 @@ const TRANSLATIONS = {
     validationMissingTrackTitan: (mode) => `${mode} mode requires TrackTitan tokens. Go to Settings and fill in ACCESS_TOKEN_LIST, ACCESS_TOKEN_DOWNLOAD and USER_ID, then try again.`,
     validationInvalidTrackTitan: "The TrackTitan tokens you entered don't look valid, or they've expired. Fetch them again from app.tracktitan.io and update them in Settings.",
     validationMissingDropbox: (mode) => `${mode} mode requires Dropbox credentials. Go to Settings and fill in DROPBOX_APP_KEY, DROPBOX_APP_SECRET and DROPBOX_REFRESH_TOKEN, then try again.`,
+    validationInvalidLmuPath: (mode) => `${mode} mode requires a valid LMU path. Go to Settings and fix the path, then try again.`,
     validationGoSettings: "Go to Settings", validationClose: "Close",
   },
 };
@@ -164,6 +168,7 @@ const TRANSLATIONS = {
 const EXTRA = {
   it: {
     emptySetupsList: "Nessun setup installato. Avvia un download dalla scheda Download.",
+    noMatchingSetups: "Nessun setup trovato.",
     statusStopped: "Interrotto",
     statusError: "Errore",
     authErrorTitle: "Autenticazione scaduta",
@@ -186,9 +191,15 @@ const EXTRA = {
     dropboxOauthDialogBody: "Approva l'app nella pagina Dropbox appena aperta, poi incolla qui sotto il codice mostrato.",
     dropboxOauthCodePlaceholder: "Codice di autorizzazione",
     dropboxOauthSuccessToast: "✓ Refresh token generato — ricordati di salvare le impostazioni",
+    tracktitanFetchButton: "Ottieni automaticamente",
+    tracktitanFetchDialogTitle: "Login TrackTitan",
+    tracktitanFetchDialogBody: "Completa il login nella finestra che si è appena aperta. Una volta effettuato l'accesso, i token verranno recuperati automaticamente.",
+    tracktitanFetchSuccessToast: "✓ Token recuperati — ricordati di salvare le impostazioni",
+    tracktitanFetchTimeoutToast: "Tempo scaduto in attesa del login. Riprova.",
   },
   en: {
     emptySetupsList: "No setups installed yet. Start a download from the Download tab.",
+    noMatchingSetups: "No setups found.",
     statusStopped: "Stopped",
     statusError: "Error",
     authErrorTitle: "Authentication expired",
@@ -211,5 +222,10 @@ const EXTRA = {
     dropboxOauthDialogBody: "Approve the app on the Dropbox page that just opened, then paste the code shown back here.",
     dropboxOauthCodePlaceholder: "Authorization code",
     dropboxOauthSuccessToast: "✓ Refresh token generated — remember to save settings",
+    tracktitanFetchButton: "Get automatically",
+    tracktitanFetchDialogTitle: "TrackTitan login",
+    tracktitanFetchDialogBody: "Complete the login in the window that just opened. Once you're signed in, the tokens are fetched automatically.",
+    tracktitanFetchSuccessToast: "✓ Tokens fetched — remember to save settings",
+    tracktitanFetchTimeoutToast: "Timed out waiting for login. Please try again.",
   },
 };

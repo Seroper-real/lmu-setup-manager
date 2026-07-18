@@ -28,6 +28,7 @@ const state = {
   correggiTarget: null,
   deleteTarget: null,
   dropboxOAuth: null,
+  tracktitanFetch: null,
   validationErrors: null,
   authErrorMessage: null,
   showWarning: false,
@@ -75,6 +76,7 @@ const ICONS = {
   activityStopped: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"></path></svg>`,
   activityError: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6"></path><circle cx="12" cy="16.7" r="0.6" fill="currentColor"></circle></svg>`,
   warning: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-accent-300)"></circle></svg>`,
+  fieldWarning: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-warning)"></circle></svg>`,
   validation: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6"></path><circle cx="12" cy="16.7" r="0.6" fill="var(--color-accent-300)"></circle></svg>`,
 };
 
@@ -165,6 +167,7 @@ function buildSettingsForm(bootstrap) {
 
   return {
     lmuPath: bootstrap.lmuPath || "",
+    lmuPathValid: bootstrap.lmuPathExists !== false,
     env: {
       ACCESS_TOKEN_LIST: env.ACCESS_TOKEN_LIST || "",
       ACCESS_TOKEN_DOWNLOAD: env.ACCESS_TOKEN_DOWNLOAD || "",
@@ -248,6 +251,25 @@ window.onProgress = function onProgress(event) {
       if (state.view === "setups") renderSetupsView();
     });
   }
+};
+
+// Result push channel for the TrackTitan automatic token-fetch flow (the
+// second pywebview window opened by tracktitan_fetch_tokens_start()) - see
+// its click handler and the waiting modal in renderModals().
+window.onTrackTitanTokens = function onTrackTitanTokens(result) {
+  state.tracktitanFetch = null;
+  renderModals();
+  if (result.ok) {
+    Object.entries(result.tokens).forEach(([key, value]) => {
+      const input = document.getElementById(`f-${key}`);
+      if (input) input.value = value;
+    });
+    showToast(t("tracktitanFetchSuccessToast"), "success");
+  } else if (result.reason === "timeout") {
+    showToast(t("tracktitanFetchTimeoutToast"), "error");
+  }
+  // "cancelled" (user closed the popup or hit Annulla) stays silent - it's an
+  // ordinary user action, not a failure worth a toast.
 };
 
 // ----- top-level render ---------------------------------------------------
@@ -335,6 +357,8 @@ function renderSetupsView() {
   const search = state.installedSearch.trim();
   const emptyText = search
     ? `${t("noResultsPrefix")}${escapeHtml(search)}${t("noResultsSuffix")}`
+    : state.installedUnmappedOnly
+    ? escapeHtml(t("noMatchingSetups"))
     : escapeHtml(t("emptySetupsList"));
 
   const groupsHtml = state.installedData.groups.length
@@ -738,6 +762,7 @@ function renderSettingsView() {
             <input class="input" id="lmu-path-input" value="${escapeHtml(f.lmuPath)}">
             <button type="button" class="btn btn-secondary" id="browse-btn">${ICONS.folderBrowse}${escapeHtml(t("browseButton"))}</button>
           </div>
+          <div class="field-warning" id="lmu-path-warning" style="${f.lmuPathValid ? "display:none;" : ""}">${ICONS.fieldWarning}${escapeHtml(t("lmuPathInvalidWarning"))}</div>
         </div>
         <p class="help-text">${escapeHtml(t("lmuHelp"))}</p>
       </div>
@@ -747,7 +772,13 @@ function renderSettingsView() {
     <div>
       <h6 class="text-muted">${escapeHtml(t("tokenHeading"))}</h6>
       <p class="text-muted" style="font-size:13px;">${escapeHtml(t("tokenHelp"))}</p>
-      ${secretField("f-ACCESS_TOKEN_LIST", displayKey("ACCESS_TOKEN_LIST"), f.env.ACCESS_TOKEN_LIST, secretType)}
+      ${secretField(
+        "f-ACCESS_TOKEN_LIST",
+        displayKey("ACCESS_TOKEN_LIST"),
+        f.env.ACCESS_TOKEN_LIST,
+        secretType,
+        `<a href="#" class="field-hint-link" id="tracktitan-fetch-start-btn">${ICONS.externalLink}${escapeHtml(t("tracktitanFetchButton"))}</a>`
+      )}
       ${secretField("f-ACCESS_TOKEN_DOWNLOAD", displayKey("ACCESS_TOKEN_DOWNLOAD"), f.env.ACCESS_TOKEN_DOWNLOAD, secretType)}
       <div class="field">
         <label>${displayKey("USER_ID")}</label>
@@ -847,11 +878,32 @@ function renderSettingsView() {
     renderModals();
   });
 
+  document.getElementById("tracktitan-fetch-start-btn").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const result = await api().tracktitan_fetch_tokens_start();
+    if (!result || !result.started) return;
+    state.tracktitanFetch = {};
+    renderModals();
+  });
+
+  document.getElementById("lmu-path-input").addEventListener(
+    "input",
+    debounce(async (e) => {
+      const valid = await api().check_lmu_path(e.target.value.trim());
+      f.lmuPathValid = valid;
+      const warning = document.getElementById("lmu-path-warning");
+      if (warning) warning.style.display = valid ? "none" : "flex";
+    }, 400)
+  );
+
   document.getElementById("browse-btn").addEventListener("click", async () => {
     const current = document.getElementById("lmu-path-input").value;
     const picked = await api().browse_lmu_folder(current);
     if (picked) {
       document.getElementById("lmu-path-input").value = picked;
+      f.lmuPathValid = true;
+      const warning = document.getElementById("lmu-path-warning");
+      if (warning) warning.style.display = "none";
     }
   });
 
@@ -979,9 +1031,11 @@ function validationBody(errors, mode) {
   const modeLabel = mode.toUpperCase();
   const hasTrackTitan = errors.some((e) => e.includes("ACCESS_TOKEN") || e.includes("USER_ID"));
   const hasDropbox = errors.some((e) => e.includes("DROPBOX"));
+  const hasLmuPath = errors.some((e) => e.includes("LMU_PATH"));
   const sentences = [];
   if (hasTrackTitan) sentences.push(tFn("validationMissingTrackTitan", modeLabel));
   if (hasDropbox) sentences.push(tFn("validationMissingDropbox", modeLabel));
+  if (hasLmuPath) sentences.push(tFn("validationInvalidLmuPath", modeLabel));
   const items = errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("");
   return `${sentences.map((s) => `<p>${escapeHtml(s)}</p>`).join("")}<ul>${items}</ul>`;
 }
@@ -1059,6 +1113,20 @@ function renderModals() {
           <div class="dialog-actions">
             <button type="button" class="btn btn-ghost" id="dropbox-oauth-cancel">${escapeHtml(t("mapFolderCancel"))}</button>
             <button type="button" class="btn btn-primary" id="dropbox-oauth-confirm">${escapeHtml(t("mapConfirm"))}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state.tracktitanFetch) {
+    html += `
+      <div class="dialog-backdrop" data-modal="tracktitan-fetch">
+        <div class="dialog elev-lg">
+          <div class="dialog-title">${ICONS.externalLink}${escapeHtml(t("tracktitanFetchDialogTitle"))}</div>
+          <div class="dialog-body">${escapeHtml(t("tracktitanFetchDialogBody"))}</div>
+          <div class="dialog-actions">
+            <button type="button" class="btn btn-ghost" id="tracktitan-fetch-cancel">${escapeHtml(t("mapFolderCancel"))}</button>
           </div>
         </div>
       </div>
@@ -1184,6 +1252,15 @@ function renderModals() {
       const tokenInput = document.getElementById("f-DROPBOX_REFRESH_TOKEN");
       if (tokenInput) tokenInput.value = result.refreshToken;
       showToast(t("dropboxOauthSuccessToast"), "success");
+    });
+  }
+
+  const tracktitanFetchCancel = document.getElementById("tracktitan-fetch-cancel");
+  if (tracktitanFetchCancel) {
+    tracktitanFetchCancel.addEventListener("click", async () => {
+      state.tracktitanFetch = null;
+      renderModals();
+      await api().tracktitan_fetch_tokens_cancel();
     });
   }
 

@@ -321,6 +321,7 @@ def test_validate_start_flags_short_credentials(api, mocker):
     mocker.patch.object(config, "USER_ID", "short")
     mocker.patch.object(config, "MOCK_TRACKTITAN", False)
     mocker.patch.object(config, "MOCK_DROPBOX", False)
+    mocker.patch.object(config, "MOCK_LMU", True)  # isolate this test to the credential rule
     mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
 
     errors = api.validate_start("full")
@@ -336,6 +337,7 @@ def test_validate_start_passes_with_credentials_at_least_20_chars(api, mocker):
     mocker.patch.object(config, "USER_ID", long_value)
     mocker.patch.object(config, "MOCK_TRACKTITAN", False)
     mocker.patch.object(config, "MOCK_DROPBOX", False)
+    mocker.patch.object(config, "MOCK_LMU", True)  # isolate this test to the credential rule
     mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
 
     assert api.validate_start("full") == []
@@ -356,11 +358,63 @@ def test_validate_start_checks_dropbox_for_slave_mode(api, mocker):
     mocker.patch.object(config, "DROPBOX_APP_SECRET", "short")
     mocker.patch.object(config, "DROPBOX_REFRESH_TOKEN", "short")
     mocker.patch.object(config, "MOCK_DROPBOX", False)
+    mocker.patch.object(config, "MOCK_LMU", True)  # isolate this test to the credential rule
     mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
 
     errors = api.validate_start("slave")
 
     assert errors == ["DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN"]
+
+
+# ----- validate_start / the LMU path rule ---------------------------------------
+# Only Full and Slave install setups locally (Master only uploads to Dropbox), so
+# only those two modes must fail validate_start over a missing LMU_SETUPS_BASE_PATH.
+
+
+@pytest.mark.parametrize("mode", ["full", "slave"])
+def test_validate_start_flags_missing_lmu_path(api, mocker, tmp_path, mode):
+    import core.config as config
+    mocker.patch.object(config, "MOCK_TRACKTITAN", True)
+    mocker.patch.object(config, "MOCK_DROPBOX", True)
+    mocker.patch.object(config, "MOCK_LMU", False)
+    mocker.patch.object(config, "LMU_SETUPS_BASE_PATH", tmp_path / "does-not-exist")
+    mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
+
+    assert api.validate_start(mode) == ["Invalid or missing LMU_PATH"]
+
+
+@pytest.mark.parametrize("mode", ["full", "slave"])
+def test_validate_start_passes_with_an_existing_lmu_path(api, mocker, tmp_path, mode):
+    import core.config as config
+    mocker.patch.object(config, "MOCK_TRACKTITAN", True)
+    mocker.patch.object(config, "MOCK_DROPBOX", True)
+    mocker.patch.object(config, "MOCK_LMU", False)
+    mocker.patch.object(config, "LMU_SETUPS_BASE_PATH", tmp_path)
+    mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
+
+    assert api.validate_start(mode) == []
+
+
+def test_validate_start_ignores_lmu_path_for_master_mode(api, mocker, tmp_path):
+    import core.config as config
+    mocker.patch.object(config, "MOCK_TRACKTITAN", True)
+    mocker.patch.object(config, "MOCK_DROPBOX", True)
+    mocker.patch.object(config, "MOCK_LMU", False)
+    mocker.patch.object(config, "LMU_SETUPS_BASE_PATH", tmp_path / "does-not-exist")
+    mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
+
+    assert api.validate_start("master") == []
+
+
+def test_validate_start_lmu_path_waived_by_mock_lmu(api, mocker, tmp_path):
+    import core.config as config
+    mocker.patch.object(config, "MOCK_TRACKTITAN", True)
+    mocker.patch.object(config, "MOCK_DROPBOX", True)
+    mocker.patch.object(config, "MOCK_LMU", True)
+    mocker.patch.object(config, "LMU_SETUPS_BASE_PATH", tmp_path / "does-not-exist")
+    mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
+
+    assert api.validate_start("full") == []
 
 
 # ----- start/stop download + progress bridge ------------------------------------
@@ -598,3 +652,171 @@ def test_dropbox_oauth_exchange_code_reports_failures(api, mocker):
     mocker.patch("clients.dropbox_client.exchange_authorization_code", side_effect=RuntimeError("invalid code"))
     result = api.dropbox_oauth_exchange_code("key", "secret", "code")
     assert result == {"error": "invalid code"}
+
+
+# ----- TrackTitan automatic token fetch (a second window + cookie polling) ------
+
+def test_tracktitan_fetch_tokens_start_opens_a_window_and_starts_polling(api, mocker):
+    child = mocker.MagicMock()
+    create_window = mocker.patch("gui.api.webview.create_window", return_value=child)
+    run_fetch = mocker.patch.object(api, "_run_tracktitan_fetch")
+
+    result = api.tracktitan_fetch_tokens_start()
+    api._tt_thread.join(timeout=2)
+
+    assert result == {"started": True}
+    assert create_window.call_args.kwargs["url"] == "https://app.tracktitan.io"
+    assert api._tt_window is child
+    run_fetch.assert_called_once()
+    assert run_fetch.call_args.args[0] is child
+
+
+def test_tracktitan_fetch_tokens_start_rejects_a_concurrent_start(api, mocker):
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_run(child, cancel_event):
+        started.set()
+        release.wait(2)
+
+    mocker.patch("gui.api.webview.create_window", return_value=mocker.MagicMock())
+    mocker.patch.object(api, "_run_tracktitan_fetch", side_effect=fake_run)
+
+    first = api.tracktitan_fetch_tokens_start()
+    assert started.wait(2)
+    second = api.tracktitan_fetch_tokens_start()
+
+    release.set()
+    api._tt_thread.join(timeout=2)
+
+    assert first == {"started": True}
+    assert second == {"started": False, "reason": "already-running"}
+
+
+def test_tracktitan_fetch_tokens_cancel_sets_the_cancel_event(api):
+    api._tt_cancel_event = threading.Event()
+    api.tracktitan_fetch_tokens_cancel()
+    assert api._tt_cancel_event.is_set()
+
+
+def test_tracktitan_fetch_tokens_cancel_is_a_noop_before_any_start(api):
+    api.tracktitan_fetch_tokens_cancel()  # must not raise
+
+
+def test_tracktitan_fetch_tokens_cancel_destroys_the_window_immediately(api, mocker):
+    child = mocker.MagicMock()
+    api._tt_window = child
+    api._tt_cancel_event = threading.Event()
+
+    api.tracktitan_fetch_tokens_cancel()
+
+    child.destroy.assert_called_once()
+    assert api._tt_window is None
+
+
+def _cognito_cookies():
+    from http.cookies import SimpleCookie
+
+    def cookie(name, value):
+        c = SimpleCookie()
+        c[name] = value
+        return c
+
+    return [
+        cookie("CognitoIdentityServiceProvider.abc.someuser.accessToken", "list-token"),
+        cookie("CognitoIdentityServiceProvider.abc.someuser.idToken", "download-token"),
+        cookie("CognitoIdentityServiceProvider.abc.LastAuthUser", "someuser"),
+    ]
+
+
+def test_run_tracktitan_fetch_succeeds_once_all_three_cookies_appear(api):
+    child = SimpleNamespace(get_cookies=lambda: _cognito_cookies(), destroy=lambda: None)
+
+    result = {}
+
+    def fake_push(reason, tokens):
+        result["reason"] = reason
+        result["tokens"] = tokens
+
+    api._push_tracktitan_tokens = fake_push
+    api._run_tracktitan_fetch(child, threading.Event())
+
+    assert result["reason"] == "ok"
+    assert result["tokens"] == {
+        "ACCESS_TOKEN_LIST": "list-token",
+        "ACCESS_TOKEN_DOWNLOAD": "download-token",
+        "USER_ID": "someuser",
+    }
+
+
+def test_run_tracktitan_fetch_closes_the_window_on_success(api, mocker):
+    child = mocker.MagicMock()
+    child.get_cookies.return_value = _cognito_cookies()
+    mocker.patch.object(api, "_push_tracktitan_tokens")
+
+    api._run_tracktitan_fetch(child, threading.Event())
+
+    child.destroy.assert_called_once()
+    assert api._tt_window is None
+
+
+def test_run_tracktitan_fetch_reports_cancelled_when_the_event_is_already_set(api, mocker):
+    child = mocker.MagicMock()
+    child.get_cookies.return_value = []
+    push = mocker.patch.object(api, "_push_tracktitan_tokens")
+    cancel_event = threading.Event()
+    cancel_event.set()
+
+    api._run_tracktitan_fetch(child, cancel_event)
+
+    push.assert_called_once_with("cancelled", None)
+    child.get_cookies.assert_not_called()
+
+
+def test_run_tracktitan_fetch_treats_a_destroyed_window_as_cancelled(api, mocker):
+    child = mocker.MagicMock()
+    child.get_cookies.side_effect = Exception("window gone")
+    push = mocker.patch.object(api, "_push_tracktitan_tokens")
+
+    api._run_tracktitan_fetch(child, threading.Event())
+
+    push.assert_called_once_with("cancelled", None)
+
+
+def test_run_tracktitan_fetch_times_out_when_login_never_completes(api, mocker):
+    mocker.patch.object(api, "_TT_TIMEOUT_SECONDS", 0)
+    child = mocker.MagicMock()
+    push = mocker.patch.object(api, "_push_tracktitan_tokens")
+
+    api._run_tracktitan_fetch(child, threading.Event())
+
+    child.get_cookies.assert_not_called()
+    push.assert_called_once_with("timeout", None)
+
+
+def test_close_tt_window_swallows_destroy_errors(api, mocker):
+    child = mocker.MagicMock()
+    child.destroy.side_effect = Exception("already closed")
+    api._tt_window = child
+
+    api._close_tt_window()  # must not raise
+
+    assert api._tt_window is None
+
+
+def test_close_tt_window_is_a_noop_without_a_window(api):
+    api._close_tt_window()  # must not raise
+
+
+def test_push_tracktitan_tokens_without_a_window_is_a_noop(api):
+    api._push_tracktitan_tokens("ok", {"ACCESS_TOKEN_LIST": "x"})  # must not raise
+
+
+def test_push_tracktitan_tokens_sends_the_expected_payload(api):
+    api._window = SimpleNamespace(evaluate_js=lambda script: setattr(api, "_last_js", script))
+    api._push_tracktitan_tokens("ok", {"ACCESS_TOKEN_LIST": "x"})
+
+    assert "window.onTrackTitanTokens" in api._last_js
+    assert '"ok": true' in api._last_js
+    assert '"reason": "ok"' in api._last_js
+    assert '"ACCESS_TOKEN_LIST": "x"' in api._last_js
