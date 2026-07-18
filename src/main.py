@@ -1,7 +1,13 @@
 import argparse, logging, os, sys, threading
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
+
+LOG_RETENTION_DAYS: int = 7
+_CONSOLE_FORMAT = "%(message)s"
+_FILE_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 
 def _apply_cli_env(argv: Optional[list[str]] = None) -> None:
@@ -35,26 +41,42 @@ def _apply_cli_env(argv: Optional[list[str]] = None) -> None:
         os.environ["MODE"] = args.mode
 
 
+def _prune_old_logs(logs_dir: Path, max_age_days: int, now: Optional[datetime] = None) -> None:
+    """Delete daily log files older than max_age_days. Runs once per app start
+    rather than relying on stdlib rotation, so it holds unconditionally - not
+    just when a log record happens to be emitted past a rollover time."""
+    cutoff = (now or datetime.now()) - timedelta(days=max_age_days)
+    for path in logs_dir.glob("app-*.log"):
+        try:
+            if datetime.fromtimestamp(path.stat().st_mtime) < cutoff:
+                path.unlink()
+        except OSError:
+            continue
+
+
 def setup_logging() -> logging.Logger:
-    from core.config import LOG_FORMAT_CONSOLE, LOG_FORMAT_FILE, LOG_LEVEL_CONSOLE, LOG_LEVEL_FILE
+    from core.config import LOG_LEVEL
+    from core.utils import get_path
 
-    levels = logging.getLevelNamesMapping()
-
-    lvl_c = levels.get(LOG_LEVEL_CONSOLE.upper(), logging.INFO)
-    lvl_f = levels.get(LOG_LEVEL_FILE.upper(), logging.DEBUG)
+    lvl = logging.getLevelNamesMapping().get(LOG_LEVEL, logging.INFO)
 
     logger = logging.getLogger("TrackTitanDownloader")
-    logger.setLevel(min(lvl_c, lvl_f))
+    logger.setLevel(lvl)
 
-    # --- Console Handler ---
+    # --- Console Handler (dev-only: invisible in the --windowed packaged exe) ---
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(lvl_c)
-    console_handler.setFormatter(logging.Formatter(LOG_FORMAT_CONSOLE))
+    console_handler.setLevel(lvl)
+    console_handler.setFormatter(logging.Formatter(_CONSOLE_FORMAT))
 
     # --- File Handler ---
-    file_handler = logging.FileHandler('app_debug.log', mode='a', encoding='utf-8')
-    file_handler.setLevel(lvl_f)
-    file_handler.setFormatter(logging.Formatter(LOG_FORMAT_FILE))
+    logs_dir = get_path("logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    _prune_old_logs(logs_dir, LOG_RETENTION_DAYS)
+
+    log_path = logs_dir / f"app-{datetime.now():%Y-%m-%d}.log"
+    file_handler = logging.FileHandler(log_path, mode='a', encoding='utf-8')
+    file_handler.setLevel(lvl)
+    file_handler.setFormatter(logging.Formatter(_FILE_FORMAT))
 
     if logger.hasHandlers():
         logger.handlers.clear()
@@ -63,6 +85,17 @@ def setup_logging() -> logging.Logger:
     logger.addHandler(file_handler)
 
     return logger
+
+
+def apply_log_level(level: str) -> None:
+    """Re-apply a new level to the already-attached handlers in place, so a
+    Settings save takes effect immediately (mirrors gui/api.py's
+    _reload_config(), which hot-reloads every other setting the same way)."""
+    lvl = logging.getLevelNamesMapping().get(level.strip().upper(), logging.INFO)
+    logger = logging.getLogger("TrackTitanDownloader")
+    logger.setLevel(lvl)
+    for handler in logger.handlers:
+        handler.setLevel(lvl)
 
 
 def _log_sandbox(log: logging.Logger) -> None:

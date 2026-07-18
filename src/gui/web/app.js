@@ -173,8 +173,7 @@ function buildSettingsForm(bootstrap) {
       DROPBOX_APP_SECRET: env.DROPBOX_APP_SECRET || "",
       DROPBOX_REFRESH_TOKEN: env.DROPBOX_REFRESH_TOKEN || "",
     },
-    logLevelConsole: (logging.console && logging.console.level) || "INFO",
-    logLevelFile: (logging.file && logging.file.level) || "DEBUG",
+    logLevel: logging.level || "DEBUG",
     minDelay: network.min_delay !== undefined ? network.min_delay : 0.5,
     maxDelay: network.max_delay !== undefined ? network.max_delay : 1.5,
     timeout: network.timeout !== undefined ? network.timeout : 30,
@@ -652,9 +651,8 @@ function captureSettingsForm() {
     f.env.DROPBOX_REFRESH_TOKEN = getVal("f-DROPBOX_REFRESH_TOKEN");
     f.dropboxFolder = getVal("f-dropboxFolder");
   }
-  if (state.advancedOpen && document.getElementById("f-logLevelConsole")) {
-    f.logLevelConsole = getVal("f-logLevelConsole");
-    f.logLevelFile = getVal("f-logLevelFile");
+  if (state.advancedOpen && document.getElementById("f-logLevel")) {
+    f.logLevel = getVal("f-logLevel");
     f.pageSize = getVal("f-pageSize");
     f.timeout = getVal("f-timeout");
     f.minDelay = getVal("f-minDelay");
@@ -879,9 +877,13 @@ function renderAdvancedFields(f) {
 
   return `
     <span class="text-muted" style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase;">${escapeHtml(t("logSection"))}</span>
-    <div class="field-row">
-      ${textField("f-logLevelConsole", "logConsoleLabel", "logConsoleTip", f.logLevelConsole)}
-      ${textField("f-logLevelFile", "logFileLabel", "logFileTip", f.logLevelFile)}
+    <div class="field">
+      <label>${escapeHtml(t("logLevelLabel"))} ${infoTip(t("logLevelTip"))}</label>
+      <select class="input" id="f-logLevel">
+        ${["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"].map(lvl =>
+          `<option value="${lvl}" ${lvl === f.logLevel ? "selected" : ""}>${lvl}</option>`
+        ).join("")}
+      </select>
     </div>
     <div class="hr"></div>
     <span class="text-muted" style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase;">${escapeHtml(t("networkSection"))}</span>
@@ -938,10 +940,7 @@ async function onSaveSettings() {
   };
 
   if (state.advancedOpen) {
-    configPatch.logging = {
-      console: { level: getVal("f-logLevelConsole") },
-      file: { level: getVal("f-logLevelFile") },
-    };
+    configPatch.logging = { level: getVal("f-logLevel") };
     configPatch.network = {
       min_delay: parseFloat(getVal("f-minDelay")),
       max_delay: parseFloat(getVal("f-maxDelay")),

@@ -17,10 +17,7 @@ SETTINGS_DB_PATH: Path = get_data_dir() / "settings.db"
 # and dismissed=False are the real first-run behavior.
 DEFAULT_CONFIG: dict[str, Any] = {
     "mode": "full",
-    "logging": {
-        "console": {"level": "INFO", "format": "%(message)s"},
-        "file": {"level": "DEBUG", "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"},
-    },
+    "logging": {"level": "DEBUG"},
     "network": {
         "base_url": "https://services.tracktitan.io/api",
         "consumer_id": "trackTitan",
