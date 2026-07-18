@@ -121,10 +121,7 @@ class Api:
                 "DROPBOX_REFRESH_TOKEN": config.DROPBOX_REFRESH_TOKEN or "",
             },
             "config": {
-                "logging": {
-                    "console": {"level": config.LOG_LEVEL_CONSOLE},
-                    "file": {"level": config.LOG_LEVEL_FILE},
-                },
+                "logging": {"level": config.LOG_LEVEL},
                 "network": {
                     "min_delay": config.MIN_DELAY,
                     "max_delay": config.MAX_DELAY,
@@ -389,6 +386,9 @@ class Api:
             module = sys.modules.get(name)
             if module is not None:
                 importlib.reload(module)
+
+        import main
+        main.apply_log_level(config.LOG_LEVEL)
 
     def set_language(self, language: str) -> None:
         # No relaunch needed: the frontend re-renders instantly against the other
