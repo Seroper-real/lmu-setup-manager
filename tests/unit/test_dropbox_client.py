@@ -165,8 +165,18 @@ def test_get_authorization_url_starts_an_offline_flow(mocker):
 
     url = get_authorization_url("app-key", "app-secret")
 
-    flow_cls.assert_called_once_with("app-key", "app-secret", token_access_type="offline")
+    flow_cls.assert_called_once_with("app-key", "app-secret", token_access_type="offline", scope=None)
     assert url == "https://dropbox.com/oauth2/authorize?x=1"
+
+
+def test_get_authorization_url_forwards_the_requested_scope(mocker):
+    flow_cls = mocker.patch("clients.dropbox_client.dropbox.DropboxOAuth2FlowNoRedirect")
+    flow_cls.return_value.start.return_value = "https://dropbox.com/oauth2/authorize?x=1"
+    from clients.dropbox_client import get_authorization_url, READ_ONLY_SCOPES
+
+    get_authorization_url("app-key", "app-secret", scope=READ_ONLY_SCOPES)
+
+    flow_cls.assert_called_once_with("app-key", "app-secret", token_access_type="offline", scope=READ_ONLY_SCOPES)
 
 
 def test_exchange_authorization_code_returns_the_refresh_token(mocker):

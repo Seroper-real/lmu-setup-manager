@@ -19,16 +19,32 @@ T = TypeVar("T")
 
 log = logging.getLogger("TrackTitanDownloader")
 
-__all__ = ["DropboxClient", "RemoteSetup", "get_authorization_url", "exchange_authorization_code"]
+__all__ = [
+    "DropboxClient",
+    "RemoteSetup",
+    "get_authorization_url",
+    "exchange_authorization_code",
+    "READ_WRITE_SCOPES",
+    "READ_ONLY_SCOPES",
+]
+
+# Minimal scopes for each token type offered by the Settings "get automatically"
+# dialog, matching what each operating mode actually calls on DropboxClient:
+# Master (Upload only) lists+uploads+deletes, Slave (Install only) lists+downloads.
+READ_WRITE_SCOPES = ["files.metadata.read", "files.content.write"]
+READ_ONLY_SCOPES = ["files.metadata.read", "files.content.read"]
 
 
-def get_authorization_url(app_key: str, app_secret: str) -> str:
+def get_authorization_url(app_key: str, app_secret: str, scope: list[str] | None = None) -> str:
     """Starts the OAuth2 "no redirect" flow (the CLI/desktop-app variant with no
     web server to receive a redirect) and returns the URL the user must open to
     approve the app. token_access_type="offline" is what makes Dropbox hand back
     a refresh token - not just a short-lived access token - once the resulting
-    auth code is exchanged via exchange_authorization_code()."""
-    flow = dropbox.DropboxOAuth2FlowNoRedirect(app_key, app_secret, token_access_type="offline")
+    auth code is exchanged via exchange_authorization_code(). Passing scope (e.g.
+    READ_ONLY_SCOPES) restricts the resulting token below whatever the Dropbox
+    app itself is configured to allow, so a single app can hand out both
+    read-only and read-write tokens."""
+    flow = dropbox.DropboxOAuth2FlowNoRedirect(app_key, app_secret, token_access_type="offline", scope=scope)
     return flow.start()
 
 

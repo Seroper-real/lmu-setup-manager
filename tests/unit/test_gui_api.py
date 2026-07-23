@@ -642,6 +642,20 @@ def test_dropbox_oauth_get_url_reports_failures(api, mocker):
     assert api.dropbox_oauth_get_url("key", "secret") == {"error": "bad app key"}
 
 
+def test_dropbox_oauth_get_url_defaults_to_the_read_write_scope(api, mocker):
+    from clients.dropbox_client import READ_WRITE_SCOPES
+    get_url = mocker.patch("clients.dropbox_client.get_authorization_url", return_value="https://dropbox.com/authorize")
+    api.dropbox_oauth_get_url("key", "secret")
+    get_url.assert_called_once_with("key", "secret", scope=READ_WRITE_SCOPES)
+
+
+def test_dropbox_oauth_get_url_requests_the_read_only_scope(api, mocker):
+    from clients.dropbox_client import READ_ONLY_SCOPES
+    get_url = mocker.patch("clients.dropbox_client.get_authorization_url", return_value="https://dropbox.com/authorize")
+    api.dropbox_oauth_get_url("key", "secret", token_type="read_only")
+    get_url.assert_called_once_with("key", "secret", scope=READ_ONLY_SCOPES)
+
+
 def test_dropbox_oauth_exchange_code_returns_the_refresh_token(api, mocker):
     mocker.patch("clients.dropbox_client.exchange_authorization_code", return_value="the-refresh-token")
     result = api.dropbox_oauth_exchange_code("key", "secret", "code")

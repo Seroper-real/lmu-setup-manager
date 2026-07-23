@@ -939,13 +939,7 @@ function renderSettingsView() {
       showToast(t("dropboxOauthNeedKeysToast"), "error");
       return;
     }
-    const result = await api().dropbox_oauth_get_url(appKey, appSecret);
-    if (!result || result.error) {
-      showToast((result && result.error) || t("dropboxOauthGenericError"), "error");
-      return;
-    }
-    await api().open_external_link(result.url);
-    state.dropboxOAuth = { appKey, appSecret };
+    state.dropboxOAuth = { step: "choice", appKey, appSecret };
     renderModals();
   });
 
@@ -1108,6 +1102,23 @@ async function discardSettingsChanges() {
   api().mark_settings_dirty(false);
 }
 
+// Advances the Dropbox OAuth dialog from the read-only/read-write choice step
+// to the code-paste step: requests an authorize URL scoped to the chosen
+// token type, opens it in the system browser, then swaps the modal.
+async function startDropboxOauthFlow(tokenType) {
+  const { appKey, appSecret } = state.dropboxOAuth;
+  const result = await api().dropbox_oauth_get_url(appKey, appSecret, tokenType);
+  if (!result || result.error) {
+    showToast((result && result.error) || t("dropboxOauthGenericError"), "error");
+    state.dropboxOAuth = null;
+    renderModals();
+    return;
+  }
+  await api().open_external_link(result.url);
+  state.dropboxOAuth = { step: "code", appKey, appSecret };
+  renderModals();
+}
+
 // ----- modals (warning / correggi / validation) --------------------------------
 
 // Our real check_credentials() returns a flat list of missing/invalid field
@@ -1188,7 +1199,33 @@ function renderModals() {
     `;
   }
 
-  if (state.dropboxOAuth) {
+  if (state.dropboxOAuth && state.dropboxOAuth.step === "choice") {
+    html += `
+      <div class="dialog-backdrop" data-modal="dropbox-oauth-choice">
+        <div class="dialog elev-lg">
+          <div class="dialog-title">${ICONS.externalLink}${escapeHtml(t("dropboxOauthChoiceTitle"))}</div>
+          <div class="dialog-body">
+            <p class="token-choice-warning">${ICONS.fieldWarning}${escapeHtml(t("dropboxOauthChoiceWarning"))}</p>
+            <div class="token-choice-list">
+              <button type="button" class="mode-card" id="dropbox-oauth-choice-read-write">
+                <h3>${escapeHtml(t("dropboxOauthReadWriteTitle"))}</h3>
+                <p>${escapeHtml(t("dropboxOauthReadWriteDesc"))}</p>
+              </button>
+              <button type="button" class="mode-card" id="dropbox-oauth-choice-read-only">
+                <h3>${escapeHtml(t("dropboxOauthReadOnlyTitle"))}</h3>
+                <p>${escapeHtml(t("dropboxOauthReadOnlyDesc"))}</p>
+              </button>
+            </div>
+          </div>
+          <div class="dialog-actions">
+            <button type="button" class="btn btn-ghost" id="dropbox-oauth-choice-cancel">${escapeHtml(t("mapFolderCancel"))}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state.dropboxOAuth && state.dropboxOAuth.step === "code") {
     html += `
       <div class="dialog-backdrop" data-modal="dropbox-oauth">
         <div class="dialog elev-lg">
@@ -1329,6 +1366,24 @@ function renderModals() {
       renderSidebar();
       showToast(t(all ? "deletedAllToast" : "deletedToast"), "success");
     });
+  }
+
+  const dropboxOauthChoiceCancel = document.getElementById("dropbox-oauth-choice-cancel");
+  if (dropboxOauthChoiceCancel) {
+    dropboxOauthChoiceCancel.addEventListener("click", () => {
+      state.dropboxOAuth = null;
+      renderModals();
+    });
+  }
+
+  const dropboxOauthChoiceReadWrite = document.getElementById("dropbox-oauth-choice-read-write");
+  if (dropboxOauthChoiceReadWrite) {
+    dropboxOauthChoiceReadWrite.addEventListener("click", () => startDropboxOauthFlow("read_write"));
+  }
+
+  const dropboxOauthChoiceReadOnly = document.getElementById("dropbox-oauth-choice-read-only");
+  if (dropboxOauthChoiceReadOnly) {
+    dropboxOauthChoiceReadOnly.addEventListener("click", () => startDropboxOauthFlow("read_only"));
   }
 
   const dropboxOauthCancel = document.getElementById("dropbox-oauth-cancel");
