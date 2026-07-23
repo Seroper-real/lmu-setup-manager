@@ -403,10 +403,11 @@ class Api:
     def open_external_link(self, url: str) -> None:
         webbrowser.open(url)
 
-    def dropbox_oauth_get_url(self, app_key: str, app_secret: str) -> dict[str, object]:
-        from clients.dropbox_client import get_authorization_url
+    def dropbox_oauth_get_url(self, app_key: str, app_secret: str, token_type: str = "read_write") -> dict[str, object]:
+        from clients.dropbox_client import get_authorization_url, READ_ONLY_SCOPES, READ_WRITE_SCOPES
+        scope = READ_ONLY_SCOPES if token_type == "read_only" else READ_WRITE_SCOPES
         try:
-            return {"url": get_authorization_url(app_key, app_secret)}
+            return {"url": get_authorization_url(app_key, app_secret, scope=scope)}
         except Exception as e:
             log.warning(f"Failed to start Dropbox OAuth flow: {e}")
             return {"error": str(e)}

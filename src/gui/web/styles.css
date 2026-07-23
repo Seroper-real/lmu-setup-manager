@@ -397,6 +397,13 @@ body { overflow: hidden; }
 .mode-card h3 { font-size: 15px; }
 .mode-card p { font-size: 13px; color: var(--color-neutral-500); margin: 0; }
 
+.token-choice-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.token-choice-list .mode-card { width: 100%; }
+.token-choice-warning {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 13px;
+  color: var(--color-warning); margin-bottom: var(--space-3);
+}
+
 .status-card { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: var(--space-6); gap: var(--space-4); }
 .status-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--color-neutral-700); flex: none; }
