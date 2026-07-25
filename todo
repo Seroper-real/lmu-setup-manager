@@ -1,6 +1,0 @@
-# Project Tasks
-
-## UI & Management
-- [ ] **Feature: Delete All Installed Setups Button**
-    - **Description:** Add a button to delete all installed setups, complete with a confirmation dialog matching the existing ones.
-    - **UI Requirements:** Position the button on the far right of the same row where the search bar is currently located.

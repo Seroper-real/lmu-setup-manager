@@ -25,8 +25,11 @@ const state = {
   // regardless of this set, without mutating it, so clearing the search restores
   // the manual state exactly as the user left it.
   expandedTracks: new Set(),
-  // Per-car accordion inside an expanded track card, keyed by setupId - reveals
-  // that car's individual installed setup file names on click.
+  // Per-car accordion inside an expanded track card, keyed by `${track}::${car}` -
+  // reveals that car's HYMO and/or GO sub-groups on click.
+  expandedCarGroups: new Set(),
+  // Per-installed-setup accordion inside an expanded car/type group, keyed by
+  // setupId - reveals that one installed setup's individual file names on click.
   expandedCars: new Set(),
   trackFolderOptions: [],
   correggiTarget: null,
@@ -421,6 +424,7 @@ function renderSetupsView() {
       </div>
       <button type="button" class="toggle-chip ${state.installedUnmappedOnly ? "active" : ""}" id="setups-unmapped-toggle">${ICONS.filter}${escapeHtml(t("unmappedOnlyFilter"))}</button>
       <span class="tag tag-outline results-count">${state.installedData.totalCount} ${escapeHtml(t("resultsWord"))}</span>
+      <button type="button" class="btn btn-ghost text-danger toolbar-push-end" id="setups-delete-all-btn" ${state.installedData.grandTotal ? "" : "disabled"}>${ICONS.trash}${escapeHtml(t("deleteAllInstalledButton"))}</button>
     </div>
     <div class="setups-list">${groupsHtml}</div>
   `;
@@ -444,6 +448,11 @@ function renderSetupsView() {
     });
   });
 
+  document.getElementById("setups-delete-all-btn").addEventListener("click", () => {
+    state.deleteTarget = { allInstalled: true };
+    renderModals();
+  });
+
   el.querySelectorAll("[data-correggi]").forEach((btn) => {
     btn.addEventListener("click", () => openCorreggiModal(btn.dataset.correggi));
   });
@@ -453,6 +462,15 @@ function renderSetupsView() {
       const key = btn.dataset.toggleTrack;
       if (state.expandedTracks.has(key)) state.expandedTracks.delete(key);
       else state.expandedTracks.add(key);
+      renderSetupsView();
+    });
+  });
+
+  el.querySelectorAll("[data-toggle-car-group]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.toggleCarGroup;
+      if (state.expandedCarGroups.has(key)) state.expandedCarGroups.delete(key);
+      else state.expandedCarGroups.add(key);
       renderSetupsView();
     });
   });
@@ -473,6 +491,19 @@ function renderSetupsView() {
         car: btn.dataset.car,
         track: btn.dataset.track,
         all: false,
+      };
+      renderModals();
+    });
+  });
+
+  el.querySelectorAll("[data-delete-type-ids]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.deleteTarget = {
+        setupIds: JSON.parse(btn.dataset.deleteTypeIds),
+        car: btn.dataset.car,
+        track: btn.dataset.track,
+        groupType: btn.dataset.deleteType,
+        all: true,
       };
       renderModals();
     });
@@ -501,13 +532,14 @@ function renderTrackGroup(group) {
   const isSearching = !!state.installedSearch.trim();
   const expanded = isSearching || state.expandedTracks.has(group.track);
 
-  const rows = group.setups.map((s) => renderCarRow(s, group)).join("");
-  const setupIds = group.setups.map((s) => s.setupId);
+  const allSetups = group.cars.flatMap((c) => c.types.flatMap((ty) => ty.setups));
+  const rows = group.cars.map((c) => renderCarGroup(group, c)).join("");
+  const setupIds = allSetups.map((s) => s.setupId);
 
   const unmappedTag = !group.trackFound
     ? `<span class="tag tag-neutral">${escapeHtml(t("unmappedTag"))}</span>
        <button type="button" class="btn btn-ghost" data-correggi="${escapeHtml(group.track)}">${ICONS.edit}${escapeHtml(t("correctButton"))}</button>
-       <span class="arrow">&rarr; ${escapeHtml((group.setups[0] && group.setups[0].installationFolder) || "")}</span>`
+       <span class="arrow">&rarr; ${escapeHtml((allSetups[0] && allSetups[0].installationFolder) || "")}</span>`
     : "";
 
   return `
@@ -523,7 +555,7 @@ function renderTrackGroup(group) {
             <button type="button" class="btn btn-ghost text-danger" data-delete-track="${escapeHtml(group.track)}" data-delete-track-ids="${escapeHtml(JSON.stringify(setupIds))}">${ICONS.trash}</button>
             <span class="tooltip-text">${escapeHtml(t("deleteAllButton"))}</span>
           </span>
-          <span class="tag tag-outline group-count">${group.setups.length}</span>
+          <span class="tag tag-outline group-count">${allSetups.length}</span>
         </div>
       </div>
       ${expanded ? `<div class="setup-rows">${rows}</div>` : ""}
@@ -531,38 +563,79 @@ function renderTrackGroup(group) {
   `;
 }
 
-// Each car is its own accordion, independent of the track card's own
-// expand/collapse: clicking its header reveals the individual setup file names
-// installed for it (s.fileNames), instead of just the aggregate file count.
-function renderCarRow(s, group) {
-  const carExpanded = state.expandedCars.has(s.setupId);
+// One row per unique car in the track, regardless of how many installed setups
+// it has (a car can carry both a HYMO and a GO setup at once - see
+// renderSetupEntry, which tags each row with its type). Independent accordion
+// from the track card's own expand/collapse; expanding reveals every setup
+// this car actually has installed, HYMO and/or GO alike.
+function renderCarGroup(group, carGroup) {
+  const isSearching = !!state.installedSearch.trim();
+  const key = `${group.track}::${carGroup.car}`;
+  const expanded = isSearching || state.expandedCarGroups.has(key);
+  const totalCount = carGroup.types.reduce((n, ty) => n + ty.setups.length, 0);
 
-  const files = (s.fileNames || [])
-    .map((name) => `<div class="setup-file">${escapeHtml(name)}</div>`)
+  const rowsHtml = carGroup.types
+    .flatMap((ty) => ty.setups.map((s, i) => renderSetupEntry(s, group, ty, i === 0)))
     .join("");
 
   return `
     <div class="setup-car">
       <div class="setup-car-header">
-        <button type="button" class="setup-car-toggle" data-toggle-car="${escapeHtml(s.setupId)}">
-          <span class="chevron ${carExpanded ? "expanded" : ""}">${ICONS.chevron}</span>
-          <span class="car">${escapeHtml(s.car)}</span>
+        <button type="button" class="setup-car-toggle" data-toggle-car-group="${escapeHtml(key)}">
+          <span class="chevron ${expanded ? "expanded" : ""}">${ICONS.chevron}</span>
+          <span class="car">${escapeHtml(carGroup.car)}</span>
         </button>
-        <span class="meta">${formatDate(s.installDate)}</span>
+        <span class="tag tag-outline group-count">${totalCount}</span>
+      </div>
+      ${expanded ? `<div class="setup-types">${rowsHtml}</div>` : ""}
+    </div>
+  `;
+}
+
+// One installed setup's own accordion, independent of the car group's
+// expand/collapse: clicking its header reveals the individual setup file names
+// installed for it (s.fileNames), instead of just the aggregate file count.
+// The HYMO/GO badge lives on this same row (rather than a separate group
+// header) since most cars only ever have one setup per type, which made a
+// dedicated header row mostly empty space; the redundant per-type count that
+// used to sit next to it is gone for the same reason. When a type has more
+// than one setup (e.g. multiple HYMO variants), the first entry also carries
+// a "delete all of this type" button, distinct from its own per-entry delete.
+function renderSetupEntry(s, group, ty, isFirst) {
+  const entryExpanded = state.expandedCars.has(s.setupId);
+  const badge = `<span class="tag tag-outline">${escapeHtml(ty.type)}</span>`;
+
+  const files = (s.fileNames || [])
+    .map((name) => `<div class="setup-file">${escapeHtml(name)}</div>`)
+    .join("");
+
+  const bulkDeleteButton = isFirst && ty.setups.length > 1
+    ? `<span class="tooltip">
+         <button type="button" class="btn btn-ghost text-danger" data-delete-type-ids="${escapeHtml(JSON.stringify(ty.setups.map((x) => x.setupId)))}" data-delete-type="${escapeHtml(ty.type)}" data-car="${escapeHtml(s.car)}" data-track="${escapeHtml(group.track)}">${ICONS.trash}</button>
+         <span class="tooltip-text">${escapeHtml(tFn("deleteGroupButtonTooltip", ty.type))}</span>
+       </span>`
+    : "";
+
+  return `
+    <div class="setup-entry">
+      <div class="setup-entry-header">
+        <button type="button" class="setup-entry-toggle" data-toggle-car="${escapeHtml(s.setupId)}">
+          <span class="chevron ${entryExpanded ? "expanded" : ""}">${ICONS.chevron}</span>
+          ${badge}
+          <span class="meta">${formatDate(s.installDate)}</span>
+        </button>
         <span class="tag tag-outline">${s.fileCount} ${escapeHtml(t("filesUnit"))}</span>
-        ${s.setupType === "GO"
-          ? `<span class="tooltip"><span class="tag tag-accent-2">GO</span><span class="tooltip-text">${escapeHtml(t("goBadgeTooltip"))}</span></span>`
-          : ""}
         ${s.installationFolder ? `<span class="meta meta-icon">${ICONS.folder}${escapeHtml(s.installationFolder)}</span>` : ""}
         ${s.hotlapLink
           ? `<a class="btn btn-ghost" href="#" data-open-link="${escapeHtml(s.hotlapLink)}" title="${escapeHtml(t("hotlapTitle"))}">${ICONS.hotlap}${escapeHtml(t("hotlapLabel"))}</a>`
           : ""}
+        ${bulkDeleteButton}
         <span class="tooltip">
           <button type="button" class="btn btn-ghost text-danger" data-delete-setup="${escapeHtml(s.setupId)}" data-car="${escapeHtml(s.car)}" data-track="${escapeHtml(group.track)}">${ICONS.trash}</button>
           <span class="tooltip-text">${escapeHtml(t("deleteButton"))}</span>
         </span>
       </div>
-      ${carExpanded ? `<div class="setup-files">${files}</div>` : ""}
+      ${entryExpanded ? `<div class="setup-files">${files}</div>` : ""}
     </div>
   `;
 }
@@ -1198,8 +1271,16 @@ function renderModals() {
   }
 
   if (state.deleteTarget) {
-    const deleteTitle = state.deleteTarget.all ? t("deleteAllConfirmTitle") : t("deleteConfirmTitle");
-    const deleteBody = state.deleteTarget.all
+    const deleteTitle = state.deleteTarget.allInstalled
+      ? t("deleteAllInstalledConfirmTitle")
+      : state.deleteTarget.all
+      ? t("deleteAllConfirmTitle")
+      : t("deleteConfirmTitle");
+    const deleteBody = state.deleteTarget.allInstalled
+      ? tFn("deleteAllInstalledConfirmBody", state.installedData.grandTotal)
+      : state.deleteTarget.groupType
+      ? tFn("deleteGroupConfirmBody", state.deleteTarget.groupType, state.deleteTarget.car, state.deleteTarget.setupIds.length)
+      : state.deleteTarget.all
       ? tFn("deleteAllConfirmBody", state.deleteTarget.track, state.deleteTarget.setupIds.length)
       : tFn("deleteConfirmBody", state.deleteTarget.car, state.deleteTarget.track);
     html += `
@@ -1370,10 +1451,12 @@ function renderModals() {
   const deleteConfirm = document.getElementById("delete-confirm");
   if (deleteConfirm) {
     deleteConfirm.addEventListener("click", async () => {
-      const { setupIds, all } = state.deleteTarget;
+      const { setupIds, all, allInstalled } = state.deleteTarget;
       state.deleteTarget = null;
       renderModals();
-      if (all) {
+      if (allInstalled) {
+        await api().delete_all_setups();
+      } else if (all) {
         await api().delete_setups(setupIds);
       } else {
         await api().delete_setup(setupIds[0]);
@@ -1381,7 +1464,7 @@ function renderModals() {
       await refreshInstalled();
       renderSetupsView();
       renderSidebar();
-      showToast(t(all ? "deletedAllToast" : "deletedToast"), "success");
+      showToast(t(allInstalled ? "deletedAllInstalledToast" : all ? "deletedAllToast" : "deletedToast"), "success");
     });
   }
 
@@ -1508,6 +1591,156 @@ async function resolveUnsavedChangesPrompt(action) {
   if (prompt.reason === "nav") goToView(prompt.target);
   else if (prompt.reason === "close") await api().confirm_close();
 }
+
+// ----- custom text-field context menu (Cut/Copy/Paste/Select all) --------------
+// pywebview's EdgeChromium backend ties the native right-click context menu to
+// debug mode (AreDefaultContextMenusEnabled = debug), and this app never runs
+// with debug=True in production - so right-clicking anywhere, including inside
+// a text/password field, normally shows nothing at all. Rather than turning on
+// debug mode (which would also expose DevTools/Inspect to end users), this
+// renders a small menu of our own for editable fields, wired through the same
+// clipboard APIs the Settings "copy" button already uses.
+
+// Only input types the Selection API (selectionStart/selectionEnd/setRangeText)
+// actually supports - per the HTML spec, "number" and similar non-text types
+// throw when read/written this way, so they are deliberately left out (Ctrl+C/
+// Ctrl+V on those still work natively; this menu just doesn't cover them).
+const EDITABLE_TEXT_INPUT_TYPES = new Set(["text", "search", "url", "tel", "password"]);
+
+let contextMenuEl = null;
+
+function closeContextMenu() {
+  if (contextMenuEl) {
+    contextMenuEl.remove();
+    contextMenuEl = null;
+  }
+}
+
+function getEditableTextField(el) {
+  const field = el.closest("input");
+  if (!field || field.disabled) return null;
+  return EDITABLE_TEXT_INPUT_TYPES.has(field.type) ? field : null;
+}
+
+// Shared with the Settings "copy" button's own fallback: the async Clipboard
+// API is preferred, but falls back to a hidden textarea + execCommand for
+// hosts where it is unavailable (rather than the field itself, since the
+// field may be masked or the text may be only part of its value). Paste does
+// NOT use this - see contextMenuPaste's comment for why reading is different
+// from writing here.
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch (e) {
+    // fall through to the legacy path below
+  }
+  const helper = document.createElement("textarea");
+  helper.value = text;
+  helper.style.position = "fixed";
+  helper.style.opacity = "0";
+  document.body.appendChild(helper);
+  helper.select();
+  document.execCommand("copy");
+  helper.remove();
+}
+
+async function contextMenuCut(field) {
+  const start = field.selectionStart, end = field.selectionEnd;
+  const selected = field.value.slice(start, end);
+  if (!selected) return;
+  await copyTextToClipboard(selected);
+  field.setRangeText("", start, end, "end");
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function contextMenuCopy(field) {
+  const selected = field.value.slice(field.selectionStart, field.selectionEnd);
+  if (selected) await copyTextToClipboard(selected);
+}
+
+// Paste can't use navigator.clipboard.readText() the way copy/cut use
+// writeText(): reading is blocked here without a permission grant WebView2
+// never prompts for in this app, and the legacy document.execCommand("paste")
+// fallback that used to sit here is a documented WebView2 bug - it can
+// silently insert the wrong content (e.g. the app's own local URL) instead of
+// a real paste (MicrosoftEdge/WebView2Feedback#1945). Physical Ctrl+V has
+// always worked correctly because it never goes through either JS API - it's
+// handled natively by WebView2 as a real OS keystroke. So instead of reading
+// the clipboard in JS, this asks Python to synthesize that same real,
+// OS-level Ctrl+V keystroke (see Api.simulate_paste_shortcut): WebView2 can't
+// tell it apart from the user physically pressing the keys, so it goes
+// through the exact path that already works.
+async function contextMenuPaste(field) {
+  field.focus();
+  try {
+    await api().simulate_paste_shortcut();
+  } catch (e) {
+    showToast(t("clipboardPasteBlockedToast"), "error");
+  }
+}
+
+function contextMenuSelectAll(field) {
+  field.focus();
+  field.select();
+}
+
+function openContextMenu(e, field) {
+  closeContextMenu();
+  field.focus();
+
+  const hasSelection = field.selectionStart !== field.selectionEnd;
+  const items = [
+    { key: "cut", label: t("contextMenuCut"), enabled: hasSelection && !field.readOnly, run: () => contextMenuCut(field) },
+    { key: "copy", label: t("contextMenuCopy"), enabled: hasSelection, run: () => contextMenuCopy(field) },
+    { key: "paste", label: t("contextMenuPaste"), enabled: !field.readOnly, run: () => contextMenuPaste(field) },
+    { key: "selectAll", label: t("contextMenuSelectAll"), enabled: !!field.value, run: () => contextMenuSelectAll(field) },
+  ];
+
+  const menu = document.createElement("div");
+  menu.className = "context-menu";
+  menu.innerHTML = items
+    .map((i) => `<button type="button" class="context-menu-item" data-key="${i.key}" ${i.enabled ? "" : "disabled"}>${escapeHtml(i.label)}</button>`)
+    .join("");
+  document.body.appendChild(menu);
+  contextMenuEl = menu;
+
+  // Clamp inside the viewport (fixed positioning, so this is viewport-relative
+  // regardless of any scrolled container underneath) so a right-click near the
+  // window edge doesn't open the menu partially off-screen.
+  const rect = menu.getBoundingClientRect();
+  const x = Math.max(4, Math.min(e.clientX, window.innerWidth - rect.width - 4));
+  const y = Math.max(4, Math.min(e.clientY, window.innerHeight - rect.height - 4));
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  items.forEach((item) => {
+    if (!item.enabled) return;
+    menu.querySelector(`[data-key="${item.key}"]`).addEventListener("click", async () => {
+      closeContextMenu();
+      await item.run();
+    });
+  });
+}
+
+document.addEventListener("contextmenu", (e) => {
+  const field = getEditableTextField(e.target);
+  if (!field) {
+    closeContextMenu();
+    return;
+  }
+  e.preventDefault();
+  openContextMenu(e, field);
+});
+
+document.addEventListener("mousedown", (e) => {
+  if (contextMenuEl && !contextMenuEl.contains(e.target)) closeContextMenu();
+});
+document.addEventListener("scroll", closeContextMenu, true);
+window.addEventListener("blur", closeContextMenu);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeContextMenu();
+});
 
 // ----- global delegated handlers (survive re-renders) --------------------------
 

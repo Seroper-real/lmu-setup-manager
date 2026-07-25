@@ -188,12 +188,33 @@ class Api:
             {
                 "track": track,
                 "trackFound": items[0].track_found,
-                "setups": [self._serialize_installed(s) for s in items],
+                "cars": self._group_by_car_and_type(items),
             }
             for track, items in sorted(groups.items())
         ]
 
         return {"groups": grouped, "totalCount": len(filtered), "grandTotal": len(setups)}
+
+    def _group_by_car_and_type(self, items: list["InstalledSetup"]) -> list[dict[str, object]]:
+        # A car can have both a HYMO (TrackTitan) and a GO (third-party) setup
+        # installed at once; without this, each showed as its own duplicate
+        # "car" row. One entry per car instead, holding whichever of its
+        # HYMO/GO sub-groups actually have installed setups.
+        by_car: dict[str, dict[str, list[InstalledSetup]]] = {}
+        for s in items:
+            by_car.setdefault(s.car, {}).setdefault(s.setup_type, []).append(s)
+
+        return [
+            {
+                "car": car,
+                "types": [
+                    {"type": setup_type, "setups": [self._serialize_installed(s) for s in entries]}
+                    for setup_type in ("HYMO", "GO")
+                    if (entries := by_type.get(setup_type))
+                ],
+            }
+            for car, by_type in sorted(by_car.items())
+        ]
 
     def _serialize_installed(self, setup: "InstalledSetup") -> dict[str, object]:
         return {
@@ -226,6 +247,21 @@ class Api:
 
         database = SetupDb()
         setup_manager = SetupManager(track_manager=TrackManager(), database=database)
+        deleted_count = sum(1 for setup_id in setup_ids if setup_manager.delete_setup(setup_id))
+        return {"deletedCount": deleted_count}
+
+    def delete_all_setups(self) -> dict[str, object]:
+        # Sources setup_ids from the database itself rather than trusting a
+        # client-supplied list, so "delete all" always covers every installed
+        # setup regardless of whatever search/filter the frontend currently
+        # has applied to its own copy of the data.
+        from domain.setup_db import SetupDb
+        from processing.track_manager import TrackManager
+        from processing.setup_manager import SetupManager
+
+        database = SetupDb()
+        setup_manager = SetupManager(track_manager=TrackManager(), database=database)
+        setup_ids = [s.setup_id for s in database.fetch_all_installed_setups()]
         deleted_count = sum(1 for setup_id in setup_ids if setup_manager.delete_setup(setup_id))
         return {"deletedCount": deleted_count}
 
@@ -411,6 +447,28 @@ class Api:
 
     def open_external_link(self, url: str) -> None:
         webbrowser.open(url)
+
+    def simulate_paste_shortcut(self) -> None:
+        # Backs the custom text-field context menu's Paste item (app.js's
+        # contextMenuPaste): WebView2 blocks JS clipboard reads here without a
+        # permission grant it never prompts for, and its execCommand("paste")
+        # fallback is a documented bug (MicrosoftEdge/WebView2Feedback#1945)
+        # that can insert the wrong content instead of pasting. A real Ctrl+V
+        # keypress already works correctly since WebView2 handles it natively,
+        # so this injects that same keystroke at the OS input-queue level -
+        # indistinguishable to WebView2 from the user physically pressing it,
+        # landing in whatever field currently has focus (the caller must
+        # field.focus() first).
+        import ctypes
+
+        KEYEVENTF_KEYUP = 0x0002
+        VK_CONTROL = 0x11
+        VK_V = 0x56
+        user32 = ctypes.windll.user32
+        user32.keybd_event(VK_CONTROL, 0, 0, 0)
+        user32.keybd_event(VK_V, 0, 0, 0)
+        user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
+        user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
 
     def dropbox_oauth_get_url(self, app_key: str, app_secret: str, token_type: str = "read_write") -> dict[str, object]:
         from clients.dropbox_client import get_authorization_url, READ_ONLY_SCOPES, READ_WRITE_SCOPES

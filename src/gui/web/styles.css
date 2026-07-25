@@ -334,6 +334,7 @@ body { overflow: hidden; }
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
 }
 .results-count { font-size: 12px; }
+.toolbar-push-end { margin-left: auto; }
 
 .setups-list { display: flex; flex-direction: column; gap: var(--space-3); }
 .track-group-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: var(--space-2); flex-wrap: wrap; }
@@ -376,6 +377,25 @@ body { overflow: hidden; }
 }
 .setup-car-toggle .chevron.expanded { transform: rotate(90deg); }
 .setup-car-toggle:hover .chevron { color: var(--color-neutral-300); }
+
+.setup-types { margin-top: var(--space-1); padding-left: 22px; display: flex; flex-direction: column; }
+
+.setup-entry { border-top: 1px solid var(--color-divider); }
+.setup-entry:first-child { border-top: none; }
+.setup-entry-header { display: flex; align-items: center; gap: var(--space-4); padding: 9px 4px; flex-wrap: wrap; }
+.setup-entry-header .meta { flex: none; display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--color-neutral-500); }
+.setup-entry-header a[data-open-link] { display: inline-flex; align-items: center; gap: 6px; color: var(--color-accent-300); text-decoration: none; }
+.setup-entry-toggle {
+  display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;
+  background: transparent; border: none; padding: 0; margin: 0;
+  color: var(--color-text); font: inherit; text-align: left; cursor: pointer;
+}
+.setup-entry-toggle .chevron {
+  flex: none; display: inline-flex; color: var(--color-neutral-500);
+  transition: transform 0.12s ease;
+}
+.setup-entry-toggle .chevron.expanded { transform: rotate(90deg); }
+.setup-entry-toggle:hover .chevron { color: var(--color-neutral-300); }
 
 .setup-files {
   padding: 2px 4px 12px 30px; display: flex; flex-direction: column; gap: 4px;
@@ -453,3 +473,20 @@ body { overflow: hidden; }
   from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* Custom Cut/Copy/Paste/Select all menu for text fields - see openContextMenu()
+   in app.js. Positioned with position:fixed at the click point, so this only
+   needs its own stacking, not a backdrop. */
+.context-menu {
+  position: fixed; z-index: 300; min-width: 160px;
+  display: flex; flex-direction: column; gap: 1px; padding: 4px;
+  background: var(--color-surface); border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+}
+.context-menu-item {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 14px;
+  padding: 7px 10px; border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-text); cursor: pointer;
+}
+.context-menu-item:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 8%, transparent); }
+.context-menu-item:disabled { color: var(--color-neutral-600); cursor: not-allowed; }

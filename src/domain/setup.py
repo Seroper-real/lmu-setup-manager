@@ -71,23 +71,30 @@ class Setup:
 
     @property
     def safe_car(self) -> str:
-        # Same sanitization as safe_track, plus spaces (e.g. "Ferrari 499P").
-        return self.car.replace("/", "_").replace("\\", "_").replace("-", "_").replace(" ", "_")
+        # Same sanitization as safe_track: only the real path-breaking
+        # characters are replaced, spaces are left alone. Shared by the
+        # Dropbox folder path (remote_relative_path) and, after local
+        # space-collapsing below, the zip filename - GO Setups read their car
+        # identity straight back out of this same folder name, so keeping it
+        # space-preserving is what makes a GO archive's car match TrackTitan's.
+        return self.car.replace("/", "_").replace("\\", "_").replace("-", "_")
 
     @property
     def remote_filename(self) -> str:
         # Filesystem/URL-friendly name used on the Dropbox share. Spaces in the
-        # track are collapsed too so the final name has no spaces. The HYMO-
-        # prefix brands the file as published by this tool (see _REMOTE_NAME_RE).
-        # A sandbox setup additionally carries a SANDBOX marker right after the
-        # brand prefix, so test data uploaded to a real Dropbox account (e.g. via
-        # --mock-tracktitan) is instantly recognizable next to real setups and
-        # can be found/deleted by cleanup_sandbox_dropbox.py. _REMOTE_NAME_RE
-        # still matches: it only anchors on the trailing "_id_ts.zip", not on
-        # what comes right after "HYMO-".
+        # track and car are collapsed too so the final name has no spaces. The
+        # HYMO- prefix brands the file as published by this tool (see
+        # _REMOTE_NAME_RE). A sandbox setup additionally carries a SANDBOX
+        # marker right after the brand prefix, so test data uploaded to a real
+        # Dropbox account (e.g. via --mock-tracktitan) is instantly
+        # recognizable next to real setups and can be found/deleted by
+        # cleanup_sandbox_dropbox.py. _REMOTE_NAME_RE still matches: it only
+        # anchors on the trailing "_id_ts.zip", not on what comes right after
+        # "HYMO-".
         track = self.safe_track.replace(" ", "_")
+        car = self.safe_car.replace(" ", "_")
         brand = "HYMO-SANDBOX_" if self.sandbox else "HYMO-"
-        return f"{brand}{track}_{self.safe_car}_{self.id}_{self.last_updated}.zip"
+        return f"{brand}{track}_{car}_{self.id}_{self.last_updated}.zip"
 
     @property
     def remote_relative_path(self) -> str:

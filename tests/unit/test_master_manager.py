@@ -73,7 +73,7 @@ def test_skip_when_up_to_date(mm):
     manager, dm, dbx, tmp = mm
     # Already-nested path, matching remote_relative_path exactly (car/track
     # unchanged from _setup()'s defaults): a true no-op, not a relocation.
-    dbx.list_setups.return_value = [_remote("Porsche_963/Spa/HYMO-Spa_Porsche_963_id1_1000.zip", "id1", 1000)]
+    dbx.list_setups.return_value = [_remote("Porsche 963/Spa/HYMO-Spa_Porsche_963_id1_1000.zip", "id1", 1000)]
     _pages(dm, [_setup(id="id1", ts=1000)])
 
     manager.run()
@@ -96,7 +96,7 @@ def test_relocates_legacy_flat_layout_without_republishing(mm):
     dbx.delete.assert_not_called()
     dbx.move.assert_called_once_with(
         "/lmu-setups/porsche_963/hymo-spa_porsche_963_id1_1000.zip",
-        "/lmu-setups/Porsche_963/Spa/HYMO-Spa_Porsche_963_id1_1000.zip",
+        "/lmu-setups/Porsche 963/Spa/HYMO-Spa_Porsche_963_id1_1000.zip",
     )
 
 

@@ -122,5 +122,5 @@ def test_master_relocates_a_legacy_flat_layout_zip_without_republishing(sandbox,
     sandbox.run_master()
 
     assert not legacy_path.exists()
-    assert (sandbox.share / "Porsche_963" / "Spa" / name).is_file()
+    assert (sandbox.share / "Porsche 963" / "Spa" / name).is_file()
     download.assert_not_called()

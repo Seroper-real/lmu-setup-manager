@@ -159,11 +159,11 @@ def test_list_installed_setups_groups_by_track(api, mocker):
     tracks = {g["track"] for g in result["groups"]}
     assert tracks == {"Spa", "Imola-HYMO"}
     spa_group = next(g for g in result["groups"] if g["track"] == "Spa")
-    assert len(spa_group["setups"]) == 2
+    assert len(spa_group["cars"]) == 2
     assert spa_group["trackFound"] is True
     imola_group = next(g for g in result["groups"] if g["track"] == "Imola-HYMO")
     assert imola_group["trackFound"] is False
-    assert imola_group["setups"][0]["setupId"] == "3"
+    assert imola_group["cars"][0]["types"][0]["setups"][0]["setupId"] == "3"
 
 
 def test_list_installed_setups_groups_by_matched_track_id_across_raw_names(api, mocker):
@@ -181,7 +181,7 @@ def test_list_installed_setups_groups_by_matched_track_id_across_raw_names(api, 
 
     assert len(result["groups"]) == 1
     assert result["groups"][0]["track"] == "Bahrain"
-    assert len(result["groups"][0]["setups"]) == 2
+    assert len(result["groups"][0]["cars"]) == 2
 
 
 def test_list_installed_setups_unmapped_only_filters(api, mocker):
@@ -223,7 +223,7 @@ def test_list_installed_setups_serializes_file_names(api, mocker):
 
     result = api.list_installed_setups("", False)
 
-    assert result["groups"][0]["setups"][0]["fileNames"] == ["a.svm", "b.svm"]
+    assert result["groups"][0]["cars"][0]["types"][0]["setups"][0]["fileNames"] == ["a.svm", "b.svm"]
 
 
 def test_list_installed_setups_serializes_setup_type(api, mocker):
@@ -237,8 +237,31 @@ def test_list_installed_setups_serializes_setup_type(api, mocker):
 
     result = api.list_installed_setups("", False)
 
-    types = {s["setupId"]: s["setupType"] for s in result["groups"][0]["setups"]}
-    assert types == {"1": "HYMO", "2": "GO"}
+    car_group = result["groups"][0]["cars"][0]
+    types = {ty["type"]: [s["setupId"] for s in ty["setups"]] for ty in car_group["types"]}
+    assert types == {"HYMO": ["1"], "GO": ["2"]}
+
+
+def test_list_installed_setups_nests_hymo_and_go_under_one_car(api, mocker):
+    # A car with both a HYMO (TrackTitan) and a GO (third-party) setup installed
+    # must collapse into a single car entry, not two duplicate car rows.
+    mocker.patch.object(api, "current_mode", return_value="full")
+    setups = [
+        _fake_installed(setup_id="1", track="Spa", car="Porsche 963", setup_type="HYMO"),
+        _fake_installed(setup_id="2", track="Spa", car="Porsche 963", setup_type="GO"),
+        _fake_installed(setup_id="3", track="Spa", car="BMW M4", setup_type="HYMO"),
+    ]
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = setups
+
+    result = api.list_installed_setups("", False)
+
+    cars = result["groups"][0]["cars"]
+    assert [c["car"] for c in cars] == ["BMW M4", "Porsche 963"]
+    porsche = next(c for c in cars if c["car"] == "Porsche 963")
+    assert [ty["type"] for ty in porsche["types"]] == ["HYMO", "GO"]
+    bmw = next(c for c in cars if c["car"] == "BMW M4")
+    assert [ty["type"] for ty in bmw["types"]] == ["HYMO"]
 
 
 def test_delete_setup_delegates_to_setup_manager(api, mocker):
@@ -284,6 +307,36 @@ def test_delete_setups_handles_empty_list(api, mocker):
     mocker.patch("domain.setup_db.SetupDb")
 
     assert api.delete_setups([]) == {"deletedCount": 0}
+    sm_cls.return_value.delete_setup.assert_not_called()
+
+
+def test_delete_all_setups_deletes_every_installed_setup(api, mocker):
+    tm_cls = mocker.patch("processing.track_manager.TrackManager")
+    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = [
+        _fake_installed(setup_id="1"),
+        _fake_installed(setup_id="2"),
+        _fake_installed(setup_id="3"),
+    ]
+    sm_cls.return_value.delete_setup.side_effect = [True, False, True]
+
+    result = api.delete_all_setups()
+
+    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, database=db_cls.return_value)
+    sm_cls.return_value.delete_setup.assert_any_call("1")
+    sm_cls.return_value.delete_setup.assert_any_call("2")
+    sm_cls.return_value.delete_setup.assert_any_call("3")
+    assert result == {"deletedCount": 2}
+
+
+def test_delete_all_setups_handles_nothing_installed(api, mocker):
+    mocker.patch("processing.track_manager.TrackManager")
+    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = []
+
+    assert api.delete_all_setups() == {"deletedCount": 0}
     sm_cls.return_value.delete_setup.assert_not_called()
 
 

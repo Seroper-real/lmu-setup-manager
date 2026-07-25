@@ -90,8 +90,8 @@ def test_empty_combos_raises_on_init():
         _make(combos=[])
 
 
-def test_safe_car_replaces_space_and_slash():
-    assert _make(car="Porsche/963 LMDh").safe_car == "Porsche_963_LMDh"
+def test_safe_car_replaces_slash_and_hyphen_but_keeps_spaces():
+    assert _make(car="Porsche/963 LMDh").safe_car == "Porsche_963 LMDh"
 
 
 def test_remote_filename_format():
@@ -111,9 +111,10 @@ def test_remote_filename_carries_a_sandbox_marker_when_flagged():
 
 def test_remote_relative_path_nests_under_car_then_track():
     s = _make(id="abc-123", car="Ferrari 499P", track="Le Mans/Bugatti", last_updated=1700000000)
-    # The middle segment is safe_track verbatim (which only replaces / \ -, not
-    # spaces); only remote_filename's own inner track variable collapses spaces.
-    assert s.remote_relative_path == "Ferrari_499P/Le Mans_Bugatti/HYMO-Le_Mans_Bugatti_Ferrari_499P_abc-123_1700000000.zip"
+    # Both the car and track segments are safe_car/safe_track verbatim (which
+    # only replace / \ -, not spaces); only remote_filename's own inner
+    # car/track variables collapse spaces.
+    assert s.remote_relative_path == "Ferrari 499P/Le Mans_Bugatti/HYMO-Le_Mans_Bugatti_Ferrari_499P_abc-123_1700000000.zip"
 
 
 def test_parse_remote_zip_name_roundtrip():

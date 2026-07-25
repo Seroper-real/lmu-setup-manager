@@ -89,7 +89,7 @@ def test_known_setup_car_tracks_returns_every_safe_car_track_pair(client):
     # the `fixtures` fixture above), so all 5 collapse to one pair - matching
     # how a real GO archive and multiple HYMO setups can share one Dropbox
     # folder (see cleanup_sandbox_go_setups()).
-    assert client.known_setup_car_tracks() == {("Porsche_963", "Spa")}
+    assert client.known_setup_car_tracks() == {("Porsche 963", "Spa")}
 
 
 def test_download_prefers_the_sandbox_marked_fixture(client, fixtures):
