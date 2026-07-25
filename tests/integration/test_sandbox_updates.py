@@ -103,3 +103,24 @@ def test_slave_ignores_a_non_conforming_zip_on_the_share(sandbox, in_memory_db):
     sandbox.run_slave(in_memory_db)
 
     assert sandbox.installed_files() == {"Spa/quali_v1.svm"}
+
+
+def test_master_relocates_a_legacy_flat_layout_zip_without_republishing(sandbox, mocker):
+    """A zip already published under the old <car>/<file>.zip layout (predating
+    the unified <car>/<track>/<file>.zip share tree) must be moved into place on
+    the next master run, without a fresh TrackTitan download."""
+    name = f"HYMO-Spa_Porsche_963_{SETUP_ID}_{V1_TS}.zip"
+    legacy_path = sandbox.share / "Porsche_963" / name
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_bytes(b"legacy package bytes")
+
+    sandbox.write_catalog([make_setup(SETUP_ID, "Spa", ts=V1_TS)])
+
+    from clients.mocks.mock_track_titan_client import MockTrackTitanClient
+    download = mocker.spy(MockTrackTitanClient, "download")
+
+    sandbox.run_master()
+
+    assert not legacy_path.exists()
+    assert (sandbox.share / "Porsche_963" / "Spa" / name).is_file()
+    download.assert_not_called()

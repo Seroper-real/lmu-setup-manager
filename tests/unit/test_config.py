@@ -44,6 +44,12 @@ def test_setup_file_extensions_format():
     assert all(e.startswith(".") for e in config.SETUP_FILE_EXTENSIONS)
 
 
+def test_go_setup_file_extensions():
+    import core.config as config
+    assert config.GO_SETUP_FILE_EXTENSIONS == {".svm", ".ld", ".ldx"}
+    assert config.GO_SETUP_FILE_EXTENSIONS is not config.SETUP_FILE_EXTENSIONS
+
+
 def test_mode_is_valid():
     import core.config as config
     assert config.MODE in {"full", "master", "slave"}

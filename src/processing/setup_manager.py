@@ -34,17 +34,29 @@ class SetupManager:
         self.lmu_setups_base_path.mkdir(parents=True, exist_ok=True)
 
 
-    def install_setup(self,downloaded_path: str | Path, setup: Setup) -> None:
+    def install_setup(
+        self,
+        downloaded_path: str | Path,
+        setup: Setup,
+        extensions: Optional[set[str]] = None,
+        setup_type: str = "HYMO",
+        fallback_suffix: str = "HYMO",
+        sha256: Optional[str] = None,
+    ) -> None:
         extraction_path = Path(DOWNLOAD_PATH / setup.id)
         if extraction_path.exists(): shutil.rmtree(extraction_path) #To clean previous interrupted elaborations and prevent duplicate file name in extraction
         self._unzip_recursive(downloaded_path, extraction_path)
-        (setup_installation_dir, trackFound, matchedTrackId) = self._calculate_setup_installation_dir(setup.track)
-        extracted_files: list[Path] = self._copy_file_to_lmu(extraction_path, setup_installation_dir)
+        (setup_installation_dir, trackFound, matchedTrackId) = self._calculate_setup_installation_dir(setup.track, fallback_suffix)
+        extracted_files: list[Path] = self._copy_file_to_lmu(extraction_path, setup_installation_dir, extensions)
         installed: bool = len(extracted_files) > 0
         if not installed: log.warning(f"Setup not installed! Not deleting download for manual installation: {setup.id} - {setup.track} - {setup.car}")
         else:
-            if DELETE_PREVIOUS_VERSION: self._cleanup_old(self.database.fetch_setup_files(setup.id),setup_installation_dir, extracted_files)
-            self.database.add_installed_setup(setup,extracted_files, trackFound, setup_installation_dir, matchedTrackId)
+            if DELETE_PREVIOUS_VERSION or setup_type == "GO":
+                self._cleanup_old(self.database.fetch_setup_files(setup.id),setup_installation_dir, extracted_files)
+            self.database.add_installed_setup(
+                setup, extracted_files, trackFound, setup_installation_dir, matchedTrackId,
+                setup_type=setup_type, sha256=sha256,
+            )
         self._cleanup_temp(downloaded_path,extraction_path,installed)
 
     def _unzip_recursive(self, zip_path: str | Path, dest_dir: str | Path) -> None:
@@ -53,20 +65,21 @@ class SetupManager:
     def _find_files_recursive(self, base_dir: str | Path, extensions: set[str]) -> list[Path]:
         return find_files_recursive(base_dir, extensions)
 
-    def _calculate_setup_installation_dir(self, track: str) -> tuple[Path, bool, Optional[str]]:
+    def _calculate_setup_installation_dir(self, track: str, fallback_suffix: str = "HYMO") -> tuple[Path, bool, Optional[str]]:
         track_folder_name = self.track_manager.get_track_folder_name(track)
 
         if track_folder_name:
             return (self.lmu_setups_base_path / track_folder_name, True, track_folder_name)
         else:
-            new_track = f"{track}-HYMO"
-            log.warning(f"Track not found in track map: {track}. Will use '-HYMO' track name: {new_track}")
+            new_track = f"{track}-{fallback_suffix}"
+            log.warning(f"Track not found in track map: {track}. Will use '-{fallback_suffix}' track name: {new_track}")
             return (self.lmu_setups_base_path / new_track, False, None)
 
 
-    def _copy_file_to_lmu(self, extraction_path: str | Path, setup_installation_dir: Path) -> list[Path]:
+    def _copy_file_to_lmu(self, extraction_path: str | Path, setup_installation_dir: Path, extensions: Optional[set[str]] = None) -> list[Path]:
         extraction_path = get_path(extraction_path)
-        files : list[Path] = self._find_files_recursive(extraction_path, SETUP_FILE_EXTENSIONS)
+        exts = extensions if extensions is not None else SETUP_FILE_EXTENSIONS
+        files : list[Path] = self._find_files_recursive(extraction_path, exts)
 
         setup_installation_dir.mkdir(parents=True, exist_ok=True) 
 

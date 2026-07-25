@@ -28,3 +28,36 @@ def cleanup_sandbox_setups(dropbox_client: DropboxClientProtocol, sandbox_setup_
         if dropbox_client.delete_if_exists(remote.path_lower):
             deleted += 1
     return deleted
+
+
+def cleanup_sandbox_go_setups(
+    dropbox_client: DropboxClientProtocol, expected_car_tracks: set[tuple[str, str]]
+) -> int:
+    """Delete every GO Setups archive on `dropbox_client` that looks like
+    manually-uploaded sandbox test data (see the "Enable manual uploading of
+    these setups to the real Dropbox for testing purposes" GO fixtures under
+    sandbox/dropbox/**/GO-SANDBOX-*.zip).
+
+    A GO archive has no TrackTitan-style id to match on (see
+    domain.go_setup/RemoteGoSetup), so two independent signals are required
+    together before deleting one - either alone could plausibly match a real
+    user's own GO archive:
+      - its (car, track) folder is one of `expected_car_tracks` (the sandbox
+        catalog's own safe_car/safe_track pairs - see
+        MockTrackTitanClient.known_setup_car_tracks());
+      - its filename carries the "SANDBOX" marker.
+
+    A GO archive already missing on Dropbox is logged and skipped, not raised,
+    same as cleanup_sandbox_setups().
+
+    Returns the number of archives actually deleted.
+    """
+    deleted = 0
+    for remote in dropbox_client.list_go_setups():
+        if (remote.car, remote.track) not in expected_car_tracks:
+            continue
+        if "sandbox" not in remote.name.lower():
+            continue
+        if dropbox_client.delete_if_exists(remote.path_lower):
+            deleted += 1
+    return deleted

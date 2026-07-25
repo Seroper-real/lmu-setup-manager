@@ -110,7 +110,9 @@ class TrackTitanClient:
             if getattr(response, "status_code", None) in (401, 403):
                 raise AuthError(
                     f"TrackTitan authentication failed (HTTP {response.status_code}). "
-                    "Your access tokens may have expired - update them in Settings."
+                    "Your access tokens may have expired - update them in Settings.",
+                    code="tracktitan",
+                    status=response.status_code,
                 ) from e
             raise
 

@@ -82,3 +82,22 @@ def test_throttle_does_not_sleep(client, mocker):
 
 def test_known_setup_ids_returns_every_catalog_id(client):
     assert client.known_setup_ids() == {f"uuid-{i}" for i in range(5)}
+
+
+def test_known_setup_car_tracks_returns_every_safe_car_track_pair(client):
+    # Every fixture setup shares the same car/track in this test's catalog (see
+    # the `fixtures` fixture above), so all 5 collapse to one pair - matching
+    # how a real GO archive and multiple HYMO setups can share one Dropbox
+    # folder (see cleanup_sandbox_go_setups()).
+    assert client.known_setup_car_tracks() == {("Porsche_963", "Spa")}
+
+
+def test_download_prefers_the_sandbox_marked_fixture(client, fixtures):
+    # Checked-in fixtures carry a "-SANDBOX" marker (see
+    # cleanup_sandbox_dropbox.py); it must be tried before the plain name.
+    marked = fixtures / "setups" / "uuid-0-SANDBOX.zip"
+    marked.write_bytes(b"sandbox-marked content")
+
+    response = client.download(client.download_link("uuid-0")["url"])
+
+    assert response.content == b"sandbox-marked content"

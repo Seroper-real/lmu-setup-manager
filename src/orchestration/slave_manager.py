@@ -1,13 +1,16 @@
 import json
 import logging
 import threading
+import time
+import uuid
 from pathlib import Path
 from typing import Optional
 
-from core.archive import METADATA_FILENAME, read_zip_member
+from core.archive import METADATA_FILENAME, read_zip_member, sha256_file
 from clients.protocols import DropboxClientProtocol
-from core.config import DOWNLOAD_PATH
+from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, GO_SETUP_FILE_EXTENSIONS
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
+from domain.go_setup import RemoteGoSetup
 from domain.setup import RemoteSetup, Setup
 from domain.setup_db import SetupDb
 from processing.setup_manager import SetupManager
@@ -16,9 +19,11 @@ log = logging.getLogger("TrackTitanDownloader")
 
 
 class SlaveManager:
-    """Installs setups published to a Dropbox share. Uses the DB so it stays
+    """Installs setups published to a Dropbox share: this tool's own TrackTitan
+    setups plus manually-uploaded GO Setups archives. Uses the DB so it stays
     compatible with FULL mode on the same machine; rebuilds DB records from the
-    .metadata.json embedded in each package."""
+    .metadata.json embedded in each package (or, for GO, from the Dropbox
+    car/track folder structure)."""
 
     def __init__(
         self,
@@ -47,6 +52,11 @@ class SlaveManager:
                 self._emit(ProgressEvent(ProgressKind.STOPPED, "Install stopped"))
                 return
             self._process(remote)
+        for go_remote in self.dropbox_client.list_go_setups():
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                self._emit(ProgressEvent(ProgressKind.STOPPED, "Install stopped"))
+                return
+            self._process_go(go_remote)
         self._emit(ProgressEvent(ProgressKind.FINISH, "Install completed"))
 
     def _process(self, remote: RemoteSetup) -> None:
@@ -61,6 +71,7 @@ class SlaveManager:
 
         local_zip = Path(DOWNLOAD_PATH) / remote.name
         self.dropbox_client.download_to(remote.path_lower, local_zip)
+        sha256 = sha256_file(local_zip)
 
         try:
             metadata = json.loads(read_zip_member(local_zip, METADATA_FILENAME))
@@ -72,5 +83,41 @@ class SlaveManager:
         # install_setup re-unzips, copies .svm into the LMU track folder, and
         # records the setup in the DB. The .metadata.json member is ignored by
         # the .svm-only file filter.
-        self.setup_manager.install_setup(local_zip, setup)
+        self.setup_manager.install_setup(local_zip, setup, sha256=sha256)
+        self._emit(ProgressEvent(ProgressKind.INSTALL, remote.name))
+
+    def _process_go(self, remote: RemoteGoSetup) -> None:
+        log.info("#################")
+        log.info(f"  GO Setup: {remote.car} - {remote.track}")
+        log.info(f"  File: {remote.name}")
+        self._emit(ProgressEvent(ProgressKind.START, remote.name))
+
+        local_zip = Path(DOWNLOAD_PATH) / "go" / remote.car / remote.track / remote.name
+        self.dropbox_client.download_to(remote.path_lower, local_zip)
+        sha256 = sha256_file(local_zip)
+
+        # Identity is the <Car>/<Track> pair alone, never the filename: the
+        # archive can be renamed or have its content replaced in place by hand,
+        # so only the checksum comparison below decides "already installed".
+        existing = self.database.fetch_installed_go_setup(remote.car, remote.track)
+        if existing and existing.sha256 == sha256:
+            log.info("GO Setup unchanged since last install. Skipping.")
+            if CLEAN_DOWNLOAD and local_zip.exists():
+                local_zip.unlink()
+            return
+
+        setup_id = existing.setup_id if existing else str(uuid.uuid4())
+        setup = Setup({
+            "id": setup_id,
+            "title": f"{remote.car} - {remote.track} (GO)",
+            "setupCombos": [{"car": {"name": remote.car}, "track": {"name": remote.track}}],
+            "hotlapLink": None,
+            "lastUpdatedAt": int(time.time() * 1000),
+            "isBundle": False,
+        })
+        self.setup_manager.install_setup(
+            local_zip, setup,
+            extensions=GO_SETUP_FILE_EXTENSIONS, setup_type="GO", fallback_suffix="GO",
+            sha256=sha256,
+        )
         self._emit(ProgressEvent(ProgressKind.INSTALL, remote.name))

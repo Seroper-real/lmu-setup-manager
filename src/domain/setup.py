@@ -33,8 +33,12 @@ class RemoteSetup:
 
 
 class Setup:
-    def __init__(self,data: dict):
+    def __init__(self, data: dict, sandbox: bool = False):
         self.data = data
+        # Set when built from the mock TrackTitan catalog (MOCK_TRACKTITAN) -
+        # see remote_filename. Never true for a real TrackTitan setup, so real
+        # uploads are byte-for-byte unaffected.
+        self.sandbox = sandbox
         self._safe_track = self.track.replace("/", "_").replace("\\", "_").replace("-", "_")
 
     @property
@@ -75,14 +79,22 @@ class Setup:
         # Filesystem/URL-friendly name used on the Dropbox share. Spaces in the
         # track are collapsed too so the final name has no spaces. The HYMO-
         # prefix brands the file as published by this tool (see _REMOTE_NAME_RE).
+        # A sandbox setup additionally carries a SANDBOX marker right after the
+        # brand prefix, so test data uploaded to a real Dropbox account (e.g. via
+        # --mock-tracktitan) is instantly recognizable next to real setups and
+        # can be found/deleted by cleanup_sandbox_dropbox.py. _REMOTE_NAME_RE
+        # still matches: it only anchors on the trailing "_id_ts.zip", not on
+        # what comes right after "HYMO-".
         track = self.safe_track.replace(" ", "_")
-        return f"HYMO-{track}_{self.safe_car}_{self.id}_{self.last_updated}.zip"
+        brand = "HYMO-SANDBOX_" if self.sandbox else "HYMO-"
+        return f"{brand}{track}_{self.safe_car}_{self.id}_{self.last_updated}.zip"
 
     @property
     def remote_relative_path(self) -> str:
-        # Where the package actually lands on the share: one subfolder per car,
-        # so a human browsing Dropbox can find setups by car without a DB.
-        return f"{self.safe_car}/{self.remote_filename}"
+        # Where the package actually lands on the share: car, then track, so a
+        # human browsing Dropbox finds a given car+track's setups - both this
+        # tool's own and any manually-uploaded GO Setups archives - in one place.
+        return f"{self.safe_car}/{self.safe_track}/{self.remote_filename}"
 
     @property
     def hotlap_link(self) -> Optional[str]:

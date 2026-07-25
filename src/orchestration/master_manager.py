@@ -116,7 +116,7 @@ class MasterManager:
 
         existing: Optional[RemoteSetup] = remote.get(setup.id)
         if existing and existing.ts >= setup.last_updated:
-            log.info("Already up to date on share. Skipping.")
+            self._relocate_if_stale_path(setup, existing)
             return
 
         original_zip = self.download_manager.download(setup)
@@ -127,6 +127,28 @@ class MasterManager:
         self._dispatched.add(setup.id)
         slots.acquire()
         pending.append((setup, pool.submit(self._publish, setup, existing, original_zip, slots)))
+
+    def _relocate_if_stale_path(self, setup: Setup, existing: RemoteSetup) -> None:
+        """The setup's content is already current (caller checked existing.ts),
+        but it may still sit at an old-layout path - relocate it with a cheap
+        server-side move instead of a full re-publish.
+
+        The target keeps existing.name verbatim rather than rebuilding it from
+        setup.remote_filename: when the API's last_updated has rolled back below
+        what's already published (existing.ts > setup.last_updated), setup's own
+        timestamp is stale and would produce the wrong filename. Only the folder
+        placement (car/track) is re-derived from the current catalog data.
+        """
+        target_relative = f"{setup.safe_car}/{setup.safe_track}/{existing.name}"
+        target_path = self.dropbox_client.remote_path(target_relative)
+        if existing.path_lower.lower() == target_path.lower():
+            log.info("Already up to date on share. Skipping.")
+            return
+        try:
+            self.dropbox_client.move(existing.path_lower, target_path)
+            log.info(f"Relocated {setup.id} to the unified car/track layout: {target_path}")
+        except Exception as e:
+            log.error(f"Failed to relocate {setup.id} to {target_path}: {e}")
 
     def _publish(
         self,

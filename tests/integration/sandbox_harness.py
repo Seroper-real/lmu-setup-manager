@@ -66,6 +66,16 @@ class Sandbox:
                 zf.writestr(name, content)
         return path
 
+    def add_go_zip(self, car: str, track: str, zip_name: str, members: dict[str, str]) -> Path:
+        """Write share/{car}/{track}/{zip_name} - a manually-uploaded GO Setups
+        archive, mirroring the unified layout (no separate GO/ marker level)."""
+        path = self.share / car / track / zip_name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in members.items():
+                zf.writestr(name, content)
+        return path
+
     def set_tracks(self, mapping: list[tuple[str, str]]) -> None:
         """mapping is a list of (regex pattern, lmu folder name), in priority order."""
         self.tracks_file.write_text(

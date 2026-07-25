@@ -207,6 +207,7 @@ class Api:
             "installationFolder": setup.installation_folder,
             "installationBasePath": setup.installation_base_path,
             "trackFound": setup.track_found,
+            "setupType": setup.setup_type,
         }
 
     def delete_setup(self, setup_id: str) -> dict[str, object]:
@@ -279,7 +280,13 @@ class Api:
                 run_fn(log, on_progress=self._push_progress, cancel_event=cancel_event)
             except AuthError as e:
                 self._last_error = str(e)
-                self._push_progress(ProgressEvent(kind=ProgressKind.ERROR, title=str(e), is_auth_error=True))
+                self._push_progress(ProgressEvent(
+                    kind=ProgressKind.ERROR,
+                    title=str(e),
+                    is_auth_error=True,
+                    error_code=e.code,
+                    error_status=e.status,
+                ))
                 log.exception("Download run failed: authentication error")
             except Exception as e:
                 self._last_error = str(e)
@@ -319,6 +326,8 @@ class Api:
             "title": event.title,
             "meta": event.meta,
             "authError": event.is_auth_error,
+            "errorCode": event.error_code,
+            "errorStatus": event.error_status,
         })
         try:
             self._window.evaluate_js(f"window.onProgress && window.onProgress({payload})")

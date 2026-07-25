@@ -2,7 +2,7 @@ import os, logging, threading
 from pathlib import Path
 from typing import Optional
 from clients.protocols import TrackTitanClientProtocol
-from core.config import DOWNLOAD_PATH, PAGE_SIZE
+from core.config import DOWNLOAD_PATH, MOCK_TRACKTITAN, PAGE_SIZE
 from domain.setup import Setup
 from domain.setup_db import SetupDb
 from clients.track_titan_client import TrackTitanClient
@@ -53,7 +53,11 @@ class DownloadManager:
             "/v2/games/leMansUltimate/setups",
             params={"page": self.page, "limit": self.page_size}
         )
-        setups : list[Setup] = [Setup(setup) for setup in res["data"]["setups"]]
+        # MOCK_TRACKTITAN tags every Setup as sandbox data, which changes only
+        # the filename MasterManager publishes under (see Setup.remote_filename) -
+        # so test uploads to a real Dropbox account are clearly marked and can be
+        # found by cleanup_sandbox_dropbox.py.
+        setups : list[Setup] = [Setup(setup, sandbox=MOCK_TRACKTITAN) for setup in res["data"]["setups"]]
         log.debug(f"PAGE {self.page} found:{len(setups)}")
         if len(setups) < self.page_size: self.finished = True
         self.page += 1

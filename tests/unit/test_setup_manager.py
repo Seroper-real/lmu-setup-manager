@@ -48,6 +48,14 @@ def test_calculate_dir_unknown_track(sm, lmu_base):
     assert matched_track_id is None
 
 
+def test_calculate_dir_unknown_track_uses_go_fallback_suffix(sm, lmu_base):
+    sm.track_manager.get_track_folder_name.return_value = None
+    path, found, matched_track_id = sm._calculate_setup_installation_dir("Mystery Circuit", fallback_suffix="GO")
+    assert found is False
+    assert path.name == "Mystery Circuit-GO"
+    assert "HYMO" not in path.name
+
+
 def test_find_files_recursive(sm, tmp_path):
     (tmp_path / "a.svm").write_bytes(b"x")
     (tmp_path / "b.txt").write_bytes(b"x")
@@ -67,6 +75,28 @@ def test_copy_to_lmu_copies_files(sm, tmp_path, lmu_base):
     dest = lmu_base / "Spa"
     sm._copy_file_to_lmu(src, dest)
     assert (dest / "setup.svm").exists()
+
+
+def test_copy_to_lmu_honors_explicit_extensions_override(sm, tmp_path, lmu_base):
+    src = tmp_path / "extracted"
+    src.mkdir()
+    (src / "setup.svm").write_bytes(b"x")
+    (src / "telemetry.ld").write_bytes(b"x")
+    (src / "telemetry.ldx").write_bytes(b"x")
+    dest = lmu_base / "Spa"
+    copied = sm._copy_file_to_lmu(src, dest, extensions={".ld", ".ldx"})
+    names = {f.name for f in copied}
+    assert names == {"telemetry.ld", "telemetry.ldx"}
+    assert not (dest / "setup.svm").exists()
+
+
+def test_copy_to_lmu_defaults_to_setup_file_extensions_when_none(sm, tmp_path, lmu_base):
+    src = tmp_path / "extracted"
+    src.mkdir()
+    (src / "setup.svm").write_bytes(b"x")
+    dest = lmu_base / "Spa"
+    copied = sm._copy_file_to_lmu(src, dest, extensions=None)
+    assert {f.name for f in copied} == {"setup.svm"}
 
 
 def test_copy_to_lmu_no_overwrite(sm, tmp_path, lmu_base):
@@ -134,6 +164,100 @@ def test_install_setup_full_flow(sm, sample_setup, tmp_path, lmu_base, mocker):
 
     assert (lmu_base / "Spa" / "car_spa.svm").exists()
     assert sm.database.is_setup_installed_last_version(sample_setup) is True
+
+
+def test_install_setup_threads_sha256_and_setup_type_to_db(sm, sample_setup, tmp_path, lmu_base, mocker):
+    dl_path = tmp_path / "downloads"
+    dl_path.mkdir()
+    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
+
+    def fake_extract(archive, outdir, verbosity):
+        Path(outdir).mkdir(parents=True, exist_ok=True)
+        (Path(outdir) / "car_spa.svm").write_bytes(b"setup bytes")
+
+    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
+    zip_path = dl_path / "fake.zip"
+    zip_path.write_bytes(b"fake zip")
+
+    sm.install_setup(
+        zip_path, sample_setup,
+        setup_type="GO", fallback_suffix="GO", sha256="abc123",
+    )
+
+    row = sm.database.fetch_installed_setup(sample_setup.id)
+    assert row.setup_type == "GO"
+    assert row.sha256 == "abc123"
+
+
+def test_install_setup_defaults_setup_type_to_hymo(sm, sample_setup, tmp_path, lmu_base, mocker):
+    dl_path = tmp_path / "downloads"
+    dl_path.mkdir()
+    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
+
+    def fake_extract(archive, outdir, verbosity):
+        Path(outdir).mkdir(parents=True, exist_ok=True)
+        (Path(outdir) / "car_spa.svm").write_bytes(b"setup bytes")
+
+    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
+    zip_path = dl_path / "fake.zip"
+    zip_path.write_bytes(b"fake zip")
+
+    sm.install_setup(zip_path, sample_setup)
+
+    row = sm.database.fetch_installed_setup(sample_setup.id)
+    assert row.setup_type == "HYMO"
+    assert row.sha256 is None
+
+
+def test_install_setup_go_cleans_up_stale_files_even_when_delete_previous_version_is_off(sm, sample_setup, tmp_path, lmu_base, mocker):
+    # DELETE_PREVIOUS_VERSION is already patched False by the `sm` fixture.
+    install_dir = lmu_base / "Spa"
+    install_dir.mkdir(parents=True, exist_ok=True)
+    (install_dir / "stale.svm").write_bytes(b"stale")
+    sm.database.add_installed_setup(sample_setup, [install_dir / "stale.svm"], True, install_dir, setup_type="GO")
+
+    dl_path = tmp_path / "downloads"
+    dl_path.mkdir()
+    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
+
+    def fake_extract(archive, outdir, verbosity):
+        Path(outdir).mkdir(parents=True, exist_ok=True)
+        (Path(outdir) / "fresh.svm").write_bytes(b"fresh")
+
+    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
+    zip_path = dl_path / "fake.zip"
+    zip_path.write_bytes(b"fake zip")
+
+    sm.install_setup(zip_path, sample_setup, setup_type="GO")
+
+    assert not (install_dir / "stale.svm").exists()
+    assert (install_dir / "fresh.svm").exists()
+
+
+def test_install_setup_hymo_leaves_stale_files_when_delete_previous_version_is_off(sm, sample_setup, tmp_path, lmu_base, mocker):
+    # Companion to the GO test above: setup_type="HYMO" (the default) must still
+    # respect DELETE_PREVIOUS_VERSION=False (patched by the `sm` fixture).
+    install_dir = lmu_base / "Spa"
+    install_dir.mkdir(parents=True, exist_ok=True)
+    (install_dir / "stale.svm").write_bytes(b"stale")
+    sm.database.add_installed_setup(sample_setup, [install_dir / "stale.svm"], True, install_dir)
+
+    dl_path = tmp_path / "downloads"
+    dl_path.mkdir()
+    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
+
+    def fake_extract(archive, outdir, verbosity):
+        Path(outdir).mkdir(parents=True, exist_ok=True)
+        (Path(outdir) / "fresh.svm").write_bytes(b"fresh")
+
+    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
+    zip_path = dl_path / "fake.zip"
+    zip_path.write_bytes(b"fake zip")
+
+    sm.install_setup(zip_path, sample_setup)
+
+    assert (install_dir / "stale.svm").exists()
+    assert (install_dir / "fresh.svm").exists()
 
 
 def test_delete_setup_removes_files_and_db_row(sm, in_memory_db, lmu_base, sample_setup):

@@ -57,11 +57,14 @@ downloads
 lmu-setup-manager.spec
 data
 
-# Sandbox: runtime output is throwaway, the TrackTitan fixtures are tracked.
+# Sandbox: runtime output is throwaway; the TrackTitan fixtures and the GO
+# Setups fixtures on the mock Dropbox share are tracked.
 sandbox/lmu/
-sandbox/dropbox/
+sandbox/dropbox/*
 sandbox/data/
 !sandbox/tracktitan/setups/*.zip
+!sandbox/dropbox/**/
+!sandbox/dropbox/**/GO-*.zip
 
 .claude/worktrees/
 .claude/settings.local.json

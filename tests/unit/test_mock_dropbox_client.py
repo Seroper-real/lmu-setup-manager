@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 
@@ -94,3 +96,69 @@ def test_delete_if_exists_returns_true_and_removes_the_file(client, package):
 
 def test_delete_if_exists_returns_false_for_a_missing_file(client, share):
     assert client.delete_if_exists(str(share / "absent.zip")) is False
+
+
+# ----- GO Setups (list_setups skip, list_go_setups, remote_path, move) ---------
+
+
+def test_list_setups_skips_go_prefixed_zips_without_warning(client, package, share, caplog):
+    client.upload(package, "GO-ORECA.zip")
+    client.upload(package, "HYMO-Spa_Porsche963_uuid-1_1700000000.zip")
+    caplog.clear()
+
+    with caplog.at_level("WARNING"):
+        setups = client.list_setups()
+
+    assert len(setups) == 1
+    assert setups[0].setup_id == "uuid-1"
+    assert "GO-ORECA.zip" not in caplog.text
+
+
+def test_list_go_setups_parses_car_track_from_folder_structure(client, package):
+    client.upload(package, "Oreca 07/Imola/GO-ORECA.zip")
+
+    setups = client.list_go_setups()
+
+    assert len(setups) == 1
+    assert setups[0].car == "Oreca 07"
+    assert setups[0].track == "Imola"
+    assert setups[0].name == "GO-ORECA.zip"
+
+
+def test_list_go_setups_skips_and_warns_at_wrong_depth(client, package, caplog):
+    client.upload(package, "GO-Flat.zip")
+    client.upload(package, "a/b/c/GO-TooDeep.zip")
+
+    with caplog.at_level("WARNING"):
+        setups = client.list_go_setups()
+
+    assert setups == []
+    assert "GO-Flat.zip" in caplog.text
+    assert "GO-TooDeep.zip" in caplog.text
+
+
+def test_list_go_setups_ignores_non_go_zips_regardless_of_depth(client, package, caplog):
+    client.upload(package, "Porsche_963/HYMO-Spa_Porsche963_uuid-1_1700000000.zip")
+    caplog.clear()
+
+    with caplog.at_level("WARNING"):
+        setups = client.list_go_setups()
+
+    assert setups == []
+    assert caplog.text == ""
+
+
+def test_remote_path_round_trips_via_temp_dir(client, share):
+    assert client.remote_path("a/b/x.zip") == str((share / "a" / "b" / "x.zip").resolve())
+
+
+def test_move_round_trips_via_temp_dir(client, package, share):
+    src = share / "old" / "x.zip"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_bytes(package.read_bytes())
+    dst = client.remote_path("new/x.zip")
+
+    client.move(str(src), dst)
+
+    assert not src.exists()
+    assert Path(dst).exists()

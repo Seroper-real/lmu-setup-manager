@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Callable, TypeVar
 
 import dropbox
+from stone.backends.python_rsrc.stone_validators import ValidationError as StoneValidationError
 
 from core.config import (
     DROPBOX_APP_KEY,
@@ -12,6 +13,7 @@ from core.config import (
     DROPBOX_TIMEOUT,
 )
 from core.errors import AuthError
+from domain.go_setup import RemoteGoSetup, is_go_zip_name, looks_like_go_name, parse_go_entry
 # Re-exported so existing `from dropbox_client import RemoteSetup` keeps working.
 from domain.setup import RemoteSetup, parse_remote_zip_name
 
@@ -28,10 +30,16 @@ __all__ = [
     "READ_ONLY_SCOPES",
 ]
 
-# Minimal scopes for each token type offered by the Settings "get automatically"
-# dialog, matching what each operating mode actually calls on DropboxClient:
-# Master (Upload only) lists+uploads+deletes, Slave (Install only) lists+downloads.
-READ_WRITE_SCOPES = ["files.metadata.read", "files.content.write"]
+# Scopes for each token type offered by the Settings "get automatically" dialog.
+# READ_WRITE_SCOPES must cover every call either mode makes on DropboxClient -
+# Master (Upload only) lists+uploads+deletes, Slave (Install only) lists+
+# downloads - so it works as a single do-everything token (e.g. FULL mode, or
+# one machine running both roles), same as the full-scope token from the
+# manual procedure in the README. It must include files.content.read even
+# though Master itself never downloads: without it, the token can list and
+# upload but any download call fails auth, which is easy to miss until Slave
+# (or a relocate/move) is actually exercised with it.
+READ_WRITE_SCOPES = ["files.metadata.read", "files.content.read", "files.content.write"]
 READ_ONLY_SCOPES = ["files.metadata.read", "files.content.read"]
 
 
@@ -87,12 +95,41 @@ class DropboxClient:
             path_lower = getattr(entry, "path_lower", None)
             if not name or not path_lower or not name.lower().endswith(".zip"):
                 continue
+            if is_go_zip_name(name):
+                # GO Setups archives are a recognized, expected coexisting file
+                # type now (see list_go_setups()), not stray files.
+                continue
             parsed = parse_remote_zip_name(name)
             if parsed is None:
                 log.warning(f"Ignoring non-conforming file on share: {name}")
                 continue
             setup_id, ts = parsed
             result.append(RemoteSetup(name=name, path_lower=path_lower, setup_id=setup_id, ts=ts))
+        return result
+
+    def list_go_setups(self) -> list[RemoteGoSetup]:
+        """List the share folder, returning only conforming GO Setups archives -
+        zips found exactly 3 segments deep (<Car>/<Track>/<file.zip>) whose name
+        starts with "GO"."""
+        result: list[RemoteGoSetup] = []
+        folder_depth = len([s for s in self.folder.split("/") if s])
+        for entry in self._list_all_entries():
+            name = getattr(entry, "name", None)
+            if not name or not looks_like_go_name(name):
+                continue
+            path_lower = getattr(entry, "path_lower", None)
+            # path_display (not path_lower) is used to derive car/track, since
+            # Dropbox's SDK always lowercases path_lower and the car name must
+            # be preserved verbatim.
+            path_display = getattr(entry, "path_display", None)
+            if not path_lower or not path_display:
+                continue
+            segments = [s for s in path_display.split("/") if s][folder_depth:]
+            parsed = parse_go_entry(name, path_lower, segments)
+            if parsed is None:
+                log.warning(f"Ignoring non-conforming GO Setup entry on share: {path_display}")
+                continue
+            result.append(parsed)
         return result
 
     def _list_all_entries(self) -> list:
@@ -127,7 +164,23 @@ class DropboxClient:
         except dropbox.exceptions.AuthError as e:
             raise AuthError(
                 "Dropbox authentication failed. Your credentials may have expired "
-                "or been revoked - update them in Settings."
+                "or been revoked - update them in Settings.",
+                code="dropbox",
+            ) from e
+        except StoneValidationError as e:
+            # Upstream SDK bug: on a 401 whose body is {".tag": "other"} (Dropbox's
+            # own escape hatch for an auth failure it won't name more precisely -
+            # most often a token whose granted scope doesn't cover this call, e.g.
+            # metadata-only when content read/write is required), stone's decoder
+            # can't represent its own catch-all tag and raises ValidationError
+            # instead of a clean dropbox.exceptions.AuthError. Still an auth
+            # failure from our point of view, so surface it the same way.
+            raise AuthError(
+                "Dropbox authentication failed (malformed error response for a 401 "
+                "- usually a token whose scope doesn't cover this operation). "
+                "Update your credentials in Settings, making sure the token "
+                "includes content read/write access, not just metadata access.",
+                code="dropbox_scope",
             ) from e
 
     def download_to(self, path_lower: str, local_path: str | Path) -> Path:
@@ -139,12 +192,19 @@ class DropboxClient:
 
     def upload(self, local_path: str | Path, remote_name: str) -> str:
         local_path = Path(local_path)
-        remote_path = f"{self.folder}/{remote_name}"
+        remote_path = self.remote_path(remote_name)
         with open(local_path, "rb") as f:
             data = f.read()
         self._call(self.dbx.files_upload, data, remote_path, mode=dropbox.files.WriteMode("overwrite"))
         log.info(f"Uploaded to Dropbox: {remote_path}")
         return remote_path
+
+    def remote_path(self, relative_path: str) -> str:
+        return f"{self.folder}/{relative_path}"
+
+    def move(self, from_path: str, to_path: str) -> None:
+        self._call(self.dbx.files_move_v2, from_path, to_path, autorename=False)
+        log.info(f"Moved on Dropbox: {from_path} -> {to_path}")
 
     def delete(self, path: str) -> None:
         self._call(self.dbx.files_delete_v2, path)

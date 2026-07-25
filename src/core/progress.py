@@ -20,6 +20,10 @@ class ProgressEvent:
     # Dropbox credentials): the GUI shows these as a dedicated popup with a link
     # to Settings instead of folding them into the plain activity log.
     is_auth_error: bool = False
+    # AuthError.code/status (see core.errors) - lets the GUI render a localized
+    # message instead of the English `title` used for the plain activity log.
+    error_code: Optional[str] = None
+    error_status: Optional[int] = None
 
 
 ProgressCallback = Callable[[ProgressEvent], None]

@@ -17,6 +17,7 @@ def _fake_installed(**overrides):
         installation_base_path="C:/lmu",
         track_found=True,
         matched_track_id="Spa",
+        setup_type="HYMO",
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -223,6 +224,21 @@ def test_list_installed_setups_serializes_file_names(api, mocker):
     result = api.list_installed_setups("", False)
 
     assert result["groups"][0]["setups"][0]["fileNames"] == ["a.svm", "b.svm"]
+
+
+def test_list_installed_setups_serializes_setup_type(api, mocker):
+    mocker.patch.object(api, "current_mode", return_value="full")
+    setups = [
+        _fake_installed(setup_id="1", track="Spa", setup_type="HYMO"),
+        _fake_installed(setup_id="2", track="Spa", setup_type="GO"),
+    ]
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = setups
+
+    result = api.list_installed_setups("", False)
+
+    types = {s["setupId"]: s["setupType"] for s in result["groups"][0]["setups"]}
+    assert types == {"1": "HYMO", "2": "GO"}
 
 
 def test_delete_setup_delegates_to_setup_manager(api, mocker):
@@ -491,16 +507,42 @@ def test_start_download_flags_an_auth_error_as_such(api, mocker):
     assert isinstance(event, ProgressEvent)
     assert event.kind == ProgressKind.ERROR
     assert event.is_auth_error is True
+    assert event.error_code == "generic"
+    assert event.error_status is None
+
+
+def test_start_download_forwards_the_auth_error_code_and_status(api, mocker):
+    # The GUI localizes this dialog from code/status, not the English str(exc)
+    # - see authErrorBody() in app.js.
+    from core.errors import AuthError
+    from core.progress import ProgressEvent, ProgressKind
+
+    def fake_run(log, on_progress=None, cancel_event=None):
+        raise AuthError("TrackTitan authentication failed (HTTP 401).", code="tracktitan", status=401)
+
+    mocker.patch.object(api, "_resolve_run_fn", return_value=fake_run)
+    push = mocker.patch.object(api, "_push_progress")
+
+    api.start_download("full")
+    api._thread.join(timeout=2)
+
+    event = push.call_args[0][0]
+    assert isinstance(event, ProgressEvent)
+    assert event.error_code == "tracktitan"
+    assert event.error_status == 401
 
 
 def test_push_progress_includes_the_auth_error_flag_in_the_js_payload(api, mocker):
     from core.progress import ProgressEvent, ProgressKind
 
     api._window = mocker.Mock()
-    api._push_progress(ProgressEvent(kind=ProgressKind.ERROR, title="expired", is_auth_error=True))
+    api._push_progress(ProgressEvent(
+        kind=ProgressKind.ERROR, title="expired", is_auth_error=True, error_code="dropbox", error_status=None,
+    ))
 
     js_call = api._window.evaluate_js.call_args[0][0]
     assert '"authError": true' in js_call
+    assert '"errorCode": "dropbox"' in js_call
 
 
 def test_stop_download_sets_the_cancel_event(api):

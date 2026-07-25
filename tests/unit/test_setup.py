@@ -11,6 +11,7 @@ def _make(
     last_updated=1000,
     is_bundle=False,
     combos=None,
+    sandbox=False,
 ):
     if combos is None:
         combos = [{"car": {"name": car}, "track": {"name": track}}]
@@ -21,7 +22,7 @@ def _make(
         "hotlapLink": hotlap,
         "lastUpdatedAt": last_updated,
         "isBundle": is_bundle,
-    })
+    }, sandbox=sandbox)
 
 
 def test_id():
@@ -98,9 +99,21 @@ def test_remote_filename_format():
     assert s.remote_filename == "HYMO-Le_Mans_Bugatti_Ferrari_499P_abc-123_1700000000.zip"
 
 
-def test_remote_relative_path_nests_under_car():
+def test_remote_filename_carries_a_sandbox_marker_when_flagged():
+    # Set by DownloadManager under MOCK_TRACKTITAN - never for a real setup, so
+    # a real upload's filename is byte-for-byte unaffected. See
+    # cleanup_sandbox_dropbox.py for why this marker exists.
+    s = _make(id="abc-123", car="Ferrari 499P", track="Le Mans/Bugatti", last_updated=1700000000, sandbox=True)
+    assert s.remote_filename == "HYMO-SANDBOX_Le_Mans_Bugatti_Ferrari_499P_abc-123_1700000000.zip"
+    from domain.setup import parse_remote_zip_name
+    assert parse_remote_zip_name(s.remote_filename) == ("abc-123", 1700000000)
+
+
+def test_remote_relative_path_nests_under_car_then_track():
     s = _make(id="abc-123", car="Ferrari 499P", track="Le Mans/Bugatti", last_updated=1700000000)
-    assert s.remote_relative_path == "Ferrari_499P/HYMO-Le_Mans_Bugatti_Ferrari_499P_abc-123_1700000000.zip"
+    # The middle segment is safe_track verbatim (which only replaces / \ -, not
+    # spaces); only remote_filename's own inner track variable collapses spaces.
+    assert s.remote_relative_path == "Ferrari_499P/Le Mans_Bugatti/HYMO-Le_Mans_Bugatti_Ferrari_499P_abc-123_1700000000.zip"
 
 
 def test_parse_remote_zip_name_roundtrip():

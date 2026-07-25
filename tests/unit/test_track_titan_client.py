@@ -51,8 +51,11 @@ def test_get_raises_auth_error_on_401_or_403(client, mocker, status):
     m.status_code = status
     m.raise_for_status.side_effect = req.HTTPError(str(status))
     mocker.patch("clients.track_titan_client.requests.get", return_value=m)
-    with pytest.raises(AuthError):
+    with pytest.raises(AuthError) as exc_info:
         client.get("/bad/path")
+    # code/status let the GUI render a localized message instead of str(exc).
+    assert exc_info.value.code == "tracktitan"
+    assert exc_info.value.status == status
 
 
 def test_download_link_raises_auth_error_on_403(client, mocker):

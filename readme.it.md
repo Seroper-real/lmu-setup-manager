@@ -282,6 +282,20 @@ Se usi Le Mans Ultimate su **più di un tuo PC**, puoi spostare i tuoi setup tra
 - **Solo Upload** (`master`) — da eseguire sul PC che ha i tuoi token TrackTitan. Scarica i tuoi setup e li copia in una cartella del **tuo** Dropbox (uno zip per setup, con nome `{track}_{car}_{id}_{timestamp}.zip`). Quando un setup viene aggiornato, la vecchia copia viene sostituita automaticamente.
 - **Solo installazione** (`slave`) — da eseguire sull'altro tuo PC. Installa i setup direttamente dalla tua cartella Dropbox in LMU. **Qui non servono i token TrackTitan** — basta l'accesso in lettura alla tua cartella Dropbox.
 
+### Setup GO
+
+I setup gestiti da questo tool in modo completo provengono da TrackTitan e vengono pubblicati con il marchio **HYMO** — questo è il flusso principale, coperto da tutte e tre le modalità sopra. **GO Setups**, un provider di terze parti separato, è solo *compatibile* con esso, e solo in modalità Solo installazione (`slave`): l'app non comunica mai con i sistemi di GO, non ha un passaggio di configurazione dedicato e non pubblica nulla per suo conto.
+
+Gli archivi GO sfruttano la stessa struttura Dropbox che Solo Upload crea già pubblicando i tuoi setup HYMO: `<cartella Dropbox>/<Auto>/<Pista>/`. **Queste cartelle non si creano a mano** — esistono perché Solo Upload ha già pubblicato almeno un setup HYMO per quella combinazione auto/pista. Per aggiungere un setup GO, trascina il suo zip (nome che inizia per `GO`) nella cartella `<Auto>/<Pista>/` corrispondente, già esistente. Nessuna credenziale aggiuntiva: riusa la tua configurazione Dropbox esistente.
+
+I file di telemetria MoTeC di un archivio GO (`.ld`/`.ldx`) vengono installati insieme ai suoi setup `.svm`, di proposito — GO li distribuisce insieme, quindi questo tool li tratta allo stesso modo: copiati, e ripuliti quando arriva una versione più recente.
+
+GO non fornisce alcun segnale affidabile di "questo è cambiato", quindi ogni run di Solo installazione riscarica ogni archivio GO trovato — è previsto, non un bug. Se viene poi effettivamente reinstallato dipende solo dal contenuto: l'app calcola un'impronta del download e salta la reinstallazione se non è cambiato nulla. Questo significa anche che l'archivio può essere rinominato liberamente sul posto (ad esempio tra una versione GO e l'altra) senza perdere lo storico di installazione — solo spostarlo in una cartella `<Auto>/<Pista>` diversa ne avvia uno nuovo, scollegato dal precedente.
+
+Come per i setup normali, un archivio GO per una pista che non trova corrispondenza nella mappatura finisce in una cartella di fallback chiaramente marcata — `<NOME_PISTA> - GO` invece di `<NOME_PISTA> - HYMO`, così le due provenienze restano distinguibili a colpo d'occhio (vedi [Mapping piste](#mapping-piste) più sotto). I setup GO installati compaiono nella tab Setup installati come tutti gli altri, con un piccolo badge **GO**.
+
+Se stai aggiornando da una versione precedente, il prossimo run di Solo Upload rilocalizza automaticamente e silenziosamente i setup già pubblicati nella nuova struttura unificata `<Auto>/<Pista>/` — nessuna azione richiesta, la prima volta potrebbe richiedere solo un momento in più.
+
 ### Mapping piste
 
 I nomi dei tracciati TrackTitan vengono associati automaticamente alle cartelle LMU tramite una mappatura inclusa nell'app e tenuta aggiornata da sola — non serve alcun intervento da parte tua.
@@ -308,3 +322,5 @@ python src/main.py --sandbox --mode master       # sandbox, forzando una modalit
 | `--mode {full,master,slave}` | Forza la modalità salvata solo per questa esecuzione.                                                                       |
 
 Ogni flag rimuove anche il relativo controllo sulle credenziali: `--sandbox --mode master` e poi `--sandbox --mode slave` eseguono un giro completo pubblica → installa senza alcuna credenziale configurata. Ogni esecuzione in sandbox scrive un avviso `SANDBOX ACTIVE` nei log, così non puoi confonderla con una reale. Funzionano anche le variabili d'ambiente equivalenti `MOCK_TRACKTITAN` / `MOCK_LMU` / `MOCK_DROPBOX` / `MODE`, e `.vscode/launch.json` include un profilo di debug per ogni combinazione.
+
+`sandbox/dropbox/` include già un setup GO di esempio per ogni pista (placeholder sintetici `.svm`/`.ld`/`.ldx`, non dati di setup reali), quindi `--mock-lmu --mock-dropbox --mode slave` li installa tutti subito, senza alcuna preparazione. Per provare a mano il percorso di aggiornamento, esegui due volte di fila: la seconda esecuzione dovrebbe registrare "unchanged since last install" senza toccare nulla; modifica il contenuto di un membro e riesegui per vedere il percorso di aggiornamento versione reinstallare e ripulire i file vecchi. Per scenari extra o personalizzati, crea manualmente altri zip allo stesso modo, in `sandbox/dropbox/<Auto>/<Pista>/GO-Qualcosa.zip`.

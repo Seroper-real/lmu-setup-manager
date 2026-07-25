@@ -34,6 +34,20 @@ def test_get_setups_list_returns_setup_objects(dm, sample_setup_data):
     assert all(isinstance(s, Setup) for s in result)
 
 
+def test_get_setups_list_tags_setups_sandbox_only_under_mock_tracktitan(dm, sample_setup_data, mocker):
+    dm.track_titan_client.get.return_value = {"data": {"setups": [sample_setup_data]}}
+    dm.track_titan_client.throttle.return_value = None
+
+    result = dm.get_setups_list()
+    assert result[0].sandbox is False
+
+    mocker.patch("orchestration.download_manager.MOCK_TRACKTITAN", True)
+    dm.restart_setups_list()
+    dm.track_titan_client.get.return_value = {"data": {"setups": [sample_setup_data]}}
+    result = dm.get_setups_list()
+    assert result[0].sandbox is True
+
+
 def test_get_setups_list_sets_finished_on_partial_page(dm, sample_setup_data):
     dm.page_size = 12
     dm.track_titan_client.get.return_value = {"data": {"setups": [sample_setup_data] * 5}}

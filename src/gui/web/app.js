@@ -34,7 +34,8 @@ const state = {
   dropboxOAuth: null,
   tracktitanFetch: null,
   validationErrors: null,
-  authErrorMessage: null,
+  authErrorCode: null,
+  authErrorStatus: null,
   showWarning: false,
   settingsForm: null,
   // JSON snapshot of settingsForm as of the last successful save/load, used to
@@ -253,7 +254,8 @@ window.onProgress = function onProgress(event) {
     state.runStatus = "error";
     runEnded = true;
     if (event.authError) {
-      state.authErrorMessage = event.title;
+      state.authErrorCode = event.errorCode || "generic";
+      state.authErrorStatus = event.errorStatus || null;
       renderModals();
     }
   }
@@ -548,6 +550,9 @@ function renderCarRow(s, group) {
         </button>
         <span class="meta">${formatDate(s.installDate)}</span>
         <span class="tag tag-outline">${s.fileCount} ${escapeHtml(t("filesUnit"))}</span>
+        ${s.setupType === "GO"
+          ? `<span class="tooltip"><span class="tag tag-accent-2">GO</span><span class="tooltip-text">${escapeHtml(t("goBadgeTooltip"))}</span></span>`
+          : ""}
         ${s.installationFolder ? `<span class="meta meta-icon">${ICONS.folder}${escapeHtml(s.installationFolder)}</span>` : ""}
         ${s.hotlapLink
           ? `<a class="btn btn-ghost" href="#" data-open-link="${escapeHtml(s.hotlapLink)}" title="${escapeHtml(t("hotlapTitle"))}">${ICONS.hotlap}${escapeHtml(t("hotlapLabel"))}</a>`
@@ -1134,8 +1139,20 @@ function validationBody(errors, mode) {
   if (hasTrackTitan) sentences.push(tFn("validationMissingTrackTitan", modeLabel));
   if (hasDropbox) sentences.push(tFn("validationMissingDropbox", modeLabel));
   if (hasLmuPath) sentences.push(tFn("validationInvalidLmuPath", modeLabel));
-  const items = errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("");
-  return `${sentences.map((s) => `<p>${escapeHtml(s)}</p>`).join("")}<ul>${items}</ul>`;
+  // No raw `errors` bullet list here: every string check_credentials()/
+  // validate_start() can produce is English-only (env var names) and is
+  // already fully covered, in the user's language, by the sentences above.
+  return sentences.map((s) => `<p>${escapeHtml(s)}</p>`).join("");
+}
+
+// Localizes an AuthError surfaced mid-run (see window.onProgress) from its
+// `code`/`status` instead of the English `title` used for the activity log,
+// so this dialog shows in the user's active app language.
+function authErrorBody(code, status) {
+  if (code === "tracktitan") return tFn("authErrorTrackTitanBody", status);
+  if (code === "dropbox_scope") return t("authErrorDropboxScopeBody");
+  if (code === "dropbox") return t("authErrorDropboxBody");
+  return t("authErrorGenericBody");
 }
 
 function renderModals() {
@@ -1291,12 +1308,12 @@ function renderModals() {
   // Same shape as the validation dialog above (title icon + close/go-to-settings
   // actions), triggered instead by a 403/401 surfaced mid-run as an AuthError -
   // see window.onProgress.
-  if (state.authErrorMessage) {
+  if (state.authErrorCode) {
     html += `
       <div class="dialog-backdrop" data-modal="auth-error">
         <div class="dialog elev-lg">
           <div class="dialog-title">${ICONS.validation}${escapeHtml(t("authErrorTitle"))}</div>
-          <div class="dialog-body">${escapeHtml(state.authErrorMessage)}</div>
+          <div class="dialog-body">${escapeHtml(authErrorBody(state.authErrorCode, state.authErrorStatus))}</div>
           <div class="dialog-actions">
             <button type="button" class="btn btn-ghost" id="auth-error-cancel">${escapeHtml(t("validationClose"))}</button>
             <button type="button" class="btn btn-primary" id="auth-error-settings">${escapeHtml(t("validationGoSettings"))}</button>
@@ -1459,7 +1476,8 @@ function renderModals() {
   const authErrorCancel = document.getElementById("auth-error-cancel");
   if (authErrorCancel) {
     authErrorCancel.addEventListener("click", () => {
-      state.authErrorMessage = null;
+      state.authErrorCode = null;
+      state.authErrorStatus = null;
       renderModals();
     });
   }
@@ -1467,7 +1485,8 @@ function renderModals() {
   const authErrorSettings = document.getElementById("auth-error-settings");
   if (authErrorSettings) {
     authErrorSettings.addEventListener("click", () => {
-      state.authErrorMessage = null;
+      state.authErrorCode = null;
+      state.authErrorStatus = null;
       renderModals();
       state.view = "settings";
       applyActiveView();

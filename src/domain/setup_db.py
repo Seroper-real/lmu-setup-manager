@@ -23,6 +23,8 @@ class InstalledSetup:
     installation_base_path: str | None
     installation_folder: str | None
     matched_track_id: str | None
+    sha256: str | None
+    setup_type: str
 
     @staticmethod
     def from_row(row: tuple) -> "InstalledSetup":
@@ -39,6 +41,8 @@ class InstalledSetup:
             installation_base_path=row[9],
             installation_folder=row[10],
             matched_track_id=row[11],
+            sha256=row[12],
+            setup_type=row[13],
         )
     
 class SetupDb:
@@ -62,7 +66,9 @@ class SetupDb:
                     track_found INTEGER,
                     installation_base_path TEXT,
                     installation_folder TEXT,
-                    matched_track_id TEXT
+                    matched_track_id TEXT,
+                    sha256 TEXT,
+                    setup_type TEXT NOT NULL DEFAULT 'HYMO'
                 )
             """)
             # Migration 1: add track_found to existing installations
@@ -89,6 +95,21 @@ class SetupDb:
                 self.conn.execute("ALTER TABLE installed_setups ADD COLUMN matched_track_id TEXT")
             except sqlite3.OperationalError:
                 pass
+            # Migration 4: add sha256 (content fingerprint, populated from the
+            # next real download onward for both HYMO and GO, NULL for
+            # pre-existing rows) and setup_type ('HYMO'/'GO', existing rows
+            # backfill to 'HYMO' via the column default). A GO archive's
+            # previously-assigned setup_id/hash is looked up across runs via
+            # its existing car/track columns (see fetch_installed_go_setup),
+            # not a dedicated identity column.
+            try:
+                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN sha256 TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN setup_type TEXT NOT NULL DEFAULT 'HYMO'")
+            except sqlite3.OperationalError:
+                pass
 
 
     def is_installed_last_version(self, setup_id: str, last_updated: int) -> bool:
@@ -109,11 +130,13 @@ class SetupDb:
         track_found: bool,
         installation_dir: Path,
         matched_track_id: str | None = None,
+        setup_type: str = "HYMO",
+        sha256: str | None = None,
     ) -> None:
         with self.conn:
             query = """
-                    INSERT INTO installed_setups (setup_id, track, car, install_date, setup_last_update, hotlap_link, api_data, file_names, track_found, installation_base_path, installation_folder, matched_track_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO installed_setups (setup_id, track, car, install_date, setup_last_update, hotlap_link, api_data, file_names, track_found, installation_base_path, installation_folder, matched_track_id, sha256, setup_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(setup_id) DO UPDATE SET
                         track = excluded.track,
                         car = excluded.car,
@@ -125,12 +148,15 @@ class SetupDb:
                         track_found = excluded.track_found,
                         installation_base_path = excluded.installation_base_path,
                         installation_folder = excluded.installation_folder,
-                        matched_track_id = excluded.matched_track_id
+                        matched_track_id = excluded.matched_track_id,
+                        sha256 = excluded.sha256,
+                        setup_type = excluded.setup_type
                     """
             self.conn.execute(query, (
                 setup.id, setup.track, setup.car, int(time.time()*1000), setup.last_updated,
                 setup.hotlap_link, json.dumps(setup.data), json.dumps([file.name for file in file_names]),
-                int(track_found), str(installation_dir.parent), installation_dir.name, matched_track_id
+                int(track_found), str(installation_dir.parent), installation_dir.name, matched_track_id,
+                sha256, setup_type
             ))
 
     def update_installed_setup(self, setup: InstalledSetup) -> None:
@@ -147,14 +173,16 @@ class SetupDb:
                         track_found = ?,
                         installation_base_path = ?,
                         installation_folder = ?,
-                        matched_track_id = ?
+                        matched_track_id = ?,
+                        sha256 = ?,
+                        setup_type = ?
                     WHERE setup_id = ?
                     """
             self.conn.execute(query, (
                 setup.track, setup.car, setup.install_date, setup.setup_last_update,
                 setup.hotlap_link, json.dumps(setup.api_data), json.dumps(setup.file_names),
                 int(setup.track_found), setup.installation_base_path, setup.installation_folder,
-                setup.matched_track_id, setup.setup_id
+                setup.matched_track_id, setup.sha256, setup.setup_type, setup.setup_id
             ))
 
     def fetch_setup_files(self,setup_id: str) -> list[str]:
@@ -217,6 +245,29 @@ class SetupDb:
             return InstalledSetup.from_row(row) if row else None
         except Exception as e:
             log.error(f"Error fetching installed setup {setup_id}: {e}")
+            return None
+        finally:
+            cursor.close()
+
+    def fetch_installed_go_setup(self, car: str, track: str) -> InstalledSetup | None:
+        """Look up a GO Setups archive's previously-installed row by its stable
+        <Car>/<Track> folder identity, regardless of the zip's current filename
+        or content hash. Scoped to setup_type = 'GO': a TrackTitan (HYMO) row
+        can legitimately share the same car+track, and must never be matched
+        here - reusing its real TrackTitan id as a GO setup_id would corrupt
+        it. Relies on there being at most one live GO row per car+track,
+        guaranteed because every write for that folder goes through the same
+        looked-up setup_id via ON CONFLICT above."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT * FROM installed_setups WHERE car = ? AND track = ? AND setup_type = 'GO'",
+                (car, track),
+            )
+            row = cursor.fetchone()
+            return InstalledSetup.from_row(row) if row else None
+        except Exception as e:
+            log.error(f"Error fetching installed GO setup for {car}/{track}: {e}")
             return None
         finally:
             cursor.close()

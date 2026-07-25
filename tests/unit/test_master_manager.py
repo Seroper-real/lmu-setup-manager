@@ -21,9 +21,12 @@ def _setup(id="id1", ts=2000, bundle=False, track="Spa", car="Porsche 963"):
     })
 
 
-def _remote(name, setup_id, ts):
+def _remote(path, setup_id, ts):
+    """`path` is the share-relative path (folder(s) + filename); RemoteSetup.name
+    (like the real Dropbox SDK's entry.name) is always the bare filename."""
     from clients.dropbox_client import RemoteSetup
-    return RemoteSetup(name=name, path_lower="/lmu-setups/" + name.lower(), setup_id=setup_id, ts=ts)
+    bare_name = path.rsplit("/", 1)[-1]
+    return RemoteSetup(name=bare_name, path_lower="/lmu-setups/" + path.lower(), setup_id=setup_id, ts=ts)
 
 
 @pytest.fixture
@@ -37,6 +40,7 @@ def mm(mocker, tmp_path):
     dm = MagicMock()
     dbx = MagicMock()
     dbx.list_setups.return_value = []
+    dbx.remote_path.side_effect = lambda rel: f"/lmu-setups/{rel}"
     manager = MasterManager(download_manager=dm, dropbox_client=dbx, workers=1)
     return manager, dm, dbx, tmp_path
 
@@ -67,13 +71,48 @@ def _svm(tmp, name="a.svm"):
 
 def test_skip_when_up_to_date(mm):
     manager, dm, dbx, tmp = mm
-    dbx.list_setups.return_value = [_remote("HYMO-Spa_Porsche_963_id1_1000.zip", "id1", 1000)]
+    # Already-nested path, matching remote_relative_path exactly (car/track
+    # unchanged from _setup()'s defaults): a true no-op, not a relocation.
+    dbx.list_setups.return_value = [_remote("Porsche_963/Spa/HYMO-Spa_Porsche_963_id1_1000.zip", "id1", 1000)]
     _pages(dm, [_setup(id="id1", ts=1000)])
 
     manager.run()
 
     dm.download.assert_not_called()
     dbx.upload.assert_not_called()
+    dbx.move.assert_not_called()
+
+
+def test_relocates_legacy_flat_layout_without_republishing(mm):
+    manager, dm, dbx, tmp = mm
+    # Old layout: flat <car>/<file>.zip, no track segment.
+    dbx.list_setups.return_value = [_remote("Porsche_963/HYMO-Spa_Porsche_963_id1_1000.zip", "id1", 1000)]
+    _pages(dm, [_setup(id="id1", ts=1000)])
+
+    manager.run()
+
+    dm.download.assert_not_called()
+    dbx.upload.assert_not_called()
+    dbx.delete.assert_not_called()
+    dbx.move.assert_called_once_with(
+        "/lmu-setups/porsche_963/hymo-spa_porsche_963_id1_1000.zip",
+        "/lmu-setups/Porsche_963/Spa/HYMO-Spa_Porsche_963_id1_1000.zip",
+    )
+
+
+def test_relocate_failure_does_not_abort_the_run(mm):
+    manager, dm, dbx, tmp = mm
+    dbx.list_setups.return_value = [
+        _remote("Porsche_963/HYMO-Spa_Porsche_963_id1_1000.zip", "id1", 1000),
+        _remote("BMW_M4/HYMO-Imola_BMW_M4_id2_1000.zip", "id2", 1000),
+    ]
+    dbx.move.side_effect = RuntimeError("dropbox is down")
+    _pages(dm, [_setup(id="id1", ts=1000), _setup(id="id2", ts=1000, track="Imola", car="BMW M4")])
+
+    manager.run()  # must not raise
+
+    assert dbx.move.call_count == 2
+    dm.download.assert_not_called()
 
 
 def test_skip_bundle(mm):

@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import zipfile
@@ -33,6 +34,16 @@ ARCHIVE_EXTENSIONS: set[str] = {'.zip', '.rar', '.7z', '.tar', '.gz'}
 
 # Sidecar file embedded in share packages carrying the full TrackTitan API JSON.
 METADATA_FILENAME: str = ".metadata.json"
+
+
+def sha256_file(path: str | Path) -> str:
+    """Hex digest of a file's content, read in chunks so large archives don't
+    need to be loaded fully into memory."""
+    digest = hashlib.sha256()
+    with open(get_path(path), "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def read_zip_member(zip_path: str | Path, member_name: str) -> bytes:

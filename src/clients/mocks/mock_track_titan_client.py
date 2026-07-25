@@ -48,6 +48,16 @@ class MockTrackTitanClient:
         delete, without needing to page through get()/download_link()."""
         return {setup["id"] for setup in self._load_setups()}
 
+    def known_setup_car_tracks(self) -> set[tuple[str, str]]:
+        """Every (safe_car, safe_track) pair the fixture catalog would publish
+        to, using the same sanitization MasterManager uploads under. Unlike a
+        HYMO setup, a manually-uploaded GO Setups archive has no id to match on,
+        so the sandbox cleanup utility uses these expected paths instead - see
+        cleanup_sandbox_setups.cleanup_sandbox_go_setups()."""
+        from domain.setup import Setup
+
+        return {(Setup(setup).safe_car, Setup(setup).safe_track) for setup in self._load_setups()}
+
     def get(self, path: str, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         params = params or {}
         page: int = int(params.get("page", 1))
@@ -68,11 +78,17 @@ class MockTrackTitanClient:
             raise ValueError(f"Not a sandbox download url: {url}")
         setup_id = url[len(_URL_SCHEME):]
 
-        zip_path = self.setups_path / f"{setup_id}.zip"
-        if not zip_path.exists():
-            raise FileNotFoundError(f"Sandbox setup archive not found: {zip_path}")
+        return MockResponse(content=self._resolve_zip_path(setup_id).read_bytes())
 
-        return MockResponse(content=zip_path.read_bytes())
+    def _resolve_zip_path(self, setup_id: str) -> Path:
+        # The checked-in fixtures carry a "-SANDBOX" filename marker (see
+        # cleanup_sandbox_dropbox.py); ad-hoc fixtures a test builds directly may
+        # not, so both conventions resolve.
+        for candidate in (f"{setup_id}-SANDBOX.zip", f"{setup_id}.zip"):
+            path = self.setups_path / candidate
+            if path.exists():
+                return path
+        raise FileNotFoundError(f"Sandbox setup archive not found for id: {setup_id}")
 
     def throttle(self) -> None:
         # No bot detection to evade against a local fixture: keep sandbox runs instant.

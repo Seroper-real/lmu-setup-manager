@@ -282,6 +282,20 @@ If you run Le Mans Ultimate on **more than one of your own PCs**, you can move y
 - **Upload only** (`master`) — run on the PC that has your TrackTitan tokens. It downloads your setups and mirrors them into a folder in **your** Dropbox (one zip per setup, named `{track}_{car}_{id}_{timestamp}.zip`). When a setup is updated, the old copy is replaced automatically.
 - **Install only** (`slave`) — run on your other PC. It installs the setups straight from your Dropbox folder into LMU. **No TrackTitan tokens are needed here** — only read access to your own Dropbox folder.
 
+### GO Setups
+
+The setups this tool manages end to end come from TrackTitan and are published under the **HYMO** brand — that's the primary workflow, covered by all three modes above. **GO Setups**, a separate third-party provider, is only *compatible* with it, and only in Install only (`slave`) mode: the app never talks to GO's own systems, has no dedicated setup step for it, and doesn't publish anything on GO's behalf.
+
+GO archives ride on the same Dropbox tree Upload only already builds while publishing your HYMO setups: `<Dropbox folder>/<Car>/<Track>/`. **You don't create these folders by hand** — they exist because Upload only has already published at least one HYMO setup for that car and track. To add a GO setup, drop its zip (name starting with `GO`) into the matching, already-existing `<Car>/<Track>/` folder. No extra credentials needed; it reuses your existing Dropbox setup.
+
+A GO archive's MoTeC telemetry files (`.ld`/`.ldx`) are installed alongside its `.svm` setups, intentionally — GO ships them together, so this tool treats them the same way: copied in, cleaned up when a newer version replaces them.
+
+GO gives no reliable "this changed" signal of its own, so every Install-only run re-downloads every GO archive it finds — this is expected, not a bug. Whether it's actually reinstalled depends only on its content: the app fingerprints the download and skips the reinstall when nothing changed. This also means the archive can be freely renamed in place (e.g. between GO's own version releases) without losing its install history — only moving it to a different `<Car>/<Track>` folder starts a fresh, unrelated one.
+
+Like regular setups, a GO archive for a track that matches nothing in the track mapping lands in a clearly-marked fallback folder — `<TRACK_NAME> - GO` rather than `<TRACK_NAME> - HYMO`, so the two sources stay distinguishable at a glance (see [Track mapping](#track-mapping) below). GO-installed setups show up in the Setup installati tab like any other, with a small **GO** badge.
+
+If you're upgrading from an older version, the next Upload only run automatically and silently relocates any setups it already published into the new unified `<Car>/<Track>/` layout — no action needed, it may just take a moment the first time.
+
 ### Track mapping
 
 TrackTitan track names are automatically matched to LMU folders using a mapping that's bundled with the app and kept up to date on its own — no action needed on your part.
@@ -308,3 +322,5 @@ python src/main.py --sandbox --mode master       # sandbox, forcing a mode
 | `--mode {full,master,slave}` | Override the stored mode for this run only.                                                                                     |
 
 Each flag also drops the matching credential requirement, so `--sandbox --mode master` then `--sandbox --mode slave` runs a full publish → install round trip with no credentials configured at all. Every sandbox run logs a `SANDBOX ACTIVE` warning so you can never mistake it for a real one. The equivalent `MOCK_TRACKTITAN` / `MOCK_LMU` / `MOCK_DROPBOX` / `MODE` environment variables work too, and `.vscode/launch.json` ships a debug profile for each combination.
+
+`sandbox/dropbox/` already ships one GO Setups fixture per track (synthetic `.svm`/`.ld`/`.ldx` placeholders, not real setup data), so `--mock-lmu --mock-dropbox --mode slave` installs all of them immediately with no setup step. To exercise the update path by hand, run it twice in a row: the second run should log "unchanged since last install" and touch nothing; edit a fixture member's content and rerun to see the version-bump path reinstall and clean up the old files. For extra/custom scenarios, hand-create more zips the same way, under `sandbox/dropbox/<Car>/<Track>/GO-Something.zip`.

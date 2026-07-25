@@ -120,6 +120,12 @@ SETUP_FILE_EXTENSIONS: set[str] = {
     for ext in _config["paths"]["setups"]["file_extensions"]
 }
 
+# GO Setups archives always carry .svm setups plus MoTeC telemetry (.ld/.ldx),
+# which must be installed alongside them. Hardcoded and independent of
+# SETUP_FILE_EXTENSIONS above, which is user-editable and governs the regular
+# TrackTitan flow only.
+GO_SETUP_FILE_EXTENSIONS: set[str] = {".svm", ".ld", ".ldx"}
+
 REMOTE_TRACKS_ENABLED=_config["remote_tracks"]["enabled"]
 REMOTE_TRACKS_TIMEOUT=_config["remote_tracks"]["timeout"]
 REMOTE_TRACKS_URL=_config["remote_tracks"]["url"]

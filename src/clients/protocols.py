@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Optional, Protocol, runtime_checkable
 
 from core.config import MOCK_DROPBOX, MOCK_TRACKTITAN
+from domain.go_setup import RemoteGoSetup
 from domain.setup import RemoteSetup
 
 log = logging.getLogger("TrackTitanDownloader")
@@ -31,9 +32,15 @@ class TrackTitanClientProtocol(Protocol):
 class DropboxClientProtocol(Protocol):
     def list_setups(self) -> list[RemoteSetup]: ...
 
+    def list_go_setups(self) -> list[RemoteGoSetup]: ...
+
     def download_to(self, path_lower: str, local_path: str | Path) -> Path: ...
 
     def upload(self, local_path: str | Path, remote_name: str) -> str: ...
+
+    def remote_path(self, relative_path: str) -> str: ...
+
+    def move(self, from_path: str, to_path: str) -> None: ...
 
     def delete(self, path: str) -> None: ...
 

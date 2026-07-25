@@ -122,7 +122,8 @@ def test_fetch_all_installed_setups_empty_db(in_memory_db):
 def test_installed_setup_from_row():
     row = (
         "id1", "Spa", "Ferrari", 1000, 2000, "http://lap",
-        '{"x":1}', '["a.svm"]', 1, "/base", "folder", "Spa"
+        '{"x":1}', '["a.svm"]', 1, "/base", "folder", "Spa",
+        "abc123", "GO"
     )
     s = InstalledSetup.from_row(row)
     assert s.setup_id == "id1"
@@ -130,6 +131,8 @@ def test_installed_setup_from_row():
     assert s.file_names == ["a.svm"]
     assert s.track_found is True
     assert s.matched_track_id == "Spa"
+    assert s.sha256 == "abc123"
+    assert s.setup_type == "GO"
 
 
 def test_add_installed_setup_stores_matched_track_id(in_memory_db, tmp_path):
@@ -174,3 +177,144 @@ def test_delete_installed_setup_removes_the_row(in_memory_db, tmp_path):
 
 def test_delete_installed_setup_missing_id_is_a_noop(in_memory_db):
     in_memory_db.delete_installed_setup("ghost")  # must not raise
+
+
+# --- sha256 / setup_type ------------------------------------------------------
+
+
+def test_add_installed_setup_defaults_setup_type_to_hymo_and_sha256_to_none(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="d1"), [], True, tmp_path / "Spa")
+    row = in_memory_db.fetch_installed_setup("d1")
+    assert row.setup_type == "HYMO"
+    assert row.sha256 is None
+
+
+def test_add_installed_setup_stores_sha256_and_setup_type(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="g1"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="deadbeef",
+    )
+    row = in_memory_db.fetch_installed_setup("g1")
+    assert row.setup_type == "GO"
+    assert row.sha256 == "deadbeef"
+
+
+def test_add_installed_setup_upsert_updates_sha256(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="g2"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="hash-v1",
+    )
+    in_memory_db.add_installed_setup(
+        _setup(id="g2"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="hash-v2",
+    )
+    row = in_memory_db.fetch_installed_setup("g2")
+    assert row.sha256 == "hash-v2"
+
+
+def test_update_installed_setup_persists_sha256_and_setup_type(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="u1"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="hash-v1",
+    )
+    row = in_memory_db.fetch_installed_setup("u1")
+    row.sha256 = "hash-v2"
+    in_memory_db.update_installed_setup(row)
+    updated = in_memory_db.fetch_installed_setup("u1")
+    assert updated.sha256 == "hash-v2"
+    assert updated.setup_type == "GO"
+
+
+def test_migration_backfills_setup_type_and_leaves_sha256_null(mocker, tmp_path):
+    """A pre-existing DB, created before this feature, has only the original 12
+    columns - the ADD COLUMN migration must backfill setup_type via its column
+    default, and leave sha256 NULL for that old row."""
+    import sqlite3
+    legacy_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(legacy_path)
+    conn.execute("""
+        CREATE TABLE installed_setups (
+            setup_id TEXT PRIMARY KEY,
+            track TEXT,
+            car TEXT,
+            install_date INTEGER,
+            setup_last_update INTEGER,
+            hotlap_link TEXT,
+            api_data TEXT,
+            file_names TEXT,
+            track_found INTEGER,
+            installation_base_path TEXT,
+            installation_folder TEXT,
+            matched_track_id TEXT
+        )
+    """)
+    conn.execute(
+        "INSERT INTO installed_setups VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("old1", "Spa", "Ferrari", 1000, 2000, None, "{}", "[]", 1, "/base", "Spa", None),
+    )
+    conn.commit()
+    conn.close()
+
+    mocker.patch("domain.setup_db.DB_PATH", legacy_path)
+    from domain.setup_db import SetupDb
+    db = SetupDb()
+
+    row = db.fetch_installed_setup("old1")
+    assert row.setup_type == "HYMO"
+    assert row.sha256 is None
+
+
+# --- fetch_installed_go_setup -------------------------------------------------
+
+
+def test_fetch_installed_go_setup_returns_the_matching_row(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="go1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="hash1",
+    )
+    row = in_memory_db.fetch_installed_go_setup("Ferrari", "Spa")
+    assert row is not None
+    assert row.setup_id == "go1"
+    assert row.sha256 == "hash1"
+
+
+def test_fetch_installed_go_setup_returns_none_when_absent(in_memory_db):
+    assert in_memory_db.fetch_installed_go_setup("Ferrari", "Spa") is None
+
+
+def test_fetch_installed_go_setup_reflects_updated_row_after_a_second_upsert(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="go1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="hash-v1",
+    )
+    # A version bump reuses the same setup_id (as SlaveManager._process_go
+    # would, after looking it up by car+track) so it stays one row.
+    in_memory_db.add_installed_setup(
+        _setup(id="go1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="hash-v2",
+    )
+    row = in_memory_db.fetch_installed_go_setup("Ferrari", "Spa")
+    assert row.sha256 == "hash-v2"
+    cur = in_memory_db.conn.execute(
+        "SELECT COUNT(*) FROM installed_setups WHERE car='Ferrari' AND track='Spa' AND setup_type='GO'"
+    )
+    assert cur.fetchone()[0] == 1
+
+
+def test_fetch_installed_go_setup_ignores_a_hymo_row_with_the_same_car_and_track(in_memory_db, tmp_path):
+    """A TrackTitan setup and a GO archive can legitimately share a car+track
+    pair - the lookup must not accidentally reuse the HYMO row's real
+    TrackTitan id as a GO setup_id."""
+    in_memory_db.add_installed_setup(
+        _setup(id="real-tracktitan-uuid", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="HYMO", sha256="hymo-hash",
+    )
+    assert in_memory_db.fetch_installed_go_setup("Ferrari", "Spa") is None
+
+    in_memory_db.add_installed_setup(
+        _setup(id="go-uuid", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="go-hash",
+    )
+    row = in_memory_db.fetch_installed_go_setup("Ferrari", "Spa")
+    assert row is not None
+    assert row.setup_id == "go-uuid"
