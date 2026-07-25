@@ -69,6 +69,8 @@ def test_get_bootstrap_shapes_payload(api, mocker, tmp_path):
     bootstrap = api.get_bootstrap()
 
     assert bootstrap["mode"] == "full"
+    from core.version import APP_VERSION
+    assert bootstrap["appVersion"] == APP_VERSION
     assert bootstrap["sandboxActive"] is False
     assert bootstrap["lmuPath"] == str(tmp_path)
     assert bootstrap["lmuPathExists"] is True

@@ -19,6 +19,15 @@ def parse_remote_zip_name(name: str) -> Optional[tuple[str, int]]:
     return match.group("id"), int(match.group("ts"))
 
 
+def sanitize_identity(value: str) -> str:
+    """Strip the real path-breaking characters (spaces are left alone). Shared
+    by Setup.safe_car/safe_track (Dropbox folder naming) and by SetupDb, which
+    applies it to every car/track written to installed_setups so a HYMO row's
+    raw TrackTitan name and a GO row's Dropbox-folder-derived name always
+    match for the same real car/track."""
+    return value.replace("/", "_").replace("\\", "_").replace("-", "_")
+
+
 @dataclass
 class RemoteSetup:
     """One conforming setup zip on the remote share.
@@ -39,7 +48,7 @@ class Setup:
         # see remote_filename. Never true for a real TrackTitan setup, so real
         # uploads are byte-for-byte unaffected.
         self.sandbox = sandbox
-        self._safe_track = self.track.replace("/", "_").replace("\\", "_").replace("-", "_")
+        self._safe_track = sanitize_identity(self.track)
 
     @property
     def id(self) -> str:
@@ -77,7 +86,7 @@ class Setup:
         # space-collapsing below, the zip filename - GO Setups read their car
         # identity straight back out of this same folder name, so keeping it
         # space-preserving is what makes a GO archive's car match TrackTitan's.
-        return self.car.replace("/", "_").replace("\\", "_").replace("-", "_")
+        return sanitize_identity(self.car)
 
     @property
     def remote_filename(self) -> str:

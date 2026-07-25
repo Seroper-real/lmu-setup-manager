@@ -391,6 +391,11 @@ function renderSidebar() {
     <strong>${state.installedData.grandTotal}</strong>
   `;
 
+  document.getElementById("app-version").innerHTML = `
+    <span>${escapeHtml(t("sidebarVersion"))}</span>
+    <strong>${escapeHtml(state.bootstrap && state.bootstrap.appVersion ? state.bootstrap.appVersion : "")}</strong>
+  `;
+
   applyActiveView();
 }
 

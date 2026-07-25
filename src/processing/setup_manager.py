@@ -51,7 +51,7 @@ class SetupManager:
         installed: bool = len(extracted_files) > 0
         if not installed: log.warning(f"Setup not installed! Not deleting download for manual installation: {setup.id} - {setup.track} - {setup.car}")
         else:
-            if DELETE_PREVIOUS_VERSION or setup_type == "GO":
+            if DELETE_PREVIOUS_VERSION:
                 self._cleanup_old(self.database.fetch_setup_files(setup.id),setup_installation_dir, extracted_files)
             self.database.add_installed_setup(
                 setup, extracted_files, trackFound, setup_installation_dir, matchedTrackId,

@@ -98,10 +98,12 @@ class Api:
         # dedicated endpoint (env values included: the mock's "show/hide secrets"
         # toggle only hides them visually, it does not imply they are withheld).
         import core.config as config
+        from core.version import APP_VERSION
 
         available, count = self._installed_summary()
         return {
             "mode": self.current_mode(),
+            "appVersion": APP_VERSION,
             "mockTrackTitan": config.MOCK_TRACKTITAN,
             "mockLmu": config.MOCK_LMU,
             "mockDropbox": config.MOCK_DROPBOX,

@@ -94,6 +94,13 @@ def test_safe_car_replaces_slash_and_hyphen_but_keeps_spaces():
     assert _make(car="Porsche/963 LMDh").safe_car == "Porsche_963 LMDh"
 
 
+def test_sanitize_identity_replaces_path_breaking_characters_but_keeps_spaces():
+    from domain.setup import sanitize_identity
+    assert sanitize_identity("Mercedes-AMG LMGT3") == "Mercedes_AMG LMGT3"
+    assert sanitize_identity("Le Mans/Bugatti") == "Le Mans_Bugatti"
+    assert sanitize_identity(r"A\B-C/D") == "A_B_C_D"
+
+
 def test_remote_filename_format():
     s = _make(id="abc-123", car="Ferrari 499P", track="Le Mans/Bugatti", last_updated=1700000000)
     assert s.remote_filename == "HYMO-Le_Mans_Bugatti_Ferrari_499P_abc-123_1700000000.zip"

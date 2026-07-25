@@ -227,8 +227,8 @@ def test_update_installed_setup_persists_sha256_and_setup_type(in_memory_db, tmp
 
 def test_migration_backfills_setup_type_and_leaves_sha256_null(mocker, tmp_path):
     """A pre-existing DB, created before this feature, has only the original 12
-    columns - the ADD COLUMN migration must backfill setup_type via its column
-    default, and leave sha256 NULL for that old row."""
+    columns - the migrations framework's baseline step must backfill setup_type
+    via its column default, and leave sha256 NULL for that old row."""
     import sqlite3
     legacy_path = tmp_path / "legacy.db"
     conn = sqlite3.connect(legacy_path)
@@ -262,6 +262,67 @@ def test_migration_backfills_setup_type_and_leaves_sha256_null(mocker, tmp_path)
     row = db.fetch_installed_setup("old1")
     assert row.setup_type == "HYMO"
     assert row.sha256 is None
+
+
+def test_migration_normalizes_car_and_track_on_a_legacy_row_and_stamps_schema_version(mocker, tmp_path):
+    """A pre-existing DB whose car/track contain the raw (pre-sanitization) form
+    - as every HYMO row did before this version - must be normalized by the
+    "1.3.0" migration, and the DB left at domain.migrations.SCHEMA_TARGET_VERSION."""
+    import sqlite3
+    from domain.migrations import SCHEMA_TARGET_VERSION
+    legacy_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(legacy_path)
+    conn.execute("""
+        CREATE TABLE installed_setups (
+            setup_id TEXT PRIMARY KEY,
+            track TEXT,
+            car TEXT,
+            install_date INTEGER,
+            setup_last_update INTEGER,
+            hotlap_link TEXT,
+            api_data TEXT,
+            file_names TEXT,
+            track_found INTEGER,
+            installation_base_path TEXT,
+            installation_folder TEXT,
+            matched_track_id TEXT,
+            sha256 TEXT,
+            setup_type TEXT NOT NULL DEFAULT 'HYMO'
+        )
+    """)
+    conn.execute(
+        "INSERT INTO installed_setups VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("old2", "Le Mans/Bugatti", "Mercedes-AMG LMGT3", 1000, 2000, None, "{}", "[]", 1, "/base", "Le Mans", None, None, "HYMO"),
+    )
+    conn.commit()
+    conn.close()
+
+    mocker.patch("domain.setup_db.DB_PATH", legacy_path)
+    from domain.setup_db import SetupDb
+    db = SetupDb()
+
+    row = db.fetch_installed_setup("old2")
+    assert row.car == "Mercedes_AMG LMGT3"
+    assert row.track == "Le Mans_Bugatti"
+
+    version = db.conn.execute("SELECT version FROM schema_version WHERE id = 1").fetchone()[0]
+    assert version == SCHEMA_TARGET_VERSION
+
+
+def test_rerunning_migrations_on_an_up_to_date_db_is_a_noop(mocker):
+    """A DB already at target_version must not have its migrations replayed."""
+    from domain.migrations.runner import Migration, run_migrations
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    apply_spy = mocker.MagicMock()
+    migrations = [Migration("1.0.0", "test migration", apply_spy)]
+
+    run_migrations(conn, migrations=migrations, target_version="1.0.0")
+    assert apply_spy.call_count == 1
+
+    run_migrations(conn, migrations=migrations, target_version="1.0.0")
+    assert apply_spy.call_count == 1
 
 
 # --- fetch_installed_go_setup -------------------------------------------------
@@ -318,3 +379,62 @@ def test_fetch_installed_go_setup_ignores_a_hymo_row_with_the_same_car_and_track
     row = in_memory_db.fetch_installed_go_setup("Ferrari", "Spa")
     assert row is not None
     assert row.setup_id == "go-uuid"
+
+
+# --- has_installed_hymo_setup --------------------------------------------------
+
+
+def test_has_installed_hymo_setup_true_when_a_hymo_row_matches(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="h1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa", setup_type="HYMO",
+    )
+    assert in_memory_db.has_installed_hymo_setup("Ferrari", "Spa") is True
+
+
+def test_has_installed_hymo_setup_false_when_absent(in_memory_db):
+    assert in_memory_db.has_installed_hymo_setup("Ferrari", "Spa") is False
+
+
+def test_has_installed_hymo_setup_ignores_a_go_row_with_the_same_car_and_track(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="g1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa", setup_type="GO",
+    )
+    assert in_memory_db.has_installed_hymo_setup("Ferrari", "Spa") is False
+
+
+# --- car/track sanitization on write -------------------------------------------
+
+
+def test_add_installed_setup_sanitizes_car_and_track(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="san1", car="Mercedes-AMG LMGT3", track="Le Mans/Bugatti"), [], True, tmp_path / "T",
+    )
+    row = in_memory_db.fetch_installed_setup("san1")
+    assert row.car == "Mercedes_AMG LMGT3"
+    assert row.track == "Le Mans_Bugatti"
+
+
+def test_update_installed_setup_sanitizes_car_and_track(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(_setup(id="san2", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa")
+    row = in_memory_db.fetch_installed_setup("san2")
+    row.car = "Cadillac V-Series.R"
+    row.track = "Le Mans/Bugatti"
+    in_memory_db.update_installed_setup(row)
+    updated = in_memory_db.fetch_installed_setup("san2")
+    assert updated.car == "Cadillac V_Series.R"
+    assert updated.track == "Le Mans_Bugatti"
+
+
+def test_a_hymo_and_a_go_row_for_a_hyphenated_car_share_the_same_stored_car(in_memory_db, tmp_path):
+    """The bug this sanitization fixes: a HYMO row's raw car name and a GO
+    row's folder-derived (already-sanitized) car name must land on the exact
+    same DB string, so the UI groups them under one car instead of two."""
+    in_memory_db.add_installed_setup(
+        _setup(id="hymo1", car="Mercedes-AMG LMGT3", track="Spa"), [], True, tmp_path / "Spa", setup_type="HYMO",
+    )
+    in_memory_db.add_installed_setup(
+        _setup(id="go1", car="Mercedes_AMG LMGT3", track="Spa"), [], True, tmp_path / "Spa", setup_type="GO",
+    )
+    rows = in_memory_db.fetch_all_installed_setups()
+    cars = {r.car for r in rows}
+    assert cars == {"Mercedes_AMG LMGT3"}

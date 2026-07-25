@@ -115,6 +115,26 @@ def test_relocate_failure_does_not_abort_the_run(mm):
     dm.download.assert_not_called()
 
 
+def test_relocate_auth_error_propagates_and_stops_the_run(mm):
+    """Unlike a generic failure (see the test above), an AuthError must not be
+    swallowed - it needs to reach gui/api.py's re-authentication dialog - so
+    the run aborts at the first one instead of trying the rest."""
+    from core.errors import AuthError
+    manager, dm, dbx, tmp = mm
+    dbx.list_setups.return_value = [
+        _remote("Porsche_963/HYMO-Spa_Porsche_963_id1_1000.zip", "id1", 1000),
+        _remote("BMW_M4/HYMO-Imola_BMW_M4_id2_1000.zip", "id2", 1000),
+    ]
+    dbx.move.side_effect = AuthError("token missing scope", code="dropbox_scope")
+    _pages(dm, [_setup(id="id1", ts=1000), _setup(id="id2", ts=1000, track="Imola", car="BMW M4")])
+
+    with pytest.raises(AuthError):
+        manager.run()
+
+    assert dbx.move.call_count == 1
+    dm.download.assert_not_called()
+
+
 def test_skip_bundle(mm):
     manager, dm, dbx, tmp = mm
     _pages(dm, [_setup(id="b1", bundle=True)])

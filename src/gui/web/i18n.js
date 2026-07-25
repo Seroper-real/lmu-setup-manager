@@ -167,6 +167,7 @@ const TRANSLATIONS = {
 // Real-app states the mock's fixed fixture data never had to render.
 const EXTRA = {
   it: {
+    sidebarVersion: "Versione",
     emptySetupsList: "Nessun setup installato. Avvia un download dalla scheda Download.",
     noMatchingSetups: "Nessun setup trovato.",
     statusStopped: "Interrotto",
@@ -223,6 +224,7 @@ const EXTRA = {
     clipboardPasteBlockedToast: "Impossibile incollare automaticamente. Usa Ctrl+V.",
   },
   en: {
+    sidebarVersion: "Version",
     emptySetupsList: "No setups installed yet. Start a download from the Download tab.",
     noMatchingSetups: "No setups found.",
     statusStopped: "Stopped",

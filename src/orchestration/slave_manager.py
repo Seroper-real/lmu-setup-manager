@@ -92,6 +92,18 @@ class SlaveManager:
         log.info(f"  File: {remote.name}")
         self._emit(ProgressEvent(ProgressKind.START, remote.name))
 
+        # Only trust a GO archive once its <Car>/<Track> folder is known-real -
+        # per the documented workflow that folder only exists because Upload
+        # only already published a HYMO setup there. Checked every run (not
+        # just on first install): if the HYMO setup is later deleted, this GO
+        # archive stops updating too, rather than continuing to install from an
+        # unverified folder.
+        if not self.database.has_installed_hymo_setup(remote.car, remote.track):
+            log.warning(
+                f"No installed HYMO setup for {remote.car}/{remote.track} - skipping GO archive {remote.name}."
+            )
+            return
+
         local_zip = Path(DOWNLOAD_PATH) / "go" / remote.car / remote.track / remote.name
         self.dropbox_client.download_to(remote.path_lower, local_zip)
         sha256 = sha256_file(local_zip)

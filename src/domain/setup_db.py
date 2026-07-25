@@ -5,7 +5,8 @@ from pathlib import Path
 import sqlite3
 import time
 from core.config import DB_PATH
-from domain.setup import Setup
+from domain import migrations
+from domain.setup import Setup, sanitize_identity
 
 log = logging.getLogger("TrackTitanDownloader")
 
@@ -52,64 +53,10 @@ class SetupDb:
 
 
     def create_tables(self):
-        with self.conn:
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS installed_setups (
-                    setup_id TEXT PRIMARY KEY,
-                    track TEXT,
-                    car TEXT,
-                    install_date INTEGER,
-                    setup_last_update INTEGER,
-                    hotlap_link TEXT,
-                    api_data TEXT,
-                    file_names TEXT,
-                    track_found INTEGER,
-                    installation_base_path TEXT,
-                    installation_folder TEXT,
-                    matched_track_id TEXT,
-                    sha256 TEXT,
-                    setup_type TEXT NOT NULL DEFAULT 'HYMO'
-                )
-            """)
-            # Migration 1: add track_found to existing installations
-            try:
-                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN track_found INTEGER")
-            except sqlite3.OperationalError:
-                pass
-            # Migration 2: add installation_base_path and installation_folder
-            try:
-                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN installation_base_path TEXT")
-            except sqlite3.OperationalError:
-                pass
-            try:
-                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN installation_folder TEXT")
-            except sqlite3.OperationalError:
-                pass
-            # Migration 3: add matched_track_id - the canonical lmu_folder_name a
-            # setup's raw API track resolved to, distinct from the raw `track` text
-            # and from `installation_folder` (which also carries the "-HYMO"
-            # fallback). Lets the frontend group physically-identical tracks that
-            # TrackTitan exposes under different raw names (e.g. "Bahrain - WEC" vs
-            # "Bahrain International Circuit") under one card instead of two.
-            try:
-                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN matched_track_id TEXT")
-            except sqlite3.OperationalError:
-                pass
-            # Migration 4: add sha256 (content fingerprint, populated from the
-            # next real download onward for both HYMO and GO, NULL for
-            # pre-existing rows) and setup_type ('HYMO'/'GO', existing rows
-            # backfill to 'HYMO' via the column default). A GO archive's
-            # previously-assigned setup_id/hash is looked up across runs via
-            # its existing car/track columns (see fetch_installed_go_setup),
-            # not a dedicated identity column.
-            try:
-                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN sha256 TEXT")
-            except sqlite3.OperationalError:
-                pass
-            try:
-                self.conn.execute("ALTER TABLE installed_setups ADD COLUMN setup_type TEXT NOT NULL DEFAULT 'HYMO'")
-            except sqlite3.OperationalError:
-                pass
+        # Schema creation/upgrades live in domain.migrations, versioned against
+        # domain.migrations.SCHEMA_TARGET_VERSION and tracked in the DB's own
+        # schema_version table - see that package for the migration history.
+        migrations.run_migrations(self.conn)
 
 
     def is_installed_last_version(self, setup_id: str, last_updated: int) -> bool:
@@ -153,7 +100,7 @@ class SetupDb:
                         setup_type = excluded.setup_type
                     """
             self.conn.execute(query, (
-                setup.id, setup.track, setup.car, int(time.time()*1000), setup.last_updated,
+                setup.id, sanitize_identity(setup.track), sanitize_identity(setup.car), int(time.time()*1000), setup.last_updated,
                 setup.hotlap_link, json.dumps(setup.data), json.dumps([file.name for file in file_names]),
                 int(track_found), str(installation_dir.parent), installation_dir.name, matched_track_id,
                 sha256, setup_type
@@ -179,7 +126,7 @@ class SetupDb:
                     WHERE setup_id = ?
                     """
             self.conn.execute(query, (
-                setup.track, setup.car, setup.install_date, setup.setup_last_update,
+                sanitize_identity(setup.track), sanitize_identity(setup.car), setup.install_date, setup.setup_last_update,
                 setup.hotlap_link, json.dumps(setup.api_data), json.dumps(setup.file_names),
                 int(setup.track_found), setup.installation_base_path, setup.installation_folder,
                 setup.matched_track_id, setup.sha256, setup.setup_type, setup.setup_id
@@ -269,6 +216,22 @@ class SetupDb:
         except Exception as e:
             log.error(f"Error fetching installed GO setup for {car}/{track}: {e}")
             return None
+        finally:
+            cursor.close()
+
+    def has_installed_hymo_setup(self, car: str, track: str) -> bool:
+        """Whether a TrackTitan (HYMO) setup is installed for this exact
+        car+track pair - the gate SlaveManager._process_go uses before
+        installing a manually-uploaded GO archive for that same folder (a GO
+        archive is only trusted once the matching HYMO folder is known-real,
+        since that's the only way it could exist per the documented workflow)."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT 1 FROM installed_setups WHERE car = ? AND track = ? AND setup_type = 'HYMO' LIMIT 1",
+                (car, track),
+            )
+            return cursor.fetchone() is not None
         finally:
             cursor.close()
 

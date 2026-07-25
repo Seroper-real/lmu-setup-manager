@@ -50,6 +50,10 @@ def sm(mocker, tmp_path):
     setup_manager = MagicMock()
     database = MagicMock()
     database.fetch_installed_go_setup.return_value = None
+    # A matching HYMO setup is assumed present by default, so the existing GO
+    # tests below don't need to know about this gate - see
+    # test_process_go_skips_when_no_matching_hymo_setup for the False case.
+    database.has_installed_hymo_setup.return_value = True
     return SlaveManager(dropbox_client=dbx, setup_manager=setup_manager, database=database), dbx, setup_manager, database, tmp_path
 
 
@@ -296,6 +300,20 @@ def test_process_go_skip_emits_only_start(sm):
 
     manager._process_go(_go_remote())
 
+    assert [e.kind for e in events] == [ProgressKind.START]
+
+
+def test_process_go_skips_when_no_matching_hymo_setup(sm):
+    manager, dbx, setup_manager, database, tmp = sm
+    database.has_installed_hymo_setup.return_value = False
+    events = []
+    manager.on_progress = events.append
+
+    manager._process_go(_go_remote())
+
+    database.has_installed_hymo_setup.assert_called_once_with("Oreca 07", "Imola")
+    dbx.download_to.assert_not_called()
+    setup_manager.install_setup.assert_not_called()
     assert [e.kind for e in events] == [ProgressKind.START]
 
 

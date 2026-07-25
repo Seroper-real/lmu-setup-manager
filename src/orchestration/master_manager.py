@@ -10,6 +10,7 @@ from typing import Callable, Optional
 from core.archive import METADATA_FILENAME, find_files_recursive, unzip_recursive
 from clients.protocols import DropboxClientProtocol
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, DROPBOX_UPLOAD_WORKERS, SETUP_FILE_EXTENSIONS
+from core.errors import AuthError
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from orchestration.download_manager import DownloadManager
 from domain.setup import RemoteSetup, Setup
@@ -147,6 +148,12 @@ class MasterManager:
         try:
             self.dropbox_client.move(existing.path_lower, target_path)
             log.info(f"Relocated {setup.id} to the unified car/track layout: {target_path}")
+        except AuthError:
+            # Let this propagate: a swallowed AuthError here (e.g. a token
+            # missing the scope files_move_v2 needs) would otherwise never
+            # reach gui/api.py's re-authentication dialog, and would just fail
+            # silently on every already-published setup for the rest of the run.
+            raise
         except Exception as e:
             log.error(f"Failed to relocate {setup.id} to {target_path}: {e}")
 

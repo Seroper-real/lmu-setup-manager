@@ -302,11 +302,12 @@ body { overflow: hidden; }
 
 .sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 .sidebar-footer .hr { margin: 0 0 4px; }
-.mode-badge, .installed-count {
+.mode-badge, .installed-count, .app-version {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 var(--space-2); font-size: 12px; color: var(--color-neutral-500);
 }
 .installed-count strong { color: var(--color-neutral-400); font-weight: 400; }
+.app-version strong { color: var(--color-neutral-400); font-weight: 400; }
 .tag-warning { background: color-mix(in srgb, var(--color-warning) 20%, transparent); color: var(--color-warning); }
 
 .main { flex: 1; min-width: 0; padding: var(--space-8) 40px; overflow-y: auto; position: relative; }

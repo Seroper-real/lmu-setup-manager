@@ -21,12 +21,26 @@ def _tracks(sandbox):
 
 
 def _row_for_track(db, track):
-    matches = [r for r in db.fetch_all_installed_setups() if r.track == track]
-    assert len(matches) == 1, f"expected exactly one row for track {track!r}, found {len(matches)}"
+    """The GO row for `track` (setup_type-scoped: every test in this file now
+    also has a HYMO precondition row for the same track, per the has-a-
+    matching-HYMO-setup gate GO installs require)."""
+    matches = [r for r in db.fetch_all_installed_setups() if r.track == track and r.setup_type == "GO"]
+    assert len(matches) == 1, f"expected exactly one GO row for track {track!r}, found {len(matches)}"
     return matches[0]
 
 
+def _install_hymo_precondition(sandbox, in_memory_db, car=CAR, track=TRACK, setup_id="hymo-precondition-uuid"):
+    """Publish+install a HYMO setup for car/track - the GO gate
+    (SetupDb.has_installed_hymo_setup) requires one to already exist before a
+    GO archive for that same folder is trusted."""
+    sandbox.write_catalog([make_setup(setup_id, track, car=car)])
+    sandbox.add_archive(setup_id, {"tt_quali.svm": "tt"})
+    sandbox.run_master()
+    sandbox.run_slave(in_memory_db)
+
+
 def test_go_archive_installs_svm_and_telemetry_with_setup_type_and_sha256(sandbox, in_memory_db):
+    _install_hymo_precondition(sandbox, in_memory_db)
     sandbox.add_go_zip(CAR, TRACK, ZIP_NAME, {
         "GO 1.0 Q.svm": "svm-v1",
         "GO 1.0 Q MOTEC.ld": "ld-v1",
@@ -36,6 +50,7 @@ def test_go_archive_installs_svm_and_telemetry_with_setup_type_and_sha256(sandbo
     sandbox.run_slave(in_memory_db)
 
     assert sandbox.installed_files() == {
+        "Imola/tt_quali.svm",
         "Imola/GO 1.0 Q.svm", "Imola/GO 1.0 Q MOTEC.ld", "Imola/GO 1.0 Q MOTEC.ldx",
     }
     row = _row_for_track(in_memory_db, TRACK)
@@ -45,9 +60,10 @@ def test_go_archive_installs_svm_and_telemetry_with_setup_type_and_sha256(sandbo
 
 
 def test_content_change_under_the_same_filename_replaces_stale_files(sandbox, in_memory_db):
+    _install_hymo_precondition(sandbox, in_memory_db)
     sandbox.add_go_zip(CAR, TRACK, ZIP_NAME, {"GO 1.0 Q.svm": "v1"})
     sandbox.run_slave(in_memory_db)
-    assert sandbox.installed_files() == {"Imola/GO 1.0 Q.svm"}
+    assert sandbox.installed_files() == {"Imola/tt_quali.svm", "Imola/GO 1.0 Q.svm"}
     setup_id_v1 = _row_for_track(in_memory_db, TRACK).setup_id
 
     # Same Dropbox path, totally different internal filenames - no version
@@ -55,12 +71,13 @@ def test_content_change_under_the_same_filename_replaces_stale_files(sandbox, in
     sandbox.add_go_zip(CAR, TRACK, ZIP_NAME, {"GO 2.0 Q Esport.svm": "v2"})
     sandbox.run_slave(in_memory_db)
 
-    assert sandbox.installed_files() == {"Imola/GO 2.0 Q Esport.svm"}
+    assert sandbox.installed_files() == {"Imola/tt_quali.svm", "Imola/GO 2.0 Q Esport.svm"}
     row = _row_for_track(in_memory_db, TRACK)
     assert row.setup_id == setup_id_v1
 
 
 def test_unchanged_archive_is_not_reinstalled_on_a_second_run(sandbox, in_memory_db, mocker):
+    _install_hymo_precondition(sandbox, in_memory_db)
     sandbox.add_go_zip(CAR, TRACK, ZIP_NAME, {"GO 1.0 Q.svm": "v1"})
     sandbox.run_slave(in_memory_db)
 
@@ -70,10 +87,11 @@ def test_unchanged_archive_is_not_reinstalled_on_a_second_run(sandbox, in_memory
     sandbox.run_slave(in_memory_db)
 
     install_spy.assert_not_called()
-    assert sandbox.installed_files() == {"Imola/GO 1.0 Q.svm"}
+    assert sandbox.installed_files() == {"Imola/tt_quali.svm", "Imola/GO 1.0 Q.svm"}
 
 
 def test_renaming_the_zip_in_place_with_unchanged_content_is_not_reinstalled(sandbox, in_memory_db, mocker):
+    _install_hymo_precondition(sandbox, in_memory_db)
     original = sandbox.add_go_zip(CAR, TRACK, ZIP_NAME, {"GO 1.0 Q.svm": "same content"})
     sandbox.run_slave(in_memory_db)
     setup_id_before = _row_for_track(in_memory_db, TRACK).setup_id
@@ -93,10 +111,11 @@ def test_renaming_the_zip_in_place_with_unchanged_content_is_not_reinstalled(san
     install_spy.assert_not_called()
     row = _row_for_track(in_memory_db, TRACK)
     assert row.setup_id == setup_id_before
-    assert sandbox.installed_files() == {"Imola/GO 1.0 Q.svm"}
+    assert sandbox.installed_files() == {"Imola/tt_quali.svm", "Imola/GO 1.0 Q.svm"}
 
 
 def test_renaming_and_changing_content_still_updates_the_same_slot(sandbox, in_memory_db):
+    _install_hymo_precondition(sandbox, in_memory_db)
     sandbox.add_go_zip(CAR, TRACK, ZIP_NAME, {"GO 1.0 Q.svm": "v1"})
     sandbox.run_slave(in_memory_db)
     setup_id_before = _row_for_track(in_memory_db, TRACK).setup_id
@@ -105,22 +124,32 @@ def test_renaming_and_changing_content_still_updates_the_same_slot(sandbox, in_m
     sandbox.add_go_zip(CAR, TRACK, "GO-Renamed-v2.zip", {"GO 2.0 Q Esport.svm": "v2"})
     sandbox.run_slave(in_memory_db)
 
-    assert sandbox.installed_files() == {"Imola/GO 2.0 Q Esport.svm"}
+    assert sandbox.installed_files() == {"Imola/tt_quali.svm", "Imola/GO 2.0 Q Esport.svm"}
     row = _row_for_track(in_memory_db, TRACK)
     assert row.setup_id == setup_id_before
 
 
 def test_tracktitan_setup_and_go_archive_for_the_same_track_share_the_lmu_folder(sandbox, in_memory_db):
-    setup_id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
-    sandbox.write_catalog([make_setup(setup_id, TRACK, car="Porsche 963")])
-    sandbox.add_archive(setup_id, {"tt_quali.svm": "tt"})
+    # Two different cars' HYMO setups, both installed for the same track
+    # (Porsche 963 unrelated to the GO archive below, Oreca 07 the one it
+    # attaches to - the GO gate requires a HYMO row for its exact car+track).
+    porsche_id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+    oreca_id = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"
+    sandbox.write_catalog([
+        make_setup(porsche_id, TRACK, car="Porsche 963"),
+        make_setup(oreca_id, TRACK, car=CAR),
+    ])
+    sandbox.add_archive(porsche_id, {"tt_quali.svm": "tt"})
+    sandbox.add_archive(oreca_id, {"oreca_quali.svm": "oreca-tt"})
     sandbox.run_master()
     sandbox.run_slave(in_memory_db)
 
     sandbox.add_go_zip(CAR, TRACK, ZIP_NAME, {"go_quali.svm": "go"})
     sandbox.run_slave(in_memory_db)
 
-    assert sandbox.installed_files() == {"Imola/tt_quali.svm", "Imola/go_quali.svm"}
+    assert sandbox.installed_files() == {
+        "Imola/tt_quali.svm", "Imola/oreca_quali.svm", "Imola/go_quali.svm",
+    }
 
 
 def test_go_identity_stays_stable_when_a_hymo_setup_shares_the_same_car_and_track(sandbox, in_memory_db):
@@ -152,14 +181,30 @@ def test_go_identity_stays_stable_when_a_hymo_setup_shares_the_same_car_and_trac
     assert sandbox.installed_files() == {"Imola/tt_quali.svm", "Imola/go_quali_v2.svm"}
 
 
-def test_unmapped_go_track_lands_under_go_fallback_suffix(sandbox, in_memory_db):
+def test_go_archive_is_skipped_when_no_matching_hymo_setup_exists(sandbox, in_memory_db):
+    """The gate: a folder existing on the share is not enough on its own - per
+    the documented workflow it should only exist because a HYMO setup for that
+    exact car+track was already published there, so this GO archive (no such
+    HYMO row) is not trusted and never installed."""
     sandbox.add_go_zip("Ferrari 499P", "Nonexistent Circuit", "GO-Ferrari-Mystery.zip", {"go.svm": "x"})
 
     sandbox.run_slave(in_memory_db)
 
-    assert sandbox.installed_files() == {"Nonexistent Circuit-GO/go.svm"}
-    row = _row_for_track(in_memory_db, "Nonexistent Circuit")
-    assert row.track_found is False
+    assert sandbox.installed_files() == set()
+    assert in_memory_db.fetch_all_installed_setups() == []
+
+
+def test_unmapped_go_track_lands_under_go_fallback_suffix_when_hymo_precondition_exists(sandbox, in_memory_db):
+    car, track = "Ferrari 499P", "Nonexistent Circuit"
+    _install_hymo_precondition(sandbox, in_memory_db, car=car, track=track, setup_id="hymo-unmapped-uuid")
+
+    sandbox.add_go_zip(car, track, "GO-Ferrari-Mystery.zip", {"go.svm": "x"})
+    sandbox.run_slave(in_memory_db)
+
+    assert "Nonexistent Circuit-GO/go.svm" in sandbox.installed_files()
+    go_rows = [r for r in in_memory_db.fetch_all_installed_setups() if r.setup_type == "GO"]
+    assert len(go_rows) == 1
+    assert go_rows[0].track_found is False
 
 
 def test_stray_zip_at_wrong_depth_is_skipped_and_warned(sandbox, in_memory_db, caplog):

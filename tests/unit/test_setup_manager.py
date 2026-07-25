@@ -209,7 +209,9 @@ def test_install_setup_defaults_setup_type_to_hymo(sm, sample_setup, tmp_path, l
     assert row.sha256 is None
 
 
-def test_install_setup_go_cleans_up_stale_files_even_when_delete_previous_version_is_off(sm, sample_setup, tmp_path, lmu_base, mocker):
+def test_install_setup_go_leaves_stale_files_when_delete_previous_version_is_off(sm, sample_setup, tmp_path, lmu_base, mocker):
+    # GO must respect DELETE_PREVIOUS_VERSION exactly like HYMO (see the
+    # companion HYMO test below) - no more hardcoded cleanup special-case.
     # DELETE_PREVIOUS_VERSION is already patched False by the `sm` fixture.
     install_dir = lmu_base / "Spa"
     install_dir.mkdir(parents=True, exist_ok=True)
@@ -230,7 +232,7 @@ def test_install_setup_go_cleans_up_stale_files_even_when_delete_previous_versio
 
     sm.install_setup(zip_path, sample_setup, setup_type="GO")
 
-    assert not (install_dir / "stale.svm").exists()
+    assert (install_dir / "stale.svm").exists()
     assert (install_dir / "fresh.svm").exists()
 
 
