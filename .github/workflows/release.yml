@@ -44,6 +44,13 @@ jobs:
         with:
           python-version: '3.13.3'
 
+      - name: Sincronizza APP_VERSION dal tag
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ github.ref_name }}" -replace '^v', ''
+          New-Item -ItemType Directory -Force -Path src\core | Out-Null
+          Set-Content -Path src\core\version.py -Value "APP_VERSION = `"$tagVersion`"" -Encoding utf8
+
       - name: Installa dipendenze
         run: |
           python -m pip install --upgrade pip
