@@ -6,7 +6,7 @@ import sqlite3
 import time
 from core.config import DB_PATH
 from domain import migrations
-from domain.setup import Setup, sanitize_identity
+from domain.setup import Setup
 
 log = logging.getLogger("TrackTitanDownloader")
 
@@ -100,13 +100,19 @@ class SetupDb:
                         setup_type = excluded.setup_type
                     """
             self.conn.execute(query, (
-                setup.id, sanitize_identity(setup.track), sanitize_identity(setup.car), int(time.time()*1000), setup.last_updated,
+                setup.id, setup.safe_track, setup.safe_car, int(time.time()*1000), setup.last_updated,
                 setup.hotlap_link, json.dumps(setup.data), json.dumps([file.name for file in file_names]),
                 int(track_found), str(installation_dir.parent), installation_dir.name, matched_track_id,
                 sha256, setup_type
             ))
 
     def update_installed_setup(self, setup: InstalledSetup) -> None:
+        # setup.track/.car are already resolved/official by the time a row
+        # reaches this path (set once by add_installed_setup via
+        # Setup.safe_track/safe_car) - persisted as-is, never re-sanitized:
+        # re-running sanitize_identity here would silently mangle an official
+        # name containing a hyphen (e.g. "Cadillac V-Series.R") on every
+        # relocate cycle (see SetupManager._try_relocate_setup).
         with self.conn:
             query = """
                     UPDATE installed_setups SET
@@ -126,7 +132,7 @@ class SetupDb:
                     WHERE setup_id = ?
                     """
             self.conn.execute(query, (
-                sanitize_identity(setup.track), sanitize_identity(setup.car), setup.install_date, setup.setup_last_update,
+                setup.track, setup.car, setup.install_date, setup.setup_last_update,
                 setup.hotlap_link, json.dumps(setup.api_data), json.dumps(setup.file_names),
                 int(setup.track_found), setup.installation_base_path, setup.installation_folder,
                 setup.matched_track_id, setup.sha256, setup.setup_type, setup.setup_id

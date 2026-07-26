@@ -268,19 +268,21 @@ def test_list_installed_setups_nests_hymo_and_go_under_one_car(api, mocker):
 
 def test_delete_setup_delegates_to_setup_manager(api, mocker):
     tm_cls = mocker.patch("processing.track_manager.TrackManager")
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
     sm_cls = mocker.patch("processing.setup_manager.SetupManager")
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     sm_cls.return_value.delete_setup.return_value = True
 
     result = api.delete_setup("id-1")
 
-    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, database=db_cls.return_value)
+    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, car_manager=cm_cls.return_value, database=db_cls.return_value)
     sm_cls.return_value.delete_setup.assert_called_once_with("id-1")
     assert result == {"deleted": True}
 
 
 def test_delete_setup_reports_when_nothing_was_found(api, mocker):
     mocker.patch("processing.track_manager.TrackManager")
+    mocker.patch("processing.car_manager.CarManager")
     sm_cls = mocker.patch("processing.setup_manager.SetupManager")
     mocker.patch("domain.setup_db.SetupDb")
     sm_cls.return_value.delete_setup.return_value = False
@@ -290,13 +292,14 @@ def test_delete_setup_reports_when_nothing_was_found(api, mocker):
 
 def test_delete_setups_deletes_each_id_and_counts_successes(api, mocker):
     tm_cls = mocker.patch("processing.track_manager.TrackManager")
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
     sm_cls = mocker.patch("processing.setup_manager.SetupManager")
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     sm_cls.return_value.delete_setup.side_effect = [True, False, True]
 
     result = api.delete_setups(["id-1", "id-2", "id-3"])
 
-    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, database=db_cls.return_value)
+    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, car_manager=cm_cls.return_value, database=db_cls.return_value)
     sm_cls.return_value.delete_setup.assert_any_call("id-1")
     sm_cls.return_value.delete_setup.assert_any_call("id-2")
     sm_cls.return_value.delete_setup.assert_any_call("id-3")
@@ -305,6 +308,7 @@ def test_delete_setups_deletes_each_id_and_counts_successes(api, mocker):
 
 def test_delete_setups_handles_empty_list(api, mocker):
     mocker.patch("processing.track_manager.TrackManager")
+    mocker.patch("processing.car_manager.CarManager")
     sm_cls = mocker.patch("processing.setup_manager.SetupManager")
     mocker.patch("domain.setup_db.SetupDb")
 
@@ -314,6 +318,7 @@ def test_delete_setups_handles_empty_list(api, mocker):
 
 def test_delete_all_setups_deletes_every_installed_setup(api, mocker):
     tm_cls = mocker.patch("processing.track_manager.TrackManager")
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
     sm_cls = mocker.patch("processing.setup_manager.SetupManager")
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = [
@@ -325,7 +330,7 @@ def test_delete_all_setups_deletes_every_installed_setup(api, mocker):
 
     result = api.delete_all_setups()
 
-    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, database=db_cls.return_value)
+    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, car_manager=cm_cls.return_value, database=db_cls.return_value)
     sm_cls.return_value.delete_setup.assert_any_call("1")
     sm_cls.return_value.delete_setup.assert_any_call("2")
     sm_cls.return_value.delete_setup.assert_any_call("3")
@@ -334,6 +339,7 @@ def test_delete_all_setups_deletes_every_installed_setup(api, mocker):
 
 def test_delete_all_setups_handles_nothing_installed(api, mocker):
     mocker.patch("processing.track_manager.TrackManager")
+    mocker.patch("processing.car_manager.CarManager")
     sm_cls = mocker.patch("processing.setup_manager.SetupManager")
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = []
@@ -352,6 +358,7 @@ def test_get_track_folder_options_delegates_to_track_manager(api, mocker):
 def test_map_track_updates_refreshes_and_relocates(api, mocker):
     tm_cls = mocker.patch("processing.track_manager.TrackManager")
     tm_instance = tm_cls.return_value
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
     sm_cls = mocker.patch("processing.setup_manager.SetupManager")
     db_cls = mocker.patch("domain.setup_db.SetupDb")
 
@@ -359,7 +366,7 @@ def test_map_track_updates_refreshes_and_relocates(api, mocker):
 
     tm_instance.add_or_update_mapping.assert_called_once_with("Imola - WEC", "Imola")
     tm_instance.refresh.assert_called_once()
-    sm_cls.assert_called_once_with(track_manager=tm_instance, database=db_cls.return_value)
+    sm_cls.assert_called_once_with(track_manager=tm_instance, car_manager=cm_cls.return_value, database=db_cls.return_value)
     sm_cls.return_value.update_tracks_not_found.assert_called_once()
     assert result == {}
 

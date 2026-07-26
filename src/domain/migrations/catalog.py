@@ -1,5 +1,8 @@
+import json
+import re
 import sqlite3
 
+from core.utils import get_path
 from domain.migrations.runner import Migration
 
 
@@ -67,7 +70,56 @@ def _migration_normalize_car_track(conn: sqlite3.Connection) -> None:
             )
 
 
+def _migration_officialize_car_track(conn: sqlite3.Connection) -> None:
+    """One-time backfill towards the official `name` values from
+    config/mapping.json. No catalog tables are created - the mapping stays
+    in-memory, reloaded by TrackManager/CarManager on every construction.
+
+    Track: matched_track_id holds lmu_folder (the physical LMU folder
+    identity), which is not necessarily the same as the official `name` (the
+    two are independent - see TrackManager.get_official_track_name). Read
+    mapping.json to build a lmu_folder -> name map and backfill
+    installed_setups.track with the corresponding name; if matched_track_id
+    isn't present in the catalog (e.g. resolved via a user "Correggi"
+    mapping, which has no distinct `name`), leave matched_track_id as-is.
+
+    Car: no pre-resolved value exists, so the same regex matching is replayed
+    here directly against the bundled local file (a migration must stay
+    deterministic - never fetches the remote mirror)."""
+    mapping_path = get_path("config/mapping.json")
+    if not mapping_path.exists():
+        return
+    mapping_data = json.loads(mapping_path.read_text(encoding="utf-8"))
+
+    folder_to_name = {t["lmu_folder"]: t["name"] for t in mapping_data.get("tracks", [])}
+    track_rows = conn.execute(
+        "SELECT setup_id, matched_track_id FROM installed_setups WHERE track_found = 1 AND matched_track_id IS NOT NULL"
+    ).fetchall()
+    for setup_id, matched_track_id in track_rows:
+        official_name = folder_to_name.get(matched_track_id, matched_track_id)
+        conn.execute("UPDATE installed_setups SET track = ? WHERE setup_id = ?", (official_name, setup_id))
+
+    compiled_cars: list[tuple[re.Pattern, str]] = []
+    for car in mapping_data.get("cars", []):
+        name = car["name"]
+        for raw_pattern in car.get("matcher", []):
+            try:
+                compiled_cars.append((re.compile(raw_pattern, re.IGNORECASE), name))
+            except re.error:
+                continue
+
+    car_rows = conn.execute("SELECT setup_id, car FROM installed_setups").fetchall()
+    for setup_id, car in car_rows:
+        if not car:
+            continue
+        for pattern, official_name in compiled_cars:
+            if pattern.search(car) and official_name != car:
+                conn.execute("UPDATE installed_setups SET car = ? WHERE setup_id = ?", (official_name, setup_id))
+                break
+
+
 CATALOG: list[Migration] = [
     Migration("1.2.1", "Baseline schema (installed_setups with all columns through v1.2.1)", _migration_baseline),
     Migration("1.3.0", "Normalize car/track to the sanitized form shared with GO Setups", _migration_normalize_car_track),
+    Migration("2.0.0", "Officialize installed_setups.car/track to the canonical mapping.json names", _migration_officialize_car_track),
 ]

@@ -35,9 +35,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "file_extensions": [".svm"],
         },
     },
-    "remote_tracks": {
+    "remote_mappings": {
         "enabled": True,
-        "url": "https://raw.githubusercontent.com/Seroper-real/lmu-setup-manager/refs/heads/main/config/tracks.json",
+        "url": "https://raw.githubusercontent.com/Seroper-real/lmu-setup-manager/refs/heads/main/config/mapping.json",
         "timeout": 5,
     },
     "dropbox": {"folder": "/lmu-setups", "timeout": 30, "upload_workers": 4},
@@ -64,7 +64,7 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             )
         """)
         # User-added customizations only (the "Correggi" UI action) - layered on
-        # top of config/tracks.json's file-derived mapping, never seeded with it.
+        # top of config/mapping.json's file-derived mapping, never seeded with it.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tracks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,10 +92,15 @@ def _connect() -> sqlite3.Connection:
 
 
 def get_config() -> dict[str, Any]:
+    # Deep-merged with DEFAULT_CONFIG rather than a raw pass-through: a config
+    # row already saved by an older app version won't have keys introduced
+    # since (e.g. "remote_mappings", replacing the old "remote_tracks"), and a
+    # bare bracket access on a missing key downstream (core.config) would
+    # raise KeyError on first launch after an upgrade for every existing user.
     conn = _connect()
     try:
         row = conn.execute("SELECT data FROM config WHERE id = 1").fetchone()
-        return json.loads(row[0]) if row else deepcopy(DEFAULT_CONFIG)
+        return _deep_merge(DEFAULT_CONFIG, json.loads(row[0])) if row else deepcopy(DEFAULT_CONFIG)
     finally:
         conn.close()
 

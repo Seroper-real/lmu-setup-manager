@@ -48,6 +48,12 @@ def sm(mocker, tmp_path):
     dbx = MagicMock()
     dbx.list_go_setups.return_value = []
     setup_manager = MagicMock()
+    # Unconfigured, these MagicMock attributes would auto-vivify as truthy
+    # MagicMock instances (not None), breaking the `or sanitize_identity(...)`
+    # fallback in _process_go and the assert_called_once_with(...) checks
+    # below that expect the raw car/track strings back unchanged.
+    setup_manager.car_manager.get_car_name.return_value = None
+    setup_manager.track_manager.get_official_track_name.return_value = None
     database = MagicMock()
     database.fetch_installed_go_setup.return_value = None
     # A matching HYMO setup is assumed present by default, so the existing GO

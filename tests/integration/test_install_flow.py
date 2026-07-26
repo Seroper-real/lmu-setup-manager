@@ -11,15 +11,17 @@ def env(tmp_path, in_memory_db, mocker):
     lmu_path = tmp_path / "lmu"
     lmu_path.mkdir()
 
-    tracks_file = tmp_path / "tracks.json"
-    tracks_file.write_text(json.dumps({
-        "tracks": [{"tt_patterns": ["spa|francorchamps"], "lmu_folder_name": "Spa"}],
+    mapping_file = tmp_path / "mapping.json"
+    mapping_file.write_text(json.dumps({
+        "tracks": [{"name": "Spa", "matcher": ["spa|francorchamps"], "lmu_folder": "Spa"}],
     }), encoding="utf-8")
 
     mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", dl_path)
     mocker.patch("orchestration.download_manager.TrackTitanClient")
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", False)
-    mocker.patch("processing.track_manager.get_path", return_value=tracks_file)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
+    mocker.patch("processing.track_manager.get_path", return_value=mapping_file)
+    mocker.patch("processing.car_manager.REMOTE_MAPPINGS_ENABLED", False)
+    mocker.patch("processing.car_manager.get_path", return_value=mapping_file)
     mocker.patch("processing.setup_manager.CLEAN_DOWNLOAD", False)
     mocker.patch("processing.setup_manager.OVERWRITE", True)
     mocker.patch("processing.setup_manager.DELETE_PREVIOUS_VERSION", False)
@@ -28,13 +30,16 @@ def env(tmp_path, in_memory_db, mocker):
 
     from orchestration.download_manager import DownloadManager
     from processing.track_manager import TrackManager
+    from processing.car_manager import CarManager
     from processing.setup_manager import SetupManager
 
     dm = DownloadManager(database=in_memory_db)
     tm = TrackManager()
+    cm = CarManager()
     sm = SetupManager(
         database=in_memory_db,
         track_manager=tm,
+        car_manager=cm,
         lmu_setups_base_path=lmu_path,
         overwrite=True,
         already_installed=set(),

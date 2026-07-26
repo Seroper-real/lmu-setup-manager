@@ -49,6 +49,7 @@ class Setup:
         # uploads are byte-for-byte unaffected.
         self.sandbox = sandbox
         self._safe_track = sanitize_identity(self.track)
+        self._safe_car = sanitize_identity(self.car)
 
     @property
     def id(self) -> str:
@@ -80,13 +81,19 @@ class Setup:
 
     @property
     def safe_car(self) -> str:
-        # Same sanitization as safe_track: only the real path-breaking
-        # characters are replaced, spaces are left alone. Shared by the
-        # Dropbox folder path (remote_relative_path) and, after local
-        # space-collapsing below, the zip filename - GO Setups read their car
-        # identity straight back out of this same folder name, so keeping it
-        # space-preserving is what makes a GO archive's car match TrackTitan's.
-        return sanitize_identity(self.car)
+        # Same sanitization as safe_track by default (only the real
+        # path-breaking characters are replaced, spaces are left alone),
+        # overridable via the setter once CarManager resolves an official
+        # catalog name for this car. Shared by the Dropbox folder path
+        # (remote_relative_path) and, after local space-collapsing below, the
+        # zip filename - GO Setups read their car identity straight back out
+        # of this same folder name, so keeping it space-preserving is what
+        # makes a GO archive's car match TrackTitan's.
+        return self._safe_car
+
+    @safe_car.setter
+    def safe_car(self, value: str) -> None:
+        self._safe_car = value
 
     @property
     def remote_filename(self) -> str:

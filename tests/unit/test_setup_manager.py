@@ -14,11 +14,21 @@ def lmu_base(tmp_path):
 def mock_track_manager():
     m = MagicMock()
     m.get_track_folder_name.return_value = "Spa"
+    # None: leaves setup.safe_track at its sanitize_identity default, same
+    # graceful degradation as a real TrackManager with no catalog match.
+    m.get_official_track_name.return_value = None
     return m
 
 
 @pytest.fixture
-def sm(in_memory_db, mock_track_manager, lmu_base, mocker):
+def mock_car_manager():
+    m = MagicMock()
+    m.get_car_name.return_value = None
+    return m
+
+
+@pytest.fixture
+def sm(in_memory_db, mock_track_manager, mock_car_manager, lmu_base, mocker):
     mocker.patch("processing.setup_manager.CLEAN_DOWNLOAD", False)
     mocker.patch("processing.setup_manager.OVERWRITE", True)
     mocker.patch("processing.setup_manager.DELETE_PREVIOUS_VERSION", False)
@@ -27,6 +37,7 @@ def sm(in_memory_db, mock_track_manager, lmu_base, mocker):
     return SetupManager(
         database=in_memory_db,
         track_manager=mock_track_manager,
+        car_manager=mock_car_manager,
         lmu_setups_base_path=lmu_base,
         overwrite=True,
         already_installed=set(),
@@ -289,7 +300,7 @@ def test_delete_setup_returns_false_for_an_unknown_id(sm):
     assert sm.delete_setup("ghost") is False
 
 
-def test_setup_manager_creates_a_missing_lmu_base_path_on_init(in_memory_db, mock_track_manager, tmp_path, mocker):
+def test_setup_manager_creates_a_missing_lmu_base_path_on_init(in_memory_db, mock_track_manager, mock_car_manager, tmp_path, mocker):
     mocker.patch("processing.setup_manager.CLEAN_DOWNLOAD", False)
     mocker.patch("processing.setup_manager.OVERWRITE", True)
     mocker.patch("processing.setup_manager.DELETE_PREVIOUS_VERSION", False)
@@ -298,7 +309,7 @@ def test_setup_manager_creates_a_missing_lmu_base_path_on_init(in_memory_db, moc
     missing = tmp_path / "not-yet-created" / "Settings"
     assert not missing.exists()
 
-    SetupManager(database=in_memory_db, track_manager=mock_track_manager, lmu_setups_base_path=missing)
+    SetupManager(database=in_memory_db, track_manager=mock_track_manager, car_manager=mock_car_manager, lmu_setups_base_path=missing)
 
     assert missing.is_dir()
 

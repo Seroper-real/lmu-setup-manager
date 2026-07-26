@@ -25,9 +25,9 @@
             ]
         }
     },
-    "remote_tracks": {
+    "remote_mappings": {
         "enabled": false,
-        "url": "https://example.invalid/tracks.json",
+        "url": "https://example.invalid/mapping.json",
         "timeout": 5
     },
     "dropbox": {

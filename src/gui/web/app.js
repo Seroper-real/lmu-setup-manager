@@ -184,7 +184,7 @@ function buildSettingsForm(bootstrap) {
   const logging = cfg.logging || {};
   const network = cfg.network || {};
   const paths = cfg.paths || {};
-  const remoteTracks = cfg.remote_tracks || {};
+  const remoteTracks = cfg.remote_mappings || {};
   const dropbox = cfg.dropbox || {};
 
   return {
@@ -1150,7 +1150,7 @@ async function persistSettings() {
       timeout: parseInt(f.timeout, 10),
       page_size: parseInt(f.pageSize, 10),
     },
-    remote_tracks: {
+    remote_mappings: {
       enabled: !!f.remoteTracksEnabled,
       url: f.remoteTracksUrl,
       timeout: parseInt(f.remoteTracksTimeout, 10),

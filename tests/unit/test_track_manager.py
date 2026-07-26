@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 @pytest.fixture
 def local_manager(minimal_tracks_json, mocker):
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", False)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
     mocker.patch("processing.track_manager.get_path", return_value=minimal_tracks_json)
     from processing.track_manager import TrackManager
     return TrackManager()
@@ -43,10 +43,10 @@ def test_get_track_folder_partial_match(local_manager):
 
 
 def test_get_track_folder_le_mans_variants(tmp_path, mocker):
-    data = {"tracks": [{"tt_patterns": ["mans"], "lmu_folder_name": "Lemans"}]}
-    p = tmp_path / "tracks.json"
+    data = {"tracks": [{"name": "Lemans", "matcher": ["mans"], "lmu_folder": "Lemans"}]}
+    p = tmp_path / "mapping.json"
     p.write_text(json.dumps(data), encoding="utf-8")
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", False)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
     mocker.patch("processing.track_manager.get_path", return_value=p)
 
     from processing.track_manager import TrackManager
@@ -60,13 +60,13 @@ def test_get_track_folder_le_mans_variants(tmp_path, mocker):
 def test_invalid_regex_is_skipped(tmp_path, mocker):
     data = {
         "tracks": [
-            {"tt_patterns": ["["], "lmu_folder_name": "Broken"},
-            {"tt_patterns": ["imola"], "lmu_folder_name": "Imola"},
+            {"name": "Broken", "matcher": ["["], "lmu_folder": "Broken"},
+            {"name": "Imola", "matcher": ["imola"], "lmu_folder": "Imola"},
         ],
     }
-    p = tmp_path / "tracks.json"
+    p = tmp_path / "mapping.json"
     p.write_text(json.dumps(data), encoding="utf-8")
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", False)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
     mocker.patch("processing.track_manager.get_path", return_value=p)
 
     from processing.track_manager import TrackManager
@@ -80,15 +80,15 @@ def _mock_remote(mocker, remote_data):
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
     mock_resp.json.return_value = remote_data
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", True)
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_TIMEOUT", 5)
-    mocker.patch("processing.track_manager.requests.get", return_value=mock_resp)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", True)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_TIMEOUT", 5)
+    mocker.patch("processing.catalog_loader.requests.get", return_value=mock_resp)
 
 
 def test_remote_preferred_over_local_when_reachable(minimal_tracks_json, mocker):
     # No versioning anymore: remote wins whenever it's reachable. The bundled
     # local file is only a fallback, and is never written back to.
-    remote_data = {"tracks": [{"tt_patterns": ["new track"], "lmu_folder_name": "NewFolder"}]}
+    remote_data = {"tracks": [{"name": "NewFolder", "matcher": ["new track"], "lmu_folder": "NewFolder"}]}
     _mock_remote(mocker, remote_data)
     mocker.patch("processing.track_manager.get_path", return_value=minimal_tracks_json)
 
@@ -97,13 +97,13 @@ def test_remote_preferred_over_local_when_reachable(minimal_tracks_json, mocker)
 
     assert mgr.get_track_folder_name("New Track") == "NewFolder"
     saved = json.loads(minimal_tracks_json.read_text(encoding="utf-8"))
-    assert saved["tracks"][0]["lmu_folder_name"] == "Spa"
+    assert saved["tracks"][0]["lmu_folder"] == "Spa"
 
 
 def test_remote_failure_falls_back_to_local(minimal_tracks_json, mocker):
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", True)
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_TIMEOUT", 5)
-    mocker.patch("processing.track_manager.requests.get", side_effect=ConnectionError("offline"))
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", True)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_TIMEOUT", 5)
+    mocker.patch("processing.catalog_loader.requests.get", side_effect=ConnectionError("offline"))
     mocker.patch("processing.track_manager.get_path", return_value=minimal_tracks_json)
 
     from processing.track_manager import TrackManager
@@ -112,8 +112,22 @@ def test_remote_failure_falls_back_to_local(minimal_tracks_json, mocker):
     assert mgr.get_track_folder_name("Spa-Francorchamps") == "Spa"
 
 
+def test_remote_malformed_falls_back_to_local(minimal_tracks_json, mocker):
+    # Valid JSON, but missing the "lmu_folder" key every track entry needs -
+    # must not crash, must fall back to the local bundled file instead.
+    remote_data = {"tracks": [{"name": "NewFolder", "matcher": ["new track"]}]}
+    _mock_remote(mocker, remote_data)
+    mocker.patch("processing.track_manager.get_path", return_value=minimal_tracks_json)
+
+    from processing.track_manager import TrackManager
+    mgr = TrackManager()
+
+    assert mgr.get_track_folder_name("Spa-Francorchamps") == "Spa"
+    assert mgr.get_track_folder_name("New Track") is None
+
+
 def test_remote_disabled_uses_local(minimal_tracks_json, mocker):
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", False)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
     mocker.patch("processing.track_manager.get_path", return_value=minimal_tracks_json)
 
     from processing.track_manager import TrackManager
@@ -123,24 +137,55 @@ def test_remote_disabled_uses_local(minimal_tracks_json, mocker):
 
 
 def test_no_local_no_remote_raises(tmp_path, mocker):
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", False)
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
     mocker.patch("processing.track_manager.get_path", return_value=tmp_path / "nonexistent.json")
 
     from processing.track_manager import TrackManager
-    with pytest.raises(RuntimeError, match="No tracks mapping"):
+    with pytest.raises(RuntimeError, match="No mapping file"):
         TrackManager()
 
 
 def test_remote_bootstraps_when_local_missing(tmp_path, mocker):
     # No local file -> remote is used (there's nothing to fall back to).
-    remote_data = {"tracks": [{"tt_patterns": ["spa"], "lmu_folder_name": "Spa"}]}
+    remote_data = {"tracks": [{"name": "Spa", "matcher": ["spa"], "lmu_folder": "Spa"}]}
     _mock_remote(mocker, remote_data)
-    mocker.patch("processing.track_manager.get_path", return_value=tmp_path / "tracks.json")
+    mocker.patch("processing.track_manager.get_path", return_value=tmp_path / "mapping.json")
 
     from processing.track_manager import TrackManager
     mgr = TrackManager()
 
     assert mgr.get_track_folder_name("Spa-Francorchamps") == "Spa"
+
+
+# --- get_official_track_name: independent from get_track_folder_name -------
+
+
+def test_get_official_track_name_matches_name_not_lmu_folder(tmp_path, mocker):
+    # `name` and `lmu_folder` are resolved independently, even when they differ.
+    data = {"tracks": [{"name": "Spa-Francorchamps", "matcher": ["spa"], "lmu_folder": "Spa"}]}
+    p = tmp_path / "mapping.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
+    mocker.patch("processing.track_manager.get_path", return_value=p)
+
+    from processing.track_manager import TrackManager
+    mgr = TrackManager()
+
+    assert mgr.get_official_track_name("Spa - WEC") == "Spa-Francorchamps"
+    assert mgr.get_track_folder_name("Spa - WEC") == "Spa"
+
+
+def test_get_official_track_name_not_found_returns_none(local_manager):
+    assert local_manager.get_official_track_name("Unknown Circuit") is None
+
+
+def test_get_official_track_name_falls_back_to_custom_folder_name(local_manager):
+    from core import settings_db
+    settings_db.upsert_track_pattern("Nurburgring", re.escape("Nordschleife"))
+    local_manager.refresh()
+
+    # No distinct `name` exists for a user "Correggi" mapping - lmu_folder_name doubles as it.
+    assert local_manager.get_official_track_name("Nordschleife") == "Nurburgring"
 
 
 # --- get_known_folder_names / add_or_update_mapping / refresh --------------

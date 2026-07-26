@@ -80,7 +80,7 @@ class Sandbox:
         """mapping is a list of (regex pattern, lmu folder name), in priority order."""
         self.tracks_file.write_text(
             json.dumps({
-                "tracks": [{"tt_patterns": [p], "lmu_folder_name": f} for p, f in mapping],
+                "tracks": [{"name": f, "matcher": [p], "lmu_folder": f} for p, f in mapping],
             }),
             encoding="utf-8",
         )
@@ -142,9 +142,11 @@ class Sandbox:
     def setup_manager(self, database):
         from processing.setup_manager import SetupManager
         from processing.track_manager import TrackManager
+        from processing.car_manager import CarManager
 
         return SetupManager(
             database=database,
             track_manager=TrackManager(),
+            car_manager=CarManager(),
             lmu_setups_base_path=self.lmu,
         )

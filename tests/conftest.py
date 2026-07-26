@@ -140,10 +140,23 @@ def sample_setup(sample_setup_data):
 def minimal_tracks_json(tmp_path):
     data = {
         "tracks": [
-            {"tt_patterns": ["spa|francorchamps"], "lmu_folder_name": "Spa"},
-            {"tt_patterns": ["imola"], "lmu_folder_name": "Imola"},
+            {"name": "Spa", "matcher": ["spa|francorchamps"], "lmu_folder": "Spa"},
+            {"name": "Imola", "matcher": ["imola"], "lmu_folder": "Imola"},
         ],
     }
-    p = tmp_path / "tracks.json"
+    p = tmp_path / "mapping.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    return p
+
+
+@pytest.fixture
+def minimal_cars_json(tmp_path):
+    data = {
+        "cars": [
+            {"name": "Ferrari 499P", "class": "hypercar", "matcher": ["499p"]},
+            {"name": "Porsche 963", "class": "hypercar", "matcher": ["963"]},
+        ],
+    }
+    p = tmp_path / "mapping.json"
     p.write_text(json.dumps(data), encoding="utf-8")
     return p

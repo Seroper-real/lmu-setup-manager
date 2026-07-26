@@ -70,8 +70,10 @@ def _wire_orchestration_seams(mocker, box: Sandbox) -> None:
     mocker.patch("processing.setup_manager.OVERWRITE", setups_cfg["overwrite"])
     mocker.patch("processing.setup_manager.DELETE_PREVIOUS_VERSION", setups_cfg["delete_previous_version"])
     mocker.patch("processing.setup_manager.SETUP_FILE_EXTENSIONS", extensions)
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", cfg["remote_tracks"]["enabled"])
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", cfg["remote_mappings"]["enabled"])
     mocker.patch("processing.track_manager.get_path", return_value=box.tracks_file)
+    mocker.patch("processing.car_manager.REMOTE_MAPPINGS_ENABLED", cfg["remote_mappings"]["enabled"])
+    mocker.patch("processing.car_manager.get_path", return_value=box.tracks_file)
 
 
 def _wire_all(mocker, box: Sandbox, repo_fixtures) -> None:

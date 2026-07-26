@@ -267,7 +267,10 @@ def test_migration_backfills_setup_type_and_leaves_sha256_null(mocker, tmp_path)
 def test_migration_normalizes_car_and_track_on_a_legacy_row_and_stamps_schema_version(mocker, tmp_path):
     """A pre-existing DB whose car/track contain the raw (pre-sanitization) form
     - as every HYMO row did before this version - must be normalized by the
-    "1.3.0" migration, and the DB left at domain.migrations.SCHEMA_TARGET_VERSION."""
+    "1.3.0" migration, and the DB left at domain.migrations.SCHEMA_TARGET_VERSION.
+    The car is then further re-officialized by "2.0.0" (its "mercedes" catalog
+    matcher matches the sanitized form too), restoring the hyphen; the track's
+    matched_track_id is None here so it stays sanitized, untouched by "2.0.0"."""
     import sqlite3
     from domain.migrations import SCHEMA_TARGET_VERSION
     legacy_path = tmp_path / "legacy.db"
@@ -302,7 +305,7 @@ def test_migration_normalizes_car_and_track_on_a_legacy_row_and_stamps_schema_ve
     db = SetupDb()
 
     row = db.fetch_installed_setup("old2")
-    assert row.car == "Mercedes_AMG LMGT3"
+    assert row.car == "Mercedes-AMG"
     assert row.track == "Le Mans_Bugatti"
 
     version = db.conn.execute("SELECT version FROM schema_version WHERE id = 1").fetchone()[0]
@@ -414,15 +417,20 @@ def test_add_installed_setup_sanitizes_car_and_track(in_memory_db, tmp_path):
     assert row.track == "Le Mans_Bugatti"
 
 
-def test_update_installed_setup_sanitizes_car_and_track(in_memory_db, tmp_path):
+def test_update_installed_setup_does_not_re_sanitize_car_and_track(in_memory_db, tmp_path):
+    """By the time a row reaches update_installed_setup (only ever called from
+    SetupManager._try_relocate_setup, which never rewrites .car/.track), its
+    car/track are already resolved/official - re-running sanitize_identity
+    here would silently mangle an official name containing a hyphen (e.g.
+    "Cadillac V-Series.R") on every relocate cycle."""
     in_memory_db.add_installed_setup(_setup(id="san2", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa")
     row = in_memory_db.fetch_installed_setup("san2")
     row.car = "Cadillac V-Series.R"
-    row.track = "Le Mans/Bugatti"
+    row.track = "Le Mans-Bugatti"
     in_memory_db.update_installed_setup(row)
     updated = in_memory_db.fetch_installed_setup("san2")
-    assert updated.car == "Cadillac V_Series.R"
-    assert updated.track == "Le Mans_Bugatti"
+    assert updated.car == "Cadillac V-Series.R"
+    assert updated.track == "Le Mans-Bugatti"
 
 
 def test_a_hymo_and_a_go_row_for_a_hyphenated_car_share_the_same_stored_car(in_memory_db, tmp_path):

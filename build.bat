@@ -47,8 +47,8 @@ REM --icon: same glyph as the GUI's own sidebar logo (assets\icon.ico)
 
 REM Copia eventuali file esterni nella cartella dist
 REM config.json/.env non esistono piu': tutto vive in settings.db sotto %LOCALAPPDATA%.
-REM tracks.json resta un file: l'app lo legge in automatico (locale o dal mirror remoto).
-xcopy /Y config\tracks.json dist\config\
+REM mapping.json resta un file: l'app lo legge in automatico (locale o dal mirror remoto).
+xcopy /Y config\mapping.json dist\config\
 xcopy /Y /E /I src\gui\web dist\gui\web\
 
 REM Pulizia

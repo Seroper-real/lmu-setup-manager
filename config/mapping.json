@@ -1,0 +1,58 @@
+{
+    "tracks": [
+        {"name": "Qatar", "matcher": ["losail|lusail|qatar"], "lmu_folder": "Qatar"},
+        {"name": "Imola", "matcher": ["imola"], "lmu_folder": "Imola"},
+        {"name": "Circuit Of The Americas", "matcher": ["cota|americas"], "lmu_folder": "Circuit Of The Americas"},
+        {"name": "Spa", "matcher": ["spa"], "lmu_folder": "Spa"},
+        {"name": "Bahrain", "matcher": ["rain"], "lmu_folder": "Bahrain"},
+        {"name": "Lemans", "matcher": ["mans"], "lmu_folder": "Lemans"},
+        {"name": "Interlagos", "matcher": ["interlagos|pace|carlos"], "lmu_folder": "Interlagos"},
+        {"name": "Paulricard", "matcher": ["paul|ricard"], "lmu_folder": "Paulricard"},
+        {"name": "Fuji", "matcher": ["fuji"], "lmu_folder": "Fuji"},
+        {"name": "Portimao", "matcher": ["portim"], "lmu_folder": "Portimao"},
+        {"name": "Monza", "matcher": ["monza"], "lmu_folder": "Monza"},
+        {"name": "Sebring", "matcher": ["sebr"], "lmu_folder": "Sebring"},
+        {"name": "Silverstone", "matcher": ["silv"], "lmu_folder": "Silverstone"},
+        {"name": "Circuit De Barcelona", "matcher": ["barc"], "lmu_folder": "Circuit De Barcelona"}
+    ],
+    "cars": [
+        {"name": "Alpine A424", "class": "hypercar", "matcher": ["a424"]},
+        {"name": "Aston Martin Valkyrie", "class": "hypercar", "matcher": ["valkyrie"]},
+        {"name": "BMW M Hybrid V8", "class": "hypercar", "matcher": ["bmw.*hybrid"]},
+        {"name": "Cadillac V-Series.R", "class": "hypercar", "matcher": ["v.*series", "v-lmdh"]},
+        {"name": "Ferrari 499P", "class": "hypercar", "matcher": ["499p"]},
+        {"name": "Genesis GMR-001", "class": "hypercar", "matcher": ["gmr.*001"]},
+        {"name": "Glickenhaus SCG 007", "class": "hypercar", "matcher": ["scg.*007", "sgc.*007"]},
+        {"name": "Isotta Fraschini Tipo 6", "class": "hypercar", "matcher": ["isotta", "tipo.*6"]},
+        {"name": "Lamborghini SC63", "class": "hypercar", "matcher": ["sc63"]},
+        {"name": "Peugeot 9X8", "class": "hypercar", "matcher": ["9x8(?!.*evo)"]},
+        {"name": "Peugeot 9X8 Evo", "class": "hypercar", "matcher": ["9x8.*evo"]},
+        {"name": "Porsche 963", "class": "hypercar", "matcher": ["963"]},
+        {"name": "Toyota GR010", "class": "hypercar", "matcher": ["gr.*10"]},
+        {"name": "Toyota TR010", "class": "hypercar", "matcher": ["tr.*10"]},
+
+        {"name": "Aston Martin Vantage AMR", "class": "lmgt3", "matcher": ["vantage.*gt3"]},
+        {"name": "BMW M4", "class": "lmgt3", "matcher": ["bmw.*m4", "m4.*gt3"]},
+        {"name": "Corvette Z06", "class": "lmgt3", "matcher": ["z06"]},
+        {"name": "Ferrari 296", "class": "lmgt3", "matcher": ["296"]},
+        {"name": "Ford Mustang", "class": "lmgt3", "matcher": ["mustang"]},
+        {"name": "Lamborghini Huracan EVO2", "class": "lmgt3", "matcher": ["huracan"]},
+        {"name": "Lexus RCF", "class": "lmgt3", "matcher": ["rcf", "lexus"]},
+        {"name": "McLaren 720S Evo", "class": "lmgt3", "matcher": ["720s", "mclaren"]},
+        {"name": "Mercedes-AMG", "class": "lmgt3", "matcher": ["mercedes"]},
+        {"name": "Porsche 992", "class": "lmgt3", "matcher": ["992"]},
+
+        {"name": "Aston Martin Vantage", "class": "lmgte", "matcher": ["vantage.*gte"]},
+        {"name": "Corvette C8.R", "class": "lmgte", "matcher": ["c8.*r"]},
+        {"name": "Ferrari 488", "class": "lmgte", "matcher": ["488"]},
+        {"name": "Porsche 911", "class": "lmgte", "matcher": ["911.*rsr", "rsr.*19"]},
+
+        {"name": "Oreca 07", "class": "lmp2", "matcher": ["oreca.*07(?!.*elms)"]},
+        {"name": "Oreca 07 (ELMS)", "class": "lmp2 (elms)", "matcher": ["oreca.*07.*elms"]},
+
+        {"name": "ADESS AD25", "class": "lmp3", "matcher": ["adess", "ad25"]},
+        {"name": "Duqueine D09", "class": "lmp3", "matcher": ["duqueine"]},
+        {"name": "Ginetta G61-LT-P325 EVO", "class": "lmp3", "matcher": ["g61"]},
+        {"name": "Ligier JS P325", "class": "lmp3", "matcher": ["ligier", "js.*p325"]}
+    ]
+}

@@ -11,7 +11,7 @@ from clients.protocols import DropboxClientProtocol
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, GO_SETUP_FILE_EXTENSIONS
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from domain.go_setup import RemoteGoSetup
-from domain.setup import RemoteSetup, Setup
+from domain.setup import RemoteSetup, Setup, sanitize_identity
 from domain.setup_db import SetupDb
 from processing.setup_manager import SetupManager
 
@@ -92,15 +92,24 @@ class SlaveManager:
         log.info(f"  File: {remote.name}")
         self._emit(ProgressEvent(ProgressKind.START, remote.name))
 
+        # installed_setups.car/.track now hold the officialized catalog name
+        # (see CarManager/TrackManager), not the raw Dropbox folder segments -
+        # resolve remote.car/remote.track the same way install_setup() will
+        # below, so these two lookups agree with what a HYMO row actually has
+        # stored even when the raw folder text differs from the official name
+        # but still matches its `matcher` regex.
+        car = self.setup_manager.car_manager.get_car_name(remote.car) or sanitize_identity(remote.car)
+        track = self.setup_manager.track_manager.get_official_track_name(remote.track) or sanitize_identity(remote.track)
+
         # Only trust a GO archive once its <Car>/<Track> folder is known-real -
         # per the documented workflow that folder only exists because Upload
         # only already published a HYMO setup there. Checked every run (not
         # just on first install): if the HYMO setup is later deleted, this GO
         # archive stops updating too, rather than continuing to install from an
         # unverified folder.
-        if not self.database.has_installed_hymo_setup(remote.car, remote.track):
+        if not self.database.has_installed_hymo_setup(car, track):
             log.warning(
-                f"No installed HYMO setup for {remote.car}/{remote.track} - skipping GO archive {remote.name}."
+                f"No installed HYMO setup for {car}/{track} - skipping GO archive {remote.name}."
             )
             return
 
@@ -111,7 +120,7 @@ class SlaveManager:
         # Identity is the <Car>/<Track> pair alone, never the filename: the
         # archive can be renamed or have its content replaced in place by hand,
         # so only the checksum comparison below decides "already installed".
-        existing = self.database.fetch_installed_go_setup(remote.car, remote.track)
+        existing = self.database.fetch_installed_go_setup(car, track)
         if existing and existing.sha256 == sha256:
             log.info("GO Setup unchanged since last install. Skipping.")
             if CLEAN_DOWNLOAD and local_zip.exists():

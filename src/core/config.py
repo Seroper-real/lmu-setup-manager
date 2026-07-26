@@ -126,9 +126,9 @@ SETUP_FILE_EXTENSIONS: set[str] = {
 # TrackTitan flow only.
 GO_SETUP_FILE_EXTENSIONS: set[str] = {".svm", ".ld", ".ldx"}
 
-REMOTE_TRACKS_ENABLED=_config["remote_tracks"]["enabled"]
-REMOTE_TRACKS_TIMEOUT=_config["remote_tracks"]["timeout"]
-REMOTE_TRACKS_URL=_config["remote_tracks"]["url"]
+REMOTE_MAPPINGS_ENABLED=_config["remote_mappings"]["enabled"]
+REMOTE_MAPPINGS_TIMEOUT=_config["remote_mappings"]["timeout"]
+REMOTE_MAPPINGS_URL=_config["remote_mappings"]["url"]
 
 # ===== DROPBOX =====
 _dropbox_cfg = _config.get("dropbox", {})

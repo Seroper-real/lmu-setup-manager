@@ -121,6 +121,7 @@ def run_full(
     cancel_event: Optional[threading.Event] = None,
 ) -> None:
     from domain.setup_db import SetupDb
+    from processing.car_manager import CarManager
     from processing.track_manager import TrackManager
     from orchestration.download_manager import DownloadManager
     from processing.setup_manager import SetupManager
@@ -128,8 +129,9 @@ def run_full(
 
     database = SetupDb()
     track_manager = TrackManager()
+    car_manager = CarManager()
     download_manager = DownloadManager(database=database, client=build_track_titan_client(), cancel_event=cancel_event)
-    setup_manager = SetupManager(track_manager=track_manager, database=database)
+    setup_manager = SetupManager(track_manager=track_manager, car_manager=car_manager, database=database)
 
     setup_manager.update_tracks_not_found()
 
@@ -191,6 +193,7 @@ def run_slave(
     cancel_event: Optional[threading.Event] = None,
 ) -> None:
     from domain.setup_db import SetupDb
+    from processing.car_manager import CarManager
     from processing.track_manager import TrackManager
     from processing.setup_manager import SetupManager
     from orchestration.slave_manager import SlaveManager
@@ -198,7 +201,8 @@ def run_slave(
 
     database = SetupDb()
     track_manager = TrackManager()
-    setup_manager = SetupManager(track_manager=track_manager, database=database)
+    car_manager = CarManager()
+    setup_manager = SetupManager(track_manager=track_manager, car_manager=car_manager, database=database)
     dropbox_client = build_dropbox_client()
     SlaveManager(
         dropbox_client=dropbox_client,

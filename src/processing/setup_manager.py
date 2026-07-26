@@ -5,6 +5,7 @@ import shutil
 from core.archive import find_files_recursive, unzip_recursive
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, OVERWRITE, SETUP_FILE_EXTENSIONS, LMU_SETUPS_BASE_PATH, DELETE_PREVIOUS_VERSION
 from domain.setup import Setup
+from processing.car_manager import CarManager
 from processing.track_manager import TrackManager
 from core.utils import get_path
 from domain.setup_db import InstalledSetup, SetupDb
@@ -16,6 +17,7 @@ class SetupManager:
         self,
         database: SetupDb,
         track_manager: TrackManager,
+        car_manager: CarManager,
         lmu_setups_base_path: Optional[Path] = None,
         already_installed : Optional[set[str]] = None,
         overwrite: Optional[bool] = None
@@ -24,6 +26,7 @@ class SetupManager:
         # which would freeze them at import time and ignore any later override.
         self.database = database
         self.track_manager = track_manager
+        self.car_manager = car_manager
         self.lmu_setups_base_path = get_path(lmu_setups_base_path if lmu_setups_base_path is not None else LMU_SETUPS_BASE_PATH)
         self.overwrite = overwrite if overwrite is not None else OVERWRITE
         self.already_installed = already_installed if already_installed is not None else set()
@@ -47,6 +50,13 @@ class SetupManager:
         if extraction_path.exists(): shutil.rmtree(extraction_path) #To clean previous interrupted elaborations and prevent duplicate file name in extraction
         self._unzip_recursive(downloaded_path, extraction_path)
         (setup_installation_dir, trackFound, matchedTrackId) = self._calculate_setup_installation_dir(setup.track, fallback_suffix)
+        if matchedTrackId:
+            official_track_name = self.track_manager.get_official_track_name(setup.track)
+            if official_track_name:
+                setup.safe_track = official_track_name
+        car_name = self.car_manager.get_car_name(setup.car)
+        if car_name:
+            setup.safe_car = car_name
         extracted_files: list[Path] = self._copy_file_to_lmu(extraction_path, setup_installation_dir, extensions)
         installed: bool = len(extracted_files) > 0
         if not installed: log.warning(f"Setup not installed! Not deleting download for manual installation: {setup.id} - {setup.track} - {setup.car}")

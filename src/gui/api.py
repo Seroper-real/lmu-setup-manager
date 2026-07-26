@@ -19,7 +19,7 @@ log = logging.getLogger("TrackTitanDownloader")
 
 # Modules that bind GUI-editable config values at import time via `from
 # core.config import X` (network delays/timeout/page size, LMU path,
-# overwrite/cleanup flags, remote-tracks settings, Dropbox folder/timeout/
+# overwrite/cleanup flags, remote-mappings settings, Dropbox folder/timeout/
 # workers, credentials). Reloading core.config alone would not refresh these -
 # Python freezes a `from X import Y` binding at the importing module's own
 # first import, and these modules are cached in sys.modules for the life of
@@ -34,6 +34,7 @@ _HOT_RELOAD_MODULES: tuple[str, ...] = (
     "orchestration.slave_manager",
     "processing.setup_manager",
     "processing.track_manager",
+    "processing.car_manager",
 )
 
 
@@ -137,10 +138,10 @@ class Api:
                         "delete_previous_version": config.DELETE_PREVIOUS_VERSION,
                     },
                 },
-                "remote_tracks": {
-                    "enabled": config.REMOTE_TRACKS_ENABLED,
-                    "url": config.REMOTE_TRACKS_URL,
-                    "timeout": config.REMOTE_TRACKS_TIMEOUT,
+                "remote_mappings": {
+                    "enabled": config.REMOTE_MAPPINGS_ENABLED,
+                    "url": config.REMOTE_MAPPINGS_URL,
+                    "timeout": config.REMOTE_MAPPINGS_TIMEOUT,
                 },
                 "dropbox": {
                     "folder": config.DROPBOX_FOLDER,
@@ -235,20 +236,22 @@ class Api:
 
     def delete_setup(self, setup_id: str) -> dict[str, object]:
         from domain.setup_db import SetupDb
+        from processing.car_manager import CarManager
         from processing.track_manager import TrackManager
         from processing.setup_manager import SetupManager
 
         database = SetupDb()
-        setup_manager = SetupManager(track_manager=TrackManager(), database=database)
+        setup_manager = SetupManager(track_manager=TrackManager(), car_manager=CarManager(), database=database)
         return {"deleted": setup_manager.delete_setup(setup_id)}
 
     def delete_setups(self, setup_ids: list[str]) -> dict[str, object]:
         from domain.setup_db import SetupDb
+        from processing.car_manager import CarManager
         from processing.track_manager import TrackManager
         from processing.setup_manager import SetupManager
 
         database = SetupDb()
-        setup_manager = SetupManager(track_manager=TrackManager(), database=database)
+        setup_manager = SetupManager(track_manager=TrackManager(), car_manager=CarManager(), database=database)
         deleted_count = sum(1 for setup_id in setup_ids if setup_manager.delete_setup(setup_id))
         return {"deletedCount": deleted_count}
 
@@ -258,11 +261,12 @@ class Api:
         # setup regardless of whatever search/filter the frontend currently
         # has applied to its own copy of the data.
         from domain.setup_db import SetupDb
+        from processing.car_manager import CarManager
         from processing.track_manager import TrackManager
         from processing.setup_manager import SetupManager
 
         database = SetupDb()
-        setup_manager = SetupManager(track_manager=TrackManager(), database=database)
+        setup_manager = SetupManager(track_manager=TrackManager(), car_manager=CarManager(), database=database)
         setup_ids = [s.setup_id for s in database.fetch_all_installed_setups()]
         deleted_count = sum(1 for setup_id in setup_ids if setup_manager.delete_setup(setup_id))
         return {"deletedCount": deleted_count}
@@ -272,6 +276,7 @@ class Api:
         return TrackManager().get_known_folder_names()
 
     def map_track(self, track: str, folder: str) -> dict[str, object]:
+        from processing.car_manager import CarManager
         from processing.track_manager import TrackManager
         from processing.setup_manager import SetupManager
         from domain.setup_db import SetupDb
@@ -281,7 +286,7 @@ class Api:
         track_manager.refresh()
 
         database = SetupDb()
-        setup_manager = SetupManager(track_manager=track_manager, database=database)
+        setup_manager = SetupManager(track_manager=track_manager, car_manager=CarManager(), database=database)
         setup_manager.update_tracks_not_found()
 
         return {}

@@ -43,8 +43,15 @@ def sandbox(tmp_path, mocker) -> Sandbox:
     mocker.patch("processing.setup_manager.DELETE_PREVIOUS_VERSION", setups["delete_previous_version"])
     mocker.patch("processing.setup_manager.SETUP_FILE_EXTENSIONS", extensions)
 
-    # No network: never fetch the remote tracks.json, and read ours instead.
-    mocker.patch("processing.track_manager.REMOTE_TRACKS_ENABLED", cfg["remote_tracks"]["enabled"])
+    # No network: never fetch the remote mapping.json, and read ours instead.
+    # Both managers bind REMOTE_MAPPINGS_ENABLED/get_path in their own module
+    # namespace (a `from X import Y` binding is per-importer), so each needs
+    # its own patch - both point at the same sandbox file: its "cars" key is
+    # simply absent, which CarManager treats as no cars mapped, harmless for
+    # these track-focused tests.
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", cfg["remote_mappings"]["enabled"])
     mocker.patch("processing.track_manager.get_path", return_value=box.tracks_file)
+    mocker.patch("processing.car_manager.REMOTE_MAPPINGS_ENABLED", cfg["remote_mappings"]["enabled"])
+    mocker.patch("processing.car_manager.get_path", return_value=box.tracks_file)
 
     return box

@@ -67,7 +67,7 @@ jobs:
           if not exist release_pkg mkdir release_pkg
           if not exist release_pkg\config mkdir release_pkg\config
           copy dist\lmu-setup-manager.exe release_pkg\
-          copy config\tracks.json release_pkg\config\
+          copy config\mapping.json release_pkg\config\
           copy readme.md release_pkg\
           copy readme.it.md release_pkg\
           xcopy /Y /E /I src\gui\web release_pkg\gui\web\
