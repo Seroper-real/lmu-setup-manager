@@ -1,7 +1,7 @@
-- I log che appaiono nella sezione download, rendiamoli più parlanti: anzichè il nome dell'archivio, mostra "Pista - Auto Setup"
 - Verifica (se non esiste fai un junit) questa sequenza: 1) mode master: upload manuale di un setup 2)mode slave: download e installazione di quel setup 3) Mode slave: download e quel setup viene skippato 4) mode master: upload manuale dello stesso setup 5)mode slave: download e aggiornamento di quel setup
 
 doing:
+- I log che appaiono nella sezione download, rendiamoli più parlanti: anzichè il nome dell'archivio, mostra "Pista - Auto Setup"
 
 
 later:
