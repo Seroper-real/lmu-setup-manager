@@ -1,9 +1,13 @@
-- Verifica (se non esiste fai un junit) questa sequenza: 1) mode master: upload manuale di un setup 2)mode slave: download e installazione di quel setup 3) Mode slave: download e quel setup viene skippato 4) mode master: upload manuale dello stesso setup 5)mode slave: download e aggiornamento di quel setup
-
 doing:
 - I log che appaiono nella sezione download, rendiamoli più parlanti: anzichè il nome dell'archivio, mostra "Pista - Auto Setup"
 
 
-later:
+todo:
+- Caricando due volte lo stesso setup manualmente, sia in modalità master che in modalità slave, il secondo deve sovrascrivere il primo, i parametri per capire se è un aggiornamento sono: tipologia (HYMO o GO), track e car. Se facendo upload manuale esiste già un setup con quei valori, allora si sta caricando un aggiornamento. Su dropbox significa eliminare il precedente e caricare il nuovo (avrà lo stesso ID ma data diversa nel nome), in locale significa fare update rispettando i flag di impostazione (come se si stesse scaricando un setup aggiornato da HYMO).
+Inoltre nei caricamenti manuali (modalità slave), non viene popolato il campo SHA 256 sul DB
+
+
+- Verifica (se non esiste fai un junit) questa sequenza: 1) mode master: upload manuale di un setup 2)mode slave: download e installazione di quel setup 3) Mode slave: download e quel setup deve essere skippato 4) mode master: upload manuale dello stesso setup (deve andare in update 5)mode slave: download e il setup deve essere riscaricato e aggiornato
+
 - Nella danger zone, quando si eliminano tutti i setup da dropbox, mettiamo un messaggio dinamico che dice "Eliminazione in corso: eliminati {n} setups"
 
