@@ -3,12 +3,7 @@ recording on_progress callback, and checks that a mid-run cancel_event truncates
 
 This is the GUI's progress bridge (src/gui/api.py Api.start_download) exercised at the
 level it actually depends on: main.run_*(log, on_progress=..., cancel_event=...) and
-the managers they build. Per plans/hymo-dashboard-gui.md §3/§7, threading those two
-optional kwargs through main.py + DownloadManager/MasterManager/SlaveManager is the
-parallel backend agent's deliverable, not this agent's (main.py and orchestration/*.py
-are out of scope here). Until that lands, every test below is expected to fail with a
-TypeError ("unexpected keyword argument 'on_progress'/'cancel_event'") - that failure
-is the "not merged yet" signal, not a bug in this test file.
+the managers they build.
 """
 import logging
 import threading

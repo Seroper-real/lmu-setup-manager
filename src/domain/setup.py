@@ -95,11 +95,16 @@ class Setup:
     def safe_car(self, value: str) -> None:
         self._safe_car = value
 
+    def _branded_filename(self, brand: str) -> str:
+        # Filesystem/URL-friendly name used on the Dropbox share. Spaces in the
+        # track and car are collapsed too so the final name has no spaces.
+        track = self.safe_track.replace(" ", "_")
+        car = self.safe_car.replace(" ", "_")
+        return f"{brand}{track}_{car}_{self.id}_{self.last_updated}.zip"
+
     @property
     def remote_filename(self) -> str:
-        # Filesystem/URL-friendly name used on the Dropbox share. Spaces in the
-        # track and car are collapsed too so the final name has no spaces. The
-        # HYMO- prefix brands the file as published by this tool (see
+        # The HYMO- prefix brands the file as published by this tool (see
         # _REMOTE_NAME_RE). A sandbox setup additionally carries a SANDBOX
         # marker right after the brand prefix, so test data uploaded to a real
         # Dropbox account (e.g. via --mock-tracktitan) is instantly
@@ -107,10 +112,17 @@ class Setup:
         # cleanup_sandbox_dropbox.py. _REMOTE_NAME_RE still matches: it only
         # anchors on the trailing "_id_ts.zip", not on what comes right after
         # "HYMO-".
-        track = self.safe_track.replace(" ", "_")
-        car = self.safe_car.replace(" ", "_")
         brand = "HYMO-SANDBOX_" if self.sandbox else "HYMO-"
-        return f"{brand}{track}_{car}_{self.id}_{self.last_updated}.zip"
+        return self._branded_filename(brand)
+
+    @property
+    def go_filename(self) -> str:
+        # Same <track>_<car>_<id>_<last_updated>.zip scheme as remote_filename
+        # (so a manually-uploaded GO Setups archive carries the same
+        # id/date info a HYMO one does), but GO- branded so
+        # is_go_zip_name/parse_go_entry (domain/go_setup.py) still recognize
+        # it as a GO Setups archive when found on the share.
+        return self._branded_filename("GO-")
 
     @property
     def remote_relative_path(self) -> str:

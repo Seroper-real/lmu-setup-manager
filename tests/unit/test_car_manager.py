@@ -11,40 +11,45 @@ def local_manager(minimal_cars_json, mocker):
     return CarManager()
 
 
-def test_loads_local_mapping(local_manager):
-    assert local_manager.get_car_name("Ferrari 499P") == "Ferrari 499P"
+@pytest.fixture
+def mapping_path(tmp_path):
+    return tmp_path / "mapping.json"
 
 
-def test_get_car_name_matches_via_matcher_pattern(local_manager):
-    assert local_manager.get_car_name("some 499p variant") == "Ferrari 499P"
+@pytest.fixture
+def make_manager(mapping_path, mocker):
+    """Build a CarManager from an ad-hoc mapping.json body, for tests that need
+    data shapes beyond what minimal_cars_json/local_manager provides."""
+    def _make(data):
+        mapping_path.write_text(json.dumps(data), encoding="utf-8")
+        mocker.patch("processing.car_manager.REMOTE_MAPPINGS_ENABLED", False)
+        mocker.patch("processing.car_manager.get_path", return_value=mapping_path)
+        from processing.car_manager import CarManager
+        return CarManager()
+    return _make
 
 
-def test_get_car_name_case_insensitive(local_manager):
-    assert local_manager.get_car_name("FERRARI 499P") == "Ferrari 499P"
-
-
-def test_get_car_name_strips_whitespace(local_manager):
-    assert local_manager.get_car_name("  963  ") == "Porsche 963"
+@pytest.mark.parametrize("query,expected", [
+    ("Ferrari 499P", "Ferrari 499P"),        # exact match
+    ("some 499p variant", "Ferrari 499P"),   # matcher pattern
+    ("FERRARI 499P", "Ferrari 499P"),        # case-insensitive
+    ("  963  ", "Porsche 963"),              # whitespace stripped
+])
+def test_get_car_name_resolves_known_variants(local_manager, query, expected):
+    assert local_manager.get_car_name(query) == expected
 
 
 def test_get_car_name_not_found_returns_none(local_manager):
     assert local_manager.get_car_name("Unknown Car") is None
 
 
-def test_invalid_regex_is_skipped(tmp_path, mocker):
-    data = {
+def test_invalid_regex_is_skipped(make_manager):
+    mgr = make_manager({
         "cars": [
             {"name": "Broken", "class": "hypercar", "matcher": ["["]},
             {"name": "Ferrari 499P", "class": "hypercar", "matcher": ["499p"]},
         ],
-    }
-    p = tmp_path / "mapping.json"
-    p.write_text(json.dumps(data), encoding="utf-8")
-    mocker.patch("processing.car_manager.REMOTE_MAPPINGS_ENABLED", False)
-    mocker.patch("processing.car_manager.get_path", return_value=p)
-
-    from processing.car_manager import CarManager
-    mgr = CarManager()
+    })
 
     assert mgr.get_car_name("Ferrari 499P") == "Ferrari 499P"
     assert mgr.get_car_name("Broken Car") is None
@@ -126,19 +131,61 @@ def test_remote_bootstraps_when_local_missing(tmp_path, mocker):
     assert mgr.get_car_name("Ferrari 499P") == "Ferrari 499P"
 
 
-def test_refresh_picks_up_new_local_file_content(tmp_path, mocker):
-    data = {"cars": [{"name": "Ferrari 499P", "class": "hypercar", "matcher": ["499p"]}]}
-    p = tmp_path / "mapping.json"
-    p.write_text(json.dumps(data), encoding="utf-8")
-    mocker.patch("processing.car_manager.REMOTE_MAPPINGS_ENABLED", False)
-    mocker.patch("processing.car_manager.get_path", return_value=p)
+# --- get_car_class / get_all_cars -------------------------------------------
 
-    from processing.car_manager import CarManager
-    mgr = CarManager()
+
+def test_get_car_class_normalizes_the_raw_mapping_json_value(local_manager):
+    assert local_manager.get_car_class("Ferrari 499P") == "HYPERCAR"
+
+
+def test_get_car_class_unknown_car_returns_none(local_manager):
+    assert local_manager.get_car_class("Unknown Car") is None
+
+
+def test_get_car_class_maps_every_known_raw_class(make_manager):
+    mgr = make_manager({
+        "cars": [
+            {"name": "A", "class": "hypercar", "matcher": ["a"]},
+            {"name": "B", "class": "lmgt3", "matcher": ["b"]},
+            {"name": "C", "class": "lmgte", "matcher": ["c"]},
+            {"name": "D", "class": "lmp2", "matcher": ["d"]},
+            {"name": "E", "class": "lmp2 (elms)", "matcher": ["e"]},
+            {"name": "F", "class": "lmp3", "matcher": ["f"]},
+        ],
+    })
+
+    assert mgr.get_car_class("A") == "HYPERCAR"
+    assert mgr.get_car_class("B") == "GT3"
+    assert mgr.get_car_class("C") == "GTE"
+    assert mgr.get_car_class("D") == "P2"
+    assert mgr.get_car_class("E") == "P2"
+    assert mgr.get_car_class("F") == "P3"
+
+
+@pytest.mark.parametrize("cars_data,query", [
+    ([{"name": "No Class", "matcher": ["noclass"]}], "No Class"),                            # missing class field
+    ([{"name": "Weird", "class": "not-a-real-class", "matcher": ["weird"]}], "Weird"),        # unrecognized raw value
+])
+def test_get_car_class_returns_none_for_missing_or_unrecognized_class(make_manager, cars_data, query):
+    mgr = make_manager({"cars": cars_data})
+
+    assert mgr.get_car_class(query) is None
+
+
+def test_get_all_cars_preserves_mapping_json_order_and_includes_class(local_manager):
+    assert local_manager.get_all_cars() == [
+        {"name": "Ferrari 499P", "carClass": "HYPERCAR"},
+        {"name": "Porsche 963", "carClass": "HYPERCAR"},
+    ]
+
+
+def test_refresh_picks_up_new_local_file_content(make_manager, mapping_path):
+    data = {"cars": [{"name": "Ferrari 499P", "class": "hypercar", "matcher": ["499p"]}]}
+    mgr = make_manager(data)
     assert mgr.get_car_name("Porsche 963") is None
 
     data["cars"].append({"name": "Porsche 963", "class": "hypercar", "matcher": ["963"]})
-    p.write_text(json.dumps(data), encoding="utf-8")
+    mapping_path.write_text(json.dumps(data), encoding="utf-8")
     mgr.refresh()
 
     assert mgr.get_car_name("Porsche 963") == "Porsche 963"

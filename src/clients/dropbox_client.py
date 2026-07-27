@@ -231,3 +231,33 @@ class DropboxClient:
             return err.is_path_lookup() and err.get_path_lookup().is_not_found()
         except Exception:
             return False
+
+    def delete_folder_if_empty(self, path: str) -> bool:
+        """Delete a share folder, but only if it currently holds nothing.
+        Dropbox folders are real, persistent objects - unlike a path prefix on
+        S3, they do not disappear on their own once the last file inside is
+        deleted, so a bulk setup-delete leaves the <Car>/<Track> tree behind
+        unless this is called too."""
+        try:
+            res = self._call(self.dbx.files_list_folder, path)
+        except dropbox.exceptions.ApiError as e:
+            if self._is_not_found(e):
+                return False
+            raise
+        if res.entries:
+            return False
+        return self.delete_if_exists(path)
+
+    def prune_empty_ancestor_folders(self, path: str, levels: int = 2) -> None:
+        """Walk up from a just-deleted file's path (Track, then its parent
+        Car) deleting each ancestor folder while it's empty, stopping as soon
+        as one still holds something (its parent can't be empty either) or the
+        share root itself is reached. path_lower is always "/"-separated by
+        Dropbox regardless of host OS, so plain string splitting is safe here."""
+        current = path
+        for _ in range(levels):
+            current = current.rsplit("/", 1)[0]
+            if not current or current == self.folder:
+                return
+            if not self.delete_folder_if_empty(current):
+                return

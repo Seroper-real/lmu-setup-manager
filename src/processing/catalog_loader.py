@@ -77,3 +77,18 @@ def compile_patterns(entries: list[dict], *, pattern_key: str, name_key: str) ->
             except re.error as e:
                 log.warning(f"Invalid regex pattern '{raw_pattern}' for '{name}': {e}. Skipping.")
     return patterns
+
+
+def extract_value_map(entries: list[dict], *, name_key: str, value_key: str) -> dict[str, str]:
+    """Turn a list of {name_key: str, value_key: str, ...} dicts into a flat
+    name_key -> value_key dict, order preserved from `entries`. Unlike
+    compile_patterns' name_key, `value_key` is optional per entry - an entry
+    missing it is silently skipped rather than raising, since it's an
+    auxiliary field (e.g. a car's class) that not every caller needs present
+    on every entry."""
+    values: dict[str, str] = {}
+    for entry in entries:
+        value = entry.get(value_key)
+        if value is not None:
+            values[entry[name_key]] = value
+    return values

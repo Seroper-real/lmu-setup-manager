@@ -26,6 +26,9 @@ def installed_unmapped(sandbox, in_memory_db):
 
 
 def test_adding_the_mapping_relocates_the_setup(installed_unmapped):
+    """Covers the full fallout of one relocation run: the file lands in the real
+    folder, the DB marks the track found, the emptied -HYMO folder is removed, and
+    the not-found queue is drained (so a later run never retries it)."""
     sandbox, db = installed_unmapped
 
     sandbox.set_tracks([("imola", "Imola")])
@@ -33,24 +36,7 @@ def test_adding_the_mapping_relocates_the_setup(installed_unmapped):
 
     assert sandbox.installed_files() == {"Imola/imola.svm"}
     assert db.is_track_found(SETUP_ID) is True
-
-
-def test_relocation_removes_the_emptied_hymo_folder(installed_unmapped):
-    sandbox, db = installed_unmapped
-
-    sandbox.set_tracks([("imola", "Imola")])
-    sandbox.run_full(db)
-
     assert not (sandbox.lmu / "Imola - WEC-HYMO").exists()
-
-
-def test_relocation_updates_the_installation_path_in_the_db(installed_unmapped):
-    sandbox, db = installed_unmapped
-
-    sandbox.set_tracks([("imola", "Imola")])
-    sandbox.run_full(db)
-
-    # A later run must not try to relocate it again.
     assert db.fetch_tracks_not_found() == []
 
 

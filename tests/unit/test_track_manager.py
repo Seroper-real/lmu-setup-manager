@@ -12,65 +12,50 @@ def local_manager(minimal_tracks_json, mocker):
     return TrackManager()
 
 
-def test_loads_local_mapping(local_manager):
-    assert local_manager.get_track_folder_name("Spa-Francorchamps") == "Spa"
+@pytest.fixture
+def make_manager(tmp_path, mocker):
+    """Build a TrackManager from an ad-hoc mapping.json body, for tests that need
+    data shapes beyond what minimal_tracks_json/local_manager provides."""
+    def _make(data):
+        p = tmp_path / "mapping.json"
+        p.write_text(json.dumps(data), encoding="utf-8")
+        mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
+        mocker.patch("processing.track_manager.get_path", return_value=p)
+        from processing.track_manager import TrackManager
+        return TrackManager()
+    return _make
 
 
-def test_multiple_variants_same_lmu_folder(local_manager):
-    assert local_manager.get_track_folder_name("Spa - WEC") == "Spa"
-
-
-def test_get_track_folder_exact_match(local_manager):
-    assert local_manager.get_track_folder_name("Spa-Francorchamps") == "Spa"
-
-
-def test_get_track_folder_case_insensitive(local_manager):
-    assert local_manager.get_track_folder_name("SPA-FRANCORCHAMPS") == "Spa"
-
-
-def test_get_track_folder_strips_whitespace(local_manager):
-    assert local_manager.get_track_folder_name("  Imola  ") == "Imola"
+@pytest.mark.parametrize("query,expected", [
+    ("Spa-Francorchamps", "Spa"),               # exact match
+    ("SPA-FRANCORCHAMPS", "Spa"),                # case-insensitive
+    ("  Imola  ", "Imola"),                      # whitespace stripped
+    ("Spa - WEC", "Spa"),                        # variant match
+    ("Circuit de Spa-Francorchamps", "Spa"),     # partial match
+])
+def test_get_track_folder_name_resolves_known_variants(local_manager, query, expected):
+    assert local_manager.get_track_folder_name(query) == expected
 
 
 def test_get_track_folder_not_found_returns_none(local_manager):
     assert local_manager.get_track_folder_name("Unknown Circuit") is None
 
 
-def test_get_track_folder_partial_match(local_manager):
-    assert local_manager.get_track_folder_name("Spa - WEC") == "Spa"
-    assert local_manager.get_track_folder_name("Spa-Francorchamps") == "Spa"
-    assert local_manager.get_track_folder_name("Circuit de Spa-Francorchamps") == "Spa"
-
-
-def test_get_track_folder_le_mans_variants(tmp_path, mocker):
-    data = {"tracks": [{"name": "Lemans", "matcher": ["mans"], "lmu_folder": "Lemans"}]}
-    p = tmp_path / "mapping.json"
-    p.write_text(json.dumps(data), encoding="utf-8")
-    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
-    mocker.patch("processing.track_manager.get_path", return_value=p)
-
-    from processing.track_manager import TrackManager
-    mgr = TrackManager()
+def test_get_track_folder_le_mans_variants(make_manager):
+    mgr = make_manager({"tracks": [{"name": "Lemans", "matcher": ["mans"], "lmu_folder": "Lemans"}]})
 
     assert mgr.get_track_folder_name("Le Mans") == "Lemans"
     assert mgr.get_track_folder_name("Le Mans - WEC") == "Lemans"
     assert mgr.get_track_folder_name("Le Mans La Sarthe") == "Lemans"
 
 
-def test_invalid_regex_is_skipped(tmp_path, mocker):
-    data = {
+def test_invalid_regex_is_skipped(make_manager):
+    mgr = make_manager({
         "tracks": [
             {"name": "Broken", "matcher": ["["], "lmu_folder": "Broken"},
             {"name": "Imola", "matcher": ["imola"], "lmu_folder": "Imola"},
         ],
-    }
-    p = tmp_path / "mapping.json"
-    p.write_text(json.dumps(data), encoding="utf-8")
-    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
-    mocker.patch("processing.track_manager.get_path", return_value=p)
-
-    from processing.track_manager import TrackManager
-    mgr = TrackManager()
+    })
 
     assert mgr.get_track_folder_name("Imola") == "Imola"
     assert mgr.get_track_folder_name("Broken Track") is None
@@ -160,16 +145,9 @@ def test_remote_bootstraps_when_local_missing(tmp_path, mocker):
 # --- get_official_track_name: independent from get_track_folder_name -------
 
 
-def test_get_official_track_name_matches_name_not_lmu_folder(tmp_path, mocker):
+def test_get_official_track_name_matches_name_not_lmu_folder(make_manager):
     # `name` and `lmu_folder` are resolved independently, even when they differ.
-    data = {"tracks": [{"name": "Spa-Francorchamps", "matcher": ["spa"], "lmu_folder": "Spa"}]}
-    p = tmp_path / "mapping.json"
-    p.write_text(json.dumps(data), encoding="utf-8")
-    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
-    mocker.patch("processing.track_manager.get_path", return_value=p)
-
-    from processing.track_manager import TrackManager
-    mgr = TrackManager()
+    mgr = make_manager({"tracks": [{"name": "Spa-Francorchamps", "matcher": ["spa"], "lmu_folder": "Spa"}]})
 
     assert mgr.get_official_track_name("Spa - WEC") == "Spa-Francorchamps"
     assert mgr.get_track_folder_name("Spa - WEC") == "Spa"
@@ -212,9 +190,30 @@ def test_add_or_update_mapping_creates_new_entry(local_manager):
     from core import settings_db
     custom = settings_db.get_custom_tracks()
     monza = next(t for t in custom if t["lmu_folder_name"] == "Monza")
-    assert monza["tt_patterns"] == [re.escape("Monza Circuit")]
+    # Both the raw track's own pattern and a self-matching one for the folder
+    # name itself (see test_add_or_update_mapping_folder_name_resolves_to_itself).
+    assert monza["tt_patterns"] == [re.escape("Monza Circuit"), re.escape("Monza")]
     # get_known_folder_names merges file-derived and DB-customization names.
     assert local_manager.get_known_folder_names() == ["Imola", "Monza", "Spa"]
+
+
+def test_add_or_update_mapping_folder_name_resolves_to_itself(local_manager):
+    # Picking an existing lmu_folder_name back out of get_known_folder_names()
+    # (e.g. the Upload tab's Track dropdown) must resolve to that same folder,
+    # not create a new "<folder> - HYMO" one.
+    local_manager.add_or_update_mapping("Monza Circuit", "Monza")
+    local_manager.refresh()
+
+    assert local_manager.get_track_folder_name("Monza") == "Monza"
+
+
+def test_add_or_update_mapping_skips_duplicate_pattern_when_track_equals_folder(local_manager):
+    local_manager.add_or_update_mapping("Monza", "Monza")
+
+    from core import settings_db
+    custom = settings_db.get_custom_tracks()
+    monza = next(t for t in custom if t["lmu_folder_name"] == "Monza")
+    assert monza["tt_patterns"] == [re.escape("Monza")]
 
 
 def test_refresh_picks_up_new_mapping(local_manager):

@@ -225,22 +225,6 @@ class SetupDb:
         finally:
             cursor.close()
 
-    def has_installed_hymo_setup(self, car: str, track: str) -> bool:
-        """Whether a TrackTitan (HYMO) setup is installed for this exact
-        car+track pair - the gate SlaveManager._process_go uses before
-        installing a manually-uploaded GO archive for that same folder (a GO
-        archive is only trusted once the matching HYMO folder is known-real,
-        since that's the only way it could exist per the documented workflow)."""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(
-                "SELECT 1 FROM installed_setups WHERE car = ? AND track = ? AND setup_type = 'HYMO' LIMIT 1",
-                (car, track),
-            )
-            return cursor.fetchone() is not None
-        finally:
-            cursor.close()
-
     def delete_installed_setup(self, setup_id: str) -> None:
         with self.conn:
             self.conn.execute("DELETE FROM installed_setups WHERE setup_id = ?", (setup_id,))

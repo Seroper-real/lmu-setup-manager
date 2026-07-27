@@ -14,6 +14,8 @@ from core.errors import AuthError
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from orchestration.download_manager import DownloadManager
 from domain.setup import RemoteSetup, Setup
+from processing.car_manager import CarManager
+from processing.track_manager import TrackManager
 
 log = logging.getLogger("TrackTitanDownloader")
 
@@ -37,6 +39,8 @@ class MasterManager:
         workers: Optional[int] = None,
         client_factory: Optional[DropboxClientFactory] = None,
         *,
+        car_manager: Optional[CarManager] = None,
+        track_manager: Optional[TrackManager] = None,
         on_progress: Optional[ProgressCallback] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> None:
@@ -46,6 +50,14 @@ class MasterManager:
         self.dropbox_client = dropbox_client
         self.workers: int = max(1, DROPBOX_UPLOAD_WORKERS if workers is None else workers)
         self.client_factory = client_factory
+        # Officialize the catalog's raw car/track text against mapping.json before
+        # anything derives a Dropbox path from it (see _dispatch) - same resolution
+        # SetupManager.install_setup and SlaveManager._process_go already apply on
+        # their own side, so the share ends up organized under mapping.json's `name`
+        # instead of raw TrackTitan text (e.g. "Oreca 07 (ELMS)", not "Oreca 07
+        # Gibson 2024 (ELMS)").
+        self.car_manager = car_manager if car_manager is not None else CarManager()
+        self.track_manager = track_manager if track_manager is not None else TrackManager()
         self._local = threading.local()
         self._dispatched: set[str] = set()
         self.on_progress = on_progress
@@ -104,6 +116,16 @@ class MasterManager:
         log.info(f"  Car: {setup.car}")
         log.info(f"  Track: {setup.track}")
         self._emit(ProgressEvent(ProgressKind.START, setup.title, meta=f"{setup.track} - {setup.car}"))
+
+        # Resolve mapping.json's official name before anything below reads
+        # setup.safe_car/safe_track: both _relocate_if_stale_path and _publish
+        # build the Dropbox path from them.
+        car_name = self.car_manager.get_car_name(setup.car)
+        if car_name:
+            setup.safe_car = car_name
+        track_name = self.track_manager.get_official_track_name(setup.track)
+        if track_name:
+            setup.safe_track = track_name
 
         if setup.is_bundle:
             log.info("Skipping bundle.")

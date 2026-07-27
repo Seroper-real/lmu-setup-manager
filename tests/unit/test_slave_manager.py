@@ -41,6 +41,16 @@ def _fake_go_download(content=b"go zip content"):
     return _download
 
 
+def _fake_download(path_lower, local_path):
+    """Regular (HYMO) download: a.svm + valid .metadata.json for id1/Spa/Porsche 963/ts=1000."""
+    local = Path(local_path)
+    local.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(local, "w") as zf:
+        zf.writestr("a.svm", b"svm")
+        zf.writestr(".metadata.json", json.dumps(_meta()))
+    return local
+
+
 @pytest.fixture
 def sm(mocker, tmp_path):
     mocker.patch("orchestration.slave_manager.DOWNLOAD_PATH", tmp_path)
@@ -56,10 +66,6 @@ def sm(mocker, tmp_path):
     setup_manager.track_manager.get_official_track_name.return_value = None
     database = MagicMock()
     database.fetch_installed_go_setup.return_value = None
-    # A matching HYMO setup is assumed present by default, so the existing GO
-    # tests below don't need to know about this gate - see
-    # test_process_go_skips_when_no_matching_hymo_setup for the False case.
-    database.has_installed_hymo_setup.return_value = True
     return SlaveManager(dropbox_client=dbx, setup_manager=setup_manager, database=database), dbx, setup_manager, database, tmp_path
 
 
@@ -74,45 +80,16 @@ def test_skip_when_installed(sm):
 def test_download_install_and_metadata(sm):
     manager, dbx, setup_manager, database, tmp = sm
     database.is_installed_last_version.return_value = False
-
-    def fake_download(path_lower, local_path):
-        local = Path(local_path)
-        local.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(local, "w") as zf:
-            zf.writestr("a.svm", b"svm")
-            zf.writestr(".metadata.json", json.dumps(_meta(id="id1", ts=1000)))
-        return local
-
-    dbx.download_to.side_effect = fake_download
+    dbx.download_to.side_effect = _fake_download
 
     manager._process(_remote())
 
     setup_manager.install_setup.assert_called_once()
     from domain.setup import Setup
-    local_arg, setup_arg = setup_manager.install_setup.call_args[0]
+    (local_arg, setup_arg), kwargs = setup_manager.install_setup.call_args
     assert isinstance(setup_arg, Setup)
     assert setup_arg.id == "id1"
     assert Path(local_arg).name == "Spa_Porsche_963_id1_1000.zip"
-
-
-def test_process_passes_computed_sha256_to_install_setup(sm):
-    manager, dbx, setup_manager, database, tmp = sm
-    database.is_installed_last_version.return_value = False
-
-    def fake_download(path_lower, local_path):
-        local = Path(local_path)
-        local.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(local, "w") as zf:
-            zf.writestr("a.svm", b"svm")
-            zf.writestr(".metadata.json", json.dumps(_meta(id="id1", ts=1000)))
-        return local
-
-    dbx.download_to.side_effect = fake_download
-
-    manager._process(_remote())
-
-    _, kwargs = setup_manager.install_setup.call_args
-    local_arg = setup_manager.install_setup.call_args[0][0]
     assert kwargs["sha256"] == hashlib.sha256(Path(local_arg).read_bytes()).hexdigest()
 
 
@@ -143,15 +120,6 @@ def test_run_housekeeps_and_lists(sm):
 
 
 # --- on_progress / cancel_event ----------------------------------------------
-
-
-def _fake_download(path_lower, local_path):
-    local = Path(local_path)
-    local.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(local, "w") as zf:
-        zf.writestr("a.svm", b"svm")
-        zf.writestr(".metadata.json", json.dumps(_meta()))
-    return local
 
 
 def test_progress_and_cancel_event_default_to_none(sm):
@@ -241,6 +209,8 @@ def test_process_go_first_time_mints_uuid_and_installs(sm):
     manager, dbx, setup_manager, database, tmp = sm
     content = b"go zip v1"
     dbx.download_to.side_effect = _fake_go_download(content)
+    events = []
+    manager.on_progress = events.append
 
     manager._process_go(_go_remote())
 
@@ -254,6 +224,7 @@ def test_process_go_first_time_mints_uuid_and_installs(sm):
     assert uuid_module.UUID(setup_arg.id)  # plain UUID, no prefix
     assert setup_arg.car == "Oreca 07"
     assert setup_arg.track == "Imola"
+    assert [e.kind for e in events] == [ProgressKind.START, ProgressKind.INSTALL]
 
 
 def test_process_go_unchanged_skips_install_even_with_different_filename(sm):
@@ -263,10 +234,13 @@ def test_process_go_unchanged_skips_install_even_with_different_filename(sm):
     existing = MagicMock(setup_id="go-existing-id", sha256=digest)
     database.fetch_installed_go_setup.return_value = existing
     dbx.download_to.side_effect = _fake_go_download(content)
+    events = []
+    manager.on_progress = events.append
 
     manager._process_go(_go_remote(name="GO-Renamed.zip"))
 
     setup_manager.install_setup.assert_not_called()
+    assert [e.kind for e in events] == [ProgressKind.START]
 
 
 def test_process_go_changed_content_reuses_the_existing_setup_id(sm):
@@ -282,45 +256,6 @@ def test_process_go_changed_content_reuses_the_existing_setup_id(sm):
     (local_arg, setup_arg), kwargs = setup_manager.install_setup.call_args
     assert setup_arg.id == "go-existing-id"
     assert kwargs["sha256"] == hashlib.sha256(new_content).hexdigest()
-
-
-def test_process_go_emits_start_and_install(sm):
-    manager, dbx, setup_manager, database, tmp = sm
-    dbx.download_to.side_effect = _fake_go_download()
-    events = []
-    manager.on_progress = events.append
-
-    manager._process_go(_go_remote())
-
-    assert [e.kind for e in events] == [ProgressKind.START, ProgressKind.INSTALL]
-
-
-def test_process_go_skip_emits_only_start(sm):
-    manager, dbx, setup_manager, database, tmp = sm
-    content = b"unchanged"
-    digest = hashlib.sha256(content).hexdigest()
-    database.fetch_installed_go_setup.return_value = MagicMock(setup_id="go-x", sha256=digest)
-    dbx.download_to.side_effect = _fake_go_download(content)
-    events = []
-    manager.on_progress = events.append
-
-    manager._process_go(_go_remote())
-
-    assert [e.kind for e in events] == [ProgressKind.START]
-
-
-def test_process_go_skips_when_no_matching_hymo_setup(sm):
-    manager, dbx, setup_manager, database, tmp = sm
-    database.has_installed_hymo_setup.return_value = False
-    events = []
-    manager.on_progress = events.append
-
-    manager._process_go(_go_remote())
-
-    database.has_installed_hymo_setup.assert_called_once_with("Oreca 07", "Imola")
-    dbx.download_to.assert_not_called()
-    setup_manager.install_setup.assert_not_called()
-    assert [e.kind for e in events] == [ProgressKind.START]
 
 
 # --- run(): regular + GO in one pass ------------------------------------------

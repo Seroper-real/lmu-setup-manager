@@ -3,17 +3,22 @@ import pytest
 from unittest.mock import MagicMock
 
 
+def _patch_download_env(mocker, tmp_path):
+    """The two seams every DownloadManager construction needs: a writable
+    download dir and no real, token-validating TrackTitanClient."""
+    mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", tmp_path)
+    return mocker.patch("orchestration.download_manager.TrackTitanClient")
+
+
 @pytest.fixture
 def dm(tmp_path, in_memory_db, mocker):
-    mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", tmp_path)
-    mocker.patch("orchestration.download_manager.TrackTitanClient")
+    _patch_download_env(mocker, tmp_path)
     from orchestration.download_manager import DownloadManager
     return DownloadManager(database=in_memory_db)
 
 
 def test_uuid_extracted_from_zip_filename(tmp_path, in_memory_db, mocker):
-    mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", tmp_path)
-    mocker.patch("orchestration.download_manager.TrackTitanClient")
+    _patch_download_env(mocker, tmp_path)
     (tmp_path / "Spa_Francorchamps-uuid-1234.zip").touch()
     (tmp_path / "not_a_zip.txt").touch()
     from orchestration.download_manager import DownloadManager
@@ -80,8 +85,7 @@ def test_download_skips_if_already_installed(dm, sample_setup, mocker):
 
 
 def test_injected_client_is_used_and_real_client_not_built(tmp_path, in_memory_db, mocker):
-    mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", tmp_path)
-    real = mocker.patch("orchestration.download_manager.TrackTitanClient")
+    real = _patch_download_env(mocker, tmp_path)
     injected = MagicMock()
 
     from orchestration.download_manager import DownloadManager
@@ -92,8 +96,7 @@ def test_injected_client_is_used_and_real_client_not_built(tmp_path, in_memory_d
 
 
 def test_omitted_client_falls_back_to_real_client(tmp_path, in_memory_db, mocker):
-    mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", tmp_path)
-    real = mocker.patch("orchestration.download_manager.TrackTitanClient")
+    real = _patch_download_env(mocker, tmp_path)
 
     from orchestration.download_manager import DownloadManager
     DownloadManager(database=in_memory_db)
@@ -173,8 +176,7 @@ def test_get_setups_list_runs_normally_when_cancel_event_not_set(dm, sample_setu
 
 
 def test_cancel_event_passed_at_construction_is_honored(tmp_path, in_memory_db, mocker):
-    mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", tmp_path)
-    mocker.patch("orchestration.download_manager.TrackTitanClient")
+    _patch_download_env(mocker, tmp_path)
     from orchestration.download_manager import DownloadManager
 
     event = threading.Event()

@@ -1,3 +1,5 @@
+import pytest
+
 from domain.go_setup import RemoteGoSetup, is_go_zip_name, looks_like_go_name, parse_go_entry
 
 
@@ -38,22 +40,12 @@ def test_parse_go_entry_valid_three_segments():
     )
 
 
-def test_parse_go_entry_rejects_one_segment():
-    assert parse_go_entry("GO-ORECA.zip", "/x/go-oreca.zip", ["GO-ORECA.zip"]) is None
-
-
-def test_parse_go_entry_rejects_two_segments():
-    assert parse_go_entry("GO-ORECA.zip", "/x/oreca/go-oreca.zip", ["Oreca 07", "GO-ORECA.zip"]) is None
-
-
-def test_parse_go_entry_rejects_four_segments():
-    segments = ["Oreca 07", "Imola", "extra", "GO-ORECA.zip"]
-    assert parse_go_entry("GO-ORECA.zip", "/x/go-oreca.zip", segments) is None
-
-
-def test_parse_go_entry_rejects_non_go_name_at_right_depth():
-    assert parse_go_entry("HYMO-Spa_id_1.zip", "/x/spa/hymo.zip", ["Porsche", "Spa", "HYMO-Spa_id_1.zip"]) is None
-
-
-def test_parse_go_entry_rejects_non_zip_at_right_depth():
-    assert parse_go_entry("GO-ORECA.txt", "/x/go-oreca.txt", ["Oreca 07", "Imola", "GO-ORECA.txt"]) is None
+@pytest.mark.parametrize("name,path,segments", [
+    ("GO-ORECA.zip", "/x/go-oreca.zip", ["GO-ORECA.zip"]),                                             # one segment
+    ("GO-ORECA.zip", "/x/oreca/go-oreca.zip", ["Oreca 07", "GO-ORECA.zip"]),                            # two segments
+    ("GO-ORECA.zip", "/x/go-oreca.zip", ["Oreca 07", "Imola", "extra", "GO-ORECA.zip"]),                # four segments
+    ("HYMO-Spa_id_1.zip", "/x/spa/hymo.zip", ["Porsche", "Spa", "HYMO-Spa_id_1.zip"]),                  # non-GO name
+    ("GO-ORECA.txt", "/x/go-oreca.txt", ["Oreca 07", "Imola", "GO-ORECA.txt"]),                         # non-zip
+])
+def test_parse_go_entry_rejects_invalid_input(name, path, segments):
+    assert parse_go_entry(name, path, segments) is None

@@ -90,3 +90,21 @@ class MockDropboxClient:
         else:
             log.warning(f"SANDBOX: already deleted from mock share, skipping: {path}")
         return existed
+
+    def delete_folder_if_empty(self, path: str) -> bool:
+        folder = Path(path)
+        if not folder.is_dir() or any(folder.iterdir()):
+            return False
+        folder.rmdir()
+        log.info(f"SANDBOX: deleted empty folder from mock share: {path}")
+        return True
+
+    def prune_empty_ancestor_folders(self, path: str, levels: int = 2) -> None:
+        root = self.folder.resolve()
+        current = Path(path).parent
+        for _ in range(levels):
+            if current.resolve() == root:
+                return
+            if not self.delete_folder_if_empty(str(current)):
+                return
+            current = current.parent

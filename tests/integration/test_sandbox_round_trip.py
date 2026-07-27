@@ -22,23 +22,21 @@ def _tracks(sandbox):
     sandbox.set_tracks([("spa", "Spa"), ("monza", "Monza")])
 
 
-def test_master_publishes_every_non_bundle_setup(sandbox, repo_fixtures):
+def test_master_publishes_every_non_bundle_setup_with_svm_plus_metadata(sandbox, repo_fixtures):
+    from core.archive import METADATA_FILENAME
+
     dbx = sandbox.run_master(base_path=repo_fixtures)
 
     published = {r.setup_id: r for r in dbx.list_setups()}
     assert {SPA_ID, UNMAPPED_ID, NESTED_ID} <= set(published)
     assert BUNDLE_ID not in published, "bundles must never be published"
 
-    assert published[SPA_ID].name == f"HYMO-Spa___WEC_Porsche_963_{SPA_ID}_1700000000.zip"
+    # The catalog's raw track text is "Spa - WEC" - officialized against
+    # mapping.json to plain "Spa", not published verbatim.
+    assert published[SPA_ID].name == f"HYMO-Spa_Porsche_963_{SPA_ID}_1700000000.zip"
     assert list(sandbox.downloads.iterdir()) == [], "master must clean its temp files"
 
-
-def test_published_package_holds_svm_plus_metadata(sandbox, repo_fixtures):
-    from core.archive import METADATA_FILENAME
-
-    dbx = sandbox.run_master(base_path=repo_fixtures)
-
-    nested = next(r for r in dbx.list_setups() if r.setup_id == NESTED_ID)
+    nested = published[NESTED_ID]
     with zipfile.ZipFile(nested.path_lower) as zf:
         names = set(zf.namelist())
         metadata = json.loads(zf.read(METADATA_FILENAME))
@@ -48,7 +46,9 @@ def test_published_package_holds_svm_plus_metadata(sandbox, repo_fixtures):
     assert metadata["id"] == NESTED_ID
 
 
-def test_slave_installs_published_setups_into_mock_lmu(sandbox, in_memory_db, repo_fixtures):
+def test_slave_installs_published_setups_into_mock_lmu_and_a_second_run_is_a_no_op(
+    sandbox, in_memory_db, mocker, repo_fixtures,
+):
     sandbox.run_master(base_path=repo_fixtures)
     sandbox.run_slave(in_memory_db)
 
@@ -62,11 +62,6 @@ def test_slave_installs_published_setups_into_mock_lmu(sandbox, in_memory_db, re
     assert in_memory_db.is_installed_last_version(SPA_ID, 1700000000) is True
     assert in_memory_db.is_track_found(SPA_ID) is True
     assert in_memory_db.is_track_found(UNMAPPED_ID) is False
-
-
-def test_second_slave_run_is_a_no_op(sandbox, in_memory_db, mocker, repo_fixtures):
-    sandbox.run_master(base_path=repo_fixtures)
-    sandbox.run_slave(in_memory_db)
 
     from clients.mocks.mock_dropbox_client import MockDropboxClient
     spy = mocker.spy(MockDropboxClient, "download_to")

@@ -46,6 +46,10 @@ class DropboxClientProtocol(Protocol):
 
     def delete_if_exists(self, path: str) -> bool: ...
 
+    def delete_folder_if_empty(self, path: str) -> bool: ...
+
+    def prune_empty_ancestor_folders(self, path: str, levels: int = 2) -> None: ...
+
 
 def build_track_titan_client() -> TrackTitanClientProtocol:
     """Return the mock or the real TrackTitan client per the sandbox flags.

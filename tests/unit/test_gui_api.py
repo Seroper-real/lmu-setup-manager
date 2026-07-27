@@ -29,6 +29,19 @@ def api():
     return Api()
 
 
+@pytest.fixture
+def managers(mocker):
+    """The TrackManager/CarManager/SetupManager/SetupDb quartet that Api methods
+    delegating to SetupManager (delete_setup*, restore_factory_settings, map_track,
+    upload_manual_setup) all construct identically."""
+    return SimpleNamespace(
+        track_manager=mocker.patch("processing.track_manager.TrackManager"),
+        car_manager=mocker.patch("processing.car_manager.CarManager"),
+        setup_manager=mocker.patch("processing.setup_manager.SetupManager"),
+        setup_db=mocker.patch("domain.setup_db.SetupDb"),
+    )
+
+
 # ----- mode ------------------------------------------------------------------
 
 def test_current_mode_falls_back_to_config_mode(api, mocker):
@@ -123,6 +136,7 @@ def test_get_bootstrap_shows_db_in_master_mode(api, mocker, tmp_path):
 
 def test_list_installed_setups_available_in_master_mode(api, mocker):
     mocker.patch.object(api, "current_mode", return_value="master")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [_fake_installed(setup_id="1", track="Spa", track_found=True)]
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
@@ -136,6 +150,7 @@ def test_list_installed_setups_available_in_master_mode(api, mocker):
 
 def test_list_installed_setups_constructs_a_fresh_setupdb_per_call(api, mocker):
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = []
 
@@ -145,8 +160,23 @@ def test_list_installed_setups_constructs_a_fresh_setupdb_per_call(api, mocker):
     assert db_cls.call_count == 2
 
 
+def test_list_installed_setups_reuses_the_cached_car_manager(api, mocker):
+    # Unlike SetupDb above, CarManager is cached on the Api instance - a second
+    # call must not re-parse (or re-fetch remotely) mapping.json.
+    mocker.patch.object(api, "current_mode", return_value="full")
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = [_fake_installed(setup_id="1")]
+
+    api.list_installed_setups("", False)
+    api.list_installed_setups("", False)
+
+    cm_cls.assert_called_once()
+
+
 def test_list_installed_setups_groups_by_track(api, mocker):
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [
         _fake_installed(setup_id="1", track="Spa", car="Porsche 963", track_found=True),
         _fake_installed(setup_id="2", track="Spa", car="BMW M4", track_found=True),
@@ -172,6 +202,7 @@ def test_list_installed_setups_groups_by_matched_track_id_across_raw_names(api, 
     # TrackTitan exposes the same physical track under different raw names; both
     # resolve to the same matched_track_id and must collapse into one card.
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [
         _fake_installed(setup_id="1", track="Bahrain - WEC", car="Porsche 963", track_found=True, matched_track_id="Bahrain"),
         _fake_installed(setup_id="2", track="Bahrain International Circuit", car="BMW M4", track_found=True, matched_track_id="Bahrain"),
@@ -188,6 +219,7 @@ def test_list_installed_setups_groups_by_matched_track_id_across_raw_names(api, 
 
 def test_list_installed_setups_unmapped_only_filters(api, mocker):
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [
         _fake_installed(setup_id="1", track="Spa", track_found=True),
         _fake_installed(setup_id="2", track="Imola-HYMO", track_found=False, matched_track_id=None),
@@ -203,6 +235,7 @@ def test_list_installed_setups_unmapped_only_filters(api, mocker):
 
 def test_list_installed_setups_search_matches_track_or_car(api, mocker):
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [
         _fake_installed(setup_id="1", track="Spa", car="Porsche 963", matched_track_id="Spa"),
         _fake_installed(setup_id="2", track="Imola", car="BMW M4", matched_track_id="Imola"),
@@ -219,6 +252,7 @@ def test_list_installed_setups_search_matches_track_or_car(api, mocker):
 
 def test_list_installed_setups_serializes_file_names(api, mocker):
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [_fake_installed(setup_id="1", track="Spa", file_names=["a.svm", "b.svm"])]
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
@@ -230,6 +264,7 @@ def test_list_installed_setups_serializes_file_names(api, mocker):
 
 def test_list_installed_setups_serializes_setup_type(api, mocker):
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [
         _fake_installed(setup_id="1", track="Spa", setup_type="HYMO"),
         _fake_installed(setup_id="2", track="Spa", setup_type="GO"),
@@ -244,10 +279,31 @@ def test_list_installed_setups_serializes_setup_type(api, mocker):
     assert types == {"HYMO": ["1"], "GO": ["2"]}
 
 
+def test_list_installed_setups_preserves_an_unknown_setup_type_instead_of_dropping_it(api, mocker):
+    # _group_by_car_and_type used to hardcode ("HYMO", "GO") and silently drop
+    # any other setup_type value - it must now keep HYMO/GO first but still
+    # surface anything else instead of discarding it.
+    mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
+    setups = [
+        _fake_installed(setup_id="1", track="Spa", car="Porsche 963", setup_type="GO"),
+        _fake_installed(setup_id="2", track="Spa", car="Porsche 963", setup_type="HYMO"),
+        _fake_installed(setup_id="3", track="Spa", car="Porsche 963", setup_type="MYSTERY"),
+    ]
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = setups
+
+    result = api.list_installed_setups("", False)
+
+    types = [ty["type"] for ty in result["groups"][0]["cars"][0]["types"]]
+    assert types == ["HYMO", "GO", "MYSTERY"]
+
+
 def test_list_installed_setups_nests_hymo_and_go_under_one_car(api, mocker):
     # A car with both a HYMO (TrackTitan) and a GO (third-party) setup installed
     # must collapse into a single car entry, not two duplicate car rows.
     mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
     setups = [
         _fake_installed(setup_id="1", track="Spa", car="Porsche 963", setup_type="HYMO"),
         _fake_installed(setup_id="2", track="Spa", car="Porsche 963", setup_type="GO"),
@@ -266,86 +322,144 @@ def test_list_installed_setups_nests_hymo_and_go_under_one_car(api, mocker):
     assert [ty["type"] for ty in bmw["types"]] == ["HYMO"]
 
 
-def test_delete_setup_delegates_to_setup_manager(api, mocker):
-    tm_cls = mocker.patch("processing.track_manager.TrackManager")
+def test_list_installed_setups_includes_car_class_from_car_manager(api, mocker):
+    mocker.patch.object(api, "current_mode", return_value="full")
     cm_cls = mocker.patch("processing.car_manager.CarManager")
-    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
+    cm_cls.return_value.get_car_class.return_value = "HYPERCAR"
+    setups = [_fake_installed(setup_id="1", track="Spa", car="Porsche 963")]
     db_cls = mocker.patch("domain.setup_db.SetupDb")
-    sm_cls.return_value.delete_setup.return_value = True
+    db_cls.return_value.fetch_all_installed_setups.return_value = setups
+
+    result = api.list_installed_setups("", False)
+
+    assert result["groups"][0]["cars"][0]["carClass"] == "HYPERCAR"
+    cm_cls.return_value.get_car_class.assert_called_once_with("Porsche 963")
+
+
+# ----- get_car_options ------------------------------------------------------
+
+def test_get_car_options_delegates_to_the_cached_car_manager(api, mocker):
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
+    cm_cls.return_value.get_all_cars.return_value = [{"name": "Porsche 963", "carClass": "HYPERCAR"}]
+
+    assert api.get_car_options() == [{"name": "Porsche 963", "carClass": "HYPERCAR"}]
+    cm_cls.assert_called_once()
+
+
+def test_reload_config_invalidates_the_cached_car_manager(api, mocker):
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
+    mocker.patch("core.config.save_env_values", create=True)
+    mocker.patch("core.config.save_config", create=True)
+    mocker.patch("gui.api.importlib.reload")
+
+    api.get_car_options()  # populates the cache
+    api._reload_config()
+    api.get_car_options()  # must rebuild, not reuse the pre-reload instance
+
+    assert cm_cls.call_count == 2
+
+
+def test_delete_setup_delegates_to_setup_manager(api, managers):
+    managers.setup_manager.return_value.delete_setup.return_value = True
 
     result = api.delete_setup("id-1")
 
-    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, car_manager=cm_cls.return_value, database=db_cls.return_value)
-    sm_cls.return_value.delete_setup.assert_called_once_with("id-1")
+    managers.setup_manager.assert_called_once_with(
+        track_manager=managers.track_manager.return_value,
+        car_manager=managers.car_manager.return_value,
+        database=managers.setup_db.return_value,
+    )
+    managers.setup_manager.return_value.delete_setup.assert_called_once_with("id-1")
     assert result == {"deleted": True}
 
 
-def test_delete_setup_reports_when_nothing_was_found(api, mocker):
-    mocker.patch("processing.track_manager.TrackManager")
-    mocker.patch("processing.car_manager.CarManager")
-    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
-    mocker.patch("domain.setup_db.SetupDb")
-    sm_cls.return_value.delete_setup.return_value = False
+def test_delete_setup_reports_when_nothing_was_found(api, managers):
+    managers.setup_manager.return_value.delete_setup.return_value = False
 
     assert api.delete_setup("ghost") == {"deleted": False}
 
 
-def test_delete_setups_deletes_each_id_and_counts_successes(api, mocker):
-    tm_cls = mocker.patch("processing.track_manager.TrackManager")
-    cm_cls = mocker.patch("processing.car_manager.CarManager")
-    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
-    db_cls = mocker.patch("domain.setup_db.SetupDb")
-    sm_cls.return_value.delete_setup.side_effect = [True, False, True]
+def test_delete_setups_deletes_each_id_and_counts_successes(api, managers):
+    managers.setup_manager.return_value.delete_setup.side_effect = [True, False, True]
 
     result = api.delete_setups(["id-1", "id-2", "id-3"])
 
-    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, car_manager=cm_cls.return_value, database=db_cls.return_value)
-    sm_cls.return_value.delete_setup.assert_any_call("id-1")
-    sm_cls.return_value.delete_setup.assert_any_call("id-2")
-    sm_cls.return_value.delete_setup.assert_any_call("id-3")
+    managers.setup_manager.assert_called_once_with(
+        track_manager=managers.track_manager.return_value,
+        car_manager=managers.car_manager.return_value,
+        database=managers.setup_db.return_value,
+    )
+    managers.setup_manager.return_value.delete_setup.assert_any_call("id-1")
+    managers.setup_manager.return_value.delete_setup.assert_any_call("id-2")
+    managers.setup_manager.return_value.delete_setup.assert_any_call("id-3")
     assert result == {"deletedCount": 2}
 
 
-def test_delete_setups_handles_empty_list(api, mocker):
-    mocker.patch("processing.track_manager.TrackManager")
-    mocker.patch("processing.car_manager.CarManager")
-    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
-    mocker.patch("domain.setup_db.SetupDb")
-
+def test_delete_setups_handles_empty_list(api, managers):
     assert api.delete_setups([]) == {"deletedCount": 0}
-    sm_cls.return_value.delete_setup.assert_not_called()
+    managers.setup_manager.return_value.delete_setup.assert_not_called()
 
 
-def test_delete_all_setups_deletes_every_installed_setup(api, mocker):
-    tm_cls = mocker.patch("processing.track_manager.TrackManager")
-    cm_cls = mocker.patch("processing.car_manager.CarManager")
-    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
-    db_cls = mocker.patch("domain.setup_db.SetupDb")
-    db_cls.return_value.fetch_all_installed_setups.return_value = [
+def test_delete_all_setups_deletes_every_installed_setup(api, managers):
+    managers.setup_db.return_value.fetch_all_installed_setups.return_value = [
         _fake_installed(setup_id="1"),
         _fake_installed(setup_id="2"),
         _fake_installed(setup_id="3"),
     ]
-    sm_cls.return_value.delete_setup.side_effect = [True, False, True]
+    managers.setup_manager.return_value.delete_setup.side_effect = [True, False, True]
 
     result = api.delete_all_setups()
 
-    sm_cls.assert_called_once_with(track_manager=tm_cls.return_value, car_manager=cm_cls.return_value, database=db_cls.return_value)
-    sm_cls.return_value.delete_setup.assert_any_call("1")
-    sm_cls.return_value.delete_setup.assert_any_call("2")
-    sm_cls.return_value.delete_setup.assert_any_call("3")
+    managers.setup_manager.assert_called_once_with(
+        track_manager=managers.track_manager.return_value,
+        car_manager=managers.car_manager.return_value,
+        database=managers.setup_db.return_value,
+    )
+    managers.setup_manager.return_value.delete_setup.assert_any_call("1")
+    managers.setup_manager.return_value.delete_setup.assert_any_call("2")
+    managers.setup_manager.return_value.delete_setup.assert_any_call("3")
     assert result == {"deletedCount": 2}
 
 
-def test_delete_all_setups_handles_nothing_installed(api, mocker):
-    mocker.patch("processing.track_manager.TrackManager")
-    mocker.patch("processing.car_manager.CarManager")
-    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
-    db_cls = mocker.patch("domain.setup_db.SetupDb")
-    db_cls.return_value.fetch_all_installed_setups.return_value = []
+def test_delete_all_setups_handles_nothing_installed(api, managers):
+    managers.setup_db.return_value.fetch_all_installed_setups.return_value = []
 
     assert api.delete_all_setups() == {"deletedCount": 0}
-    sm_cls.return_value.delete_setup.assert_not_called()
+    managers.setup_manager.return_value.delete_setup.assert_not_called()
+
+
+def test_restore_factory_settings_deletes_installed_setups_and_resets_config(api, managers, mocker):
+    managers.setup_db.return_value.fetch_all_installed_setups.return_value = [
+        _fake_installed(setup_id="1"),
+        _fake_installed(setup_id="2"),
+        _fake_installed(setup_id="3"),
+    ]
+    managers.setup_manager.return_value.delete_setup.side_effect = [True, False, True]
+    reset_defaults = mocker.patch("core.settings_db.reset_to_factory_defaults")
+    reload_cfg = mocker.patch.object(api, "_reload_config")
+
+    result = api.restore_factory_settings()
+
+    managers.setup_manager.assert_called_once_with(
+        track_manager=managers.track_manager.return_value,
+        car_manager=managers.car_manager.return_value,
+        database=managers.setup_db.return_value,
+    )
+    managers.setup_manager.return_value.delete_setup.assert_any_call("1")
+    managers.setup_manager.return_value.delete_setup.assert_any_call("2")
+    managers.setup_manager.return_value.delete_setup.assert_any_call("3")
+    reset_defaults.assert_called_once()
+    reload_cfg.assert_called_once()
+    assert result == {"deletedCount": 2}
+
+
+def test_restore_factory_settings_handles_nothing_installed(api, managers, mocker):
+    managers.setup_db.return_value.fetch_all_installed_setups.return_value = []
+    mocker.patch("core.settings_db.reset_to_factory_defaults")
+    mocker.patch.object(api, "_reload_config")
+
+    assert api.restore_factory_settings() == {"deletedCount": 0}
+    managers.setup_manager.return_value.delete_setup.assert_not_called()
 
 
 def test_get_track_folder_options_delegates_to_track_manager(api, mocker):
@@ -355,27 +469,27 @@ def test_get_track_folder_options_delegates_to_track_manager(api, mocker):
     assert api.get_track_folder_options() == ["Imola", "Spa"]
 
 
-def test_map_track_updates_refreshes_and_relocates(api, mocker):
-    tm_cls = mocker.patch("processing.track_manager.TrackManager")
-    tm_instance = tm_cls.return_value
-    cm_cls = mocker.patch("processing.car_manager.CarManager")
-    sm_cls = mocker.patch("processing.setup_manager.SetupManager")
-    db_cls = mocker.patch("domain.setup_db.SetupDb")
+def test_map_track_updates_refreshes_and_relocates(api, managers):
+    tm_instance = managers.track_manager.return_value
 
     result = api.map_track("Imola - WEC", "Imola")
 
     tm_instance.add_or_update_mapping.assert_called_once_with("Imola - WEC", "Imola")
     tm_instance.refresh.assert_called_once()
-    sm_cls.assert_called_once_with(track_manager=tm_instance, car_manager=cm_cls.return_value, database=db_cls.return_value)
-    sm_cls.return_value.update_tracks_not_found.assert_called_once()
+    managers.setup_manager.assert_called_once_with(
+        track_manager=tm_instance, car_manager=managers.car_manager.return_value, database=managers.setup_db.return_value,
+    )
+    managers.setup_manager.return_value.update_tracks_not_found.assert_called_once()
     assert result == {}
 
 
 # ----- validate_start / the 20-char credential rule -----------------------------
 
 def _rule_based_check_credentials(mode: str, mock_tracktitan: bool, mock_dropbox: bool) -> list[str]:
-    """Stands in for core.config.check_credentials (not on this branch yet): same
-    20-char rule the plan specifies, so validate_start's plumbing can be verified."""
+    """Stands in for core.config.check_credentials so these tests exercise only
+    validate_start's own plumbing (mode/mock routing, error list passthrough) in
+    isolation from check_credentials' own error-message wording, which has its
+    own coverage in test_config.py."""
     import core.config as config
 
     errors: list[str] = []
@@ -392,33 +506,21 @@ def _rule_based_check_credentials(mode: str, mock_tracktitan: bool, mock_dropbox
     return errors
 
 
-def test_validate_start_flags_short_credentials(api, mocker):
+@pytest.mark.parametrize("credential_value,expected_errors", [
+    ("short", ["ACCESS_TOKEN_LIST", "ACCESS_TOKEN_DOWNLOAD", "USER_ID"]),
+    ("x" * 20, []),
+])
+def test_validate_start_flags_credentials_under_20_chars(api, mocker, credential_value, expected_errors):
     import core.config as config
-    mocker.patch.object(config, "ACCESS_TOKEN_LIST", "short")
-    mocker.patch.object(config, "ACCESS_TOKEN_DOWNLOAD", "short")
-    mocker.patch.object(config, "USER_ID", "short")
+    mocker.patch.object(config, "ACCESS_TOKEN_LIST", credential_value)
+    mocker.patch.object(config, "ACCESS_TOKEN_DOWNLOAD", credential_value)
+    mocker.patch.object(config, "USER_ID", credential_value)
     mocker.patch.object(config, "MOCK_TRACKTITAN", False)
     mocker.patch.object(config, "MOCK_DROPBOX", False)
     mocker.patch.object(config, "MOCK_LMU", True)  # isolate this test to the credential rule
     mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
 
-    errors = api.validate_start("full")
-
-    assert errors == ["ACCESS_TOKEN_LIST", "ACCESS_TOKEN_DOWNLOAD", "USER_ID"]
-
-
-def test_validate_start_passes_with_credentials_at_least_20_chars(api, mocker):
-    import core.config as config
-    long_value = "x" * 20
-    mocker.patch.object(config, "ACCESS_TOKEN_LIST", long_value)
-    mocker.patch.object(config, "ACCESS_TOKEN_DOWNLOAD", long_value)
-    mocker.patch.object(config, "USER_ID", long_value)
-    mocker.patch.object(config, "MOCK_TRACKTITAN", False)
-    mocker.patch.object(config, "MOCK_DROPBOX", False)
-    mocker.patch.object(config, "MOCK_LMU", True)  # isolate this test to the credential rule
-    mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
-
-    assert api.validate_start("full") == []
+    assert api.validate_start("full") == expected_errors
 
 
 def test_validate_start_waives_the_check_when_mocked(api, mocker):
@@ -497,22 +599,41 @@ def test_validate_start_lmu_path_waived_by_mock_lmu(api, mocker, tmp_path):
 
 # ----- start/stop download + progress bridge ------------------------------------
 
-def test_start_download_rejects_a_concurrent_start(api, mocker):
+def _start_download_concurrently(api, mocker, fake_run):
+    mocker.patch.object(api, "_resolve_run_fn", return_value=fake_run)
+    return lambda: api.start_download("full")
+
+
+def _start_tracktitan_fetch_concurrently(api, mocker, fake_run):
+    mocker.patch("gui.api.webview.create_window", return_value=mocker.MagicMock())
+    mocker.patch.object(api, "_run_tracktitan_fetch", side_effect=fake_run)
+    return lambda: api.tracktitan_fetch_tokens_start()
+
+
+@pytest.mark.parametrize(
+    "setup,thread_attr",
+    [
+        (_start_download_concurrently, "_thread"),
+        (_start_tracktitan_fetch_concurrently, "_tt_thread"),
+    ],
+    ids=["start_download", "tracktitan_fetch_tokens_start"],
+)
+def test_concurrent_start_is_rejected_while_already_running(api, mocker, setup, thread_attr):
     started = threading.Event()
     release = threading.Event()
 
-    def fake_run(log, on_progress=None, cancel_event=None):
+    def fake_run(*args, **kwargs):
         started.set()
         release.wait(2)
 
-    mocker.patch.object(api, "_resolve_run_fn", return_value=fake_run)
+    start = setup(api, mocker, fake_run)
 
-    first = api.start_download("full")
+    first = start()
     assert started.wait(2)
-    second = api.start_download("full")
+    second = start()
 
     release.set()
-    api._thread.join(timeout=2)
+    getattr(api, thread_attr).join(timeout=2)
 
     assert first == {"started": True}
     assert second == {"started": False, "reason": "already-running"}
@@ -607,14 +728,32 @@ def test_push_progress_includes_the_auth_error_flag_in_the_js_payload(api, mocke
     assert '"errorCode": "dropbox"' in js_call
 
 
-def test_stop_download_sets_the_cancel_event(api):
-    api._cancel_event = threading.Event()
-    api.stop_download()
-    assert api._cancel_event.is_set()
+@pytest.mark.parametrize(
+    "attr,call",
+    [
+        ("_cancel_event", lambda api: api.stop_download()),
+        ("_tt_cancel_event", lambda api: api.tracktitan_fetch_tokens_cancel()),
+    ],
+    ids=["stop_download", "tracktitan_fetch_tokens_cancel"],
+)
+def test_cancel_sets_the_event(api, attr, call):
+    setattr(api, attr, threading.Event())
+    call(api)
+    assert getattr(api, attr).is_set()
 
 
-def test_stop_download_is_a_noop_before_any_start(api):
-    api.stop_download()  # must not raise
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda api: api.stop_download(),
+        lambda api: api.tracktitan_fetch_tokens_cancel(),
+        lambda api: api._close_tt_window(),
+        lambda api: api._push_tracktitan_tokens("ok", {"ACCESS_TOKEN_LIST": "x"}),
+    ],
+    ids=["stop_download", "tracktitan_fetch_tokens_cancel", "_close_tt_window", "_push_tracktitan_tokens"],
+)
+def test_noop_calls_do_not_raise_without_prior_state(api, call):
+    call(api)  # must not raise
 
 
 def test_get_status_default(api):
@@ -635,8 +774,22 @@ def test_resolve_run_fn_rejects_an_unknown_mode(api):
 
 # ----- settings tab --------------------------------------------------------------
 
-def test_browse_lmu_folder_without_a_window_returns_none(api):
-    assert api.browse_lmu_folder("C:/somewhere") is None
+_FILE_DIALOG_CALLS = [
+    pytest.param(lambda api, current: api.browse_lmu_folder(current), id="browse_lmu_folder"),
+    pytest.param(lambda api, current: api.pick_setup_zip_file(), id="pick_setup_zip_file"),
+]
+
+
+@pytest.mark.parametrize("call", _FILE_DIALOG_CALLS)
+def test_file_dialog_without_a_window_returns_none(api, call):
+    assert call(api, "C:/somewhere") is None
+
+
+@pytest.mark.parametrize("call", _FILE_DIALOG_CALLS)
+def test_file_dialog_returns_none_when_the_dialog_is_cancelled(api, mocker, call):
+    api._window = mocker.Mock()
+    api._window.create_file_dialog.return_value = None
+    assert call(api, "C:/old") is None
 
 
 def test_browse_lmu_folder_uses_the_native_folder_dialog(api, mocker):
@@ -650,10 +803,172 @@ def test_browse_lmu_folder_uses_the_native_folder_dialog(api, mocker):
     assert result == "C:/Games/LMU"
 
 
-def test_browse_lmu_folder_returns_none_when_the_dialog_is_cancelled(api, mocker):
+def test_pick_setup_zip_file_uses_the_native_file_dialog(api, mocker):
+    import webview
     api._window = mocker.Mock()
-    api._window.create_file_dialog.return_value = None
-    assert api.browse_lmu_folder("C:/old") is None
+    api._window.create_file_dialog.return_value = ("C:/setups/my-setup.zip",)
+
+    result = api.pick_setup_zip_file()
+
+    api._window.create_file_dialog.assert_called_once_with(webview.FileDialog.OPEN, file_types=("Zip files (*.zip)",))
+    assert result == "C:/setups/my-setup.zip"
+
+
+# ----- save_dropped_setup_file ------------------------------------------------
+
+def test_save_dropped_setup_file_writes_the_decoded_bytes(api):
+    import base64
+    from pathlib import Path
+
+    result = api.save_dropped_setup_file("my-setup.zip", base64.b64encode(b"zip bytes").decode())
+
+    saved = Path(result)
+    assert saved.exists()
+    assert saved.read_bytes() == b"zip bytes"
+    assert saved.name.endswith("my-setup.zip")
+
+
+def test_save_dropped_setup_file_strips_any_path_from_the_file_name(api):
+    import base64
+    from pathlib import Path
+
+    result = api.save_dropped_setup_file("../../evil.zip", base64.b64encode(b"x").decode())
+
+    saved = Path(result)
+    assert saved.name.endswith("evil.zip")
+    assert ".." not in saved.parts
+
+
+def test_save_dropped_setup_file_gives_each_call_a_distinct_path(api):
+    import base64
+
+    data = base64.b64encode(b"x").decode()
+    assert api.save_dropped_setup_file("setup.zip", data) != api.save_dropped_setup_file("setup.zip", data)
+
+
+# ----- upload_manual_setup ---------------------------------------------------
+
+@pytest.mark.parametrize("mode,setup_type", [("full", "HYMO"), ("slave", "GO")])
+def test_upload_manual_setup_installs_locally_outside_master_mode(api, managers, mocker, mode, setup_type):
+    mocker.patch.object(api, "current_mode", return_value=mode)
+    build_setup = mocker.patch("processing.manual_upload.build_manual_setup")
+    install_locally = mocker.patch("processing.manual_upload.install_manual_setup_locally")
+    upload_to_dropbox = mocker.patch("processing.manual_upload.upload_manual_setup_to_dropbox")
+
+    result = api.upload_manual_setup("C:/a.zip", setup_type, "Spa", "Porsche 963")
+
+    build_setup.assert_called_once_with("Spa", "Porsche 963")
+    managers.setup_manager.assert_called_once_with(
+        track_manager=managers.track_manager.return_value,
+        car_manager=managers.car_manager.return_value,
+        database=managers.setup_db.return_value,
+    )
+    install_locally.assert_called_once_with(managers.setup_manager.return_value, "C:/a.zip", build_setup.return_value, setup_type)
+    upload_to_dropbox.assert_not_called()
+    assert result == {"ok": True}
+
+
+def test_upload_manual_setup_uploads_to_dropbox_in_master_mode(api, mocker):
+    mocker.patch.object(api, "current_mode", return_value="master")
+    build_setup = mocker.patch("processing.manual_upload.build_manual_setup")
+    install_locally = mocker.patch("processing.manual_upload.install_manual_setup_locally")
+    upload_to_dropbox = mocker.patch("processing.manual_upload.upload_manual_setup_to_dropbox")
+    dropbox_factory = mocker.patch("clients.protocols.build_dropbox_client")
+
+    result = api.upload_manual_setup("C:/a.zip", "GO", "Spa", "Porsche 963")
+
+    upload_to_dropbox.assert_called_once_with(dropbox_factory.return_value, "C:/a.zip", build_setup.return_value, "GO")
+    install_locally.assert_not_called()
+    assert result == {"ok": True}
+
+
+def test_upload_manual_setup_reports_an_auth_error(api, mocker):
+    from core.errors import AuthError
+    mocker.patch.object(api, "current_mode", return_value="master")
+    mocker.patch("processing.manual_upload.build_manual_setup")
+    mocker.patch(
+        "processing.manual_upload.upload_manual_setup_to_dropbox",
+        side_effect=AuthError("Dropbox authentication failed.", code="dropbox"),
+    )
+    mocker.patch("clients.protocols.build_dropbox_client")
+
+    result = api.upload_manual_setup("C:/a.zip", "HYMO", "Spa", "Porsche 963")
+
+    assert result["ok"] is False
+    assert result["authError"] is True
+    assert result["errorCode"] == "dropbox"
+
+
+def test_upload_manual_setup_reports_a_generic_error(api, mocker):
+    mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.manual_upload.build_manual_setup")
+    mocker.patch("processing.manual_upload.install_manual_setup_locally", side_effect=ValueError("no setup files"))
+    mocker.patch("processing.track_manager.TrackManager")
+    mocker.patch("processing.car_manager.CarManager")
+    mocker.patch("domain.setup_db.SetupDb")
+    mocker.patch("processing.setup_manager.SetupManager")
+
+    result = api.upload_manual_setup("C:/a.zip", "HYMO", "Spa", "Porsche 963")
+
+    assert result == {"ok": False, "error": "no setup files", "authError": False}
+
+
+def test_clean_dropbox_setups_deletes_every_remote_setup(api, mocker):
+    client = mocker.Mock()
+    client.list_setups.return_value = [SimpleNamespace(path_lower="/a.zip"), SimpleNamespace(path_lower="/b.zip")]
+    client.list_go_setups.return_value = [SimpleNamespace(path_lower="/go/c.zip")]
+    client.delete_if_exists.side_effect = [True, False, True]
+    mocker.patch("clients.protocols.build_dropbox_client", return_value=client)
+
+    result = api.clean_dropbox_setups()
+
+    client.delete_if_exists.assert_any_call("/a.zip")
+    client.delete_if_exists.assert_any_call("/b.zip")
+    client.delete_if_exists.assert_any_call("/go/c.zip")
+    assert result == {"ok": True, "deletedCount": 2}
+
+
+def test_clean_dropbox_setups_prunes_empty_ancestor_folders_after_every_delete(api, mocker):
+    """Pruning must run only after every zip is gone - a Track folder shared
+    by two zips is not actually empty until the second delete happens too."""
+    client = mocker.Mock()
+    client.list_setups.return_value = [SimpleNamespace(path_lower="/Car/Track/a.zip")]
+    client.list_go_setups.return_value = [SimpleNamespace(path_lower="/Car/Track/GO-b.zip")]
+    client.delete_if_exists.return_value = True
+    calls = []
+    client.prune_empty_ancestor_folders.side_effect = lambda path: calls.append(("prune", path))
+    client.delete_if_exists.side_effect = lambda path: calls.append(("delete", path)) or True
+    mocker.patch("clients.protocols.build_dropbox_client", return_value=client)
+
+    api.clean_dropbox_setups()
+
+    delete_calls = [c for c in calls if c[0] == "delete"]
+    prune_calls = [c for c in calls if c[0] == "prune"]
+    assert len(delete_calls) == 2
+    assert len(prune_calls) == 2
+    # Every delete happens before any prune is attempted.
+    assert calls.index(prune_calls[0]) > calls.index(delete_calls[-1])
+
+
+def test_clean_dropbox_setups_reports_an_auth_error(api, mocker):
+    from core.errors import AuthError
+    client = mocker.Mock()
+    client.list_setups.side_effect = AuthError("Dropbox authentication failed.", code="dropbox")
+    mocker.patch("clients.protocols.build_dropbox_client", return_value=client)
+
+    result = api.clean_dropbox_setups()
+
+    assert result["ok"] is False
+    assert result["authError"] is True
+    assert result["errorCode"] == "dropbox"
+
+
+def test_clean_dropbox_setups_reports_a_generic_error(api, mocker):
+    mocker.patch("clients.protocols.build_dropbox_client", side_effect=RuntimeError("Missing Dropbox credentials"))
+
+    result = api.clean_dropbox_setups()
+
+    assert result == {"ok": False, "error": "Missing Dropbox credentials", "authError": False}
 
 
 def test_save_settings_writes_both_stores_and_hot_reloads_config(api, mocker):
@@ -746,18 +1061,17 @@ def test_dropbox_oauth_get_url_reports_failures(api, mocker):
     assert api.dropbox_oauth_get_url("key", "secret") == {"error": "bad app key"}
 
 
-def test_dropbox_oauth_get_url_defaults_to_the_read_write_scope(api, mocker):
-    from clients.dropbox_client import READ_WRITE_SCOPES
+@pytest.mark.parametrize(
+    "call_kwargs,scope_name",
+    [({}, "READ_WRITE_SCOPES"), ({"token_type": "read_only"}, "READ_ONLY_SCOPES")],
+    ids=["defaults_to_read_write", "requests_read_only"],
+)
+def test_dropbox_oauth_get_url_requests_the_expected_scope(api, mocker, call_kwargs, scope_name):
+    import clients.dropbox_client as dropbox_client
+    expected_scope = getattr(dropbox_client, scope_name)
     get_url = mocker.patch("clients.dropbox_client.get_authorization_url", return_value="https://dropbox.com/authorize")
-    api.dropbox_oauth_get_url("key", "secret")
-    get_url.assert_called_once_with("key", "secret", scope=READ_WRITE_SCOPES)
-
-
-def test_dropbox_oauth_get_url_requests_the_read_only_scope(api, mocker):
-    from clients.dropbox_client import READ_ONLY_SCOPES
-    get_url = mocker.patch("clients.dropbox_client.get_authorization_url", return_value="https://dropbox.com/authorize")
-    api.dropbox_oauth_get_url("key", "secret", token_type="read_only")
-    get_url.assert_called_once_with("key", "secret", scope=READ_ONLY_SCOPES)
+    api.dropbox_oauth_get_url("key", "secret", **call_kwargs)
+    get_url.assert_called_once_with("key", "secret", scope=expected_scope)
 
 
 def test_dropbox_oauth_exchange_code_returns_the_refresh_token(api, mocker):
@@ -787,38 +1101,6 @@ def test_tracktitan_fetch_tokens_start_opens_a_window_and_starts_polling(api, mo
     assert api._tt_window is child
     run_fetch.assert_called_once()
     assert run_fetch.call_args.args[0] is child
-
-
-def test_tracktitan_fetch_tokens_start_rejects_a_concurrent_start(api, mocker):
-    started = threading.Event()
-    release = threading.Event()
-
-    def fake_run(child, cancel_event):
-        started.set()
-        release.wait(2)
-
-    mocker.patch("gui.api.webview.create_window", return_value=mocker.MagicMock())
-    mocker.patch.object(api, "_run_tracktitan_fetch", side_effect=fake_run)
-
-    first = api.tracktitan_fetch_tokens_start()
-    assert started.wait(2)
-    second = api.tracktitan_fetch_tokens_start()
-
-    release.set()
-    api._tt_thread.join(timeout=2)
-
-    assert first == {"started": True}
-    assert second == {"started": False, "reason": "already-running"}
-
-
-def test_tracktitan_fetch_tokens_cancel_sets_the_cancel_event(api):
-    api._tt_cancel_event = threading.Event()
-    api.tracktitan_fetch_tokens_cancel()
-    assert api._tt_cancel_event.is_set()
-
-
-def test_tracktitan_fetch_tokens_cancel_is_a_noop_before_any_start(api):
-    api.tracktitan_fetch_tokens_cancel()  # must not raise
 
 
 def test_tracktitan_fetch_tokens_cancel_destroys_the_window_immediately(api, mocker):
@@ -920,14 +1202,6 @@ def test_close_tt_window_swallows_destroy_errors(api, mocker):
     api._close_tt_window()  # must not raise
 
     assert api._tt_window is None
-
-
-def test_close_tt_window_is_a_noop_without_a_window(api):
-    api._close_tt_window()  # must not raise
-
-
-def test_push_tracktitan_tokens_without_a_window_is_a_noop(api):
-    api._push_tracktitan_tokens("ok", {"ACCESS_TOKEN_LIST": "x"})  # must not raise
 
 
 def test_push_tracktitan_tokens_sends_the_expected_payload(api):

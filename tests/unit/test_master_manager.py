@@ -41,7 +41,18 @@ def mm(mocker, tmp_path):
     dbx = MagicMock()
     dbx.list_setups.return_value = []
     dbx.remote_path.side_effect = lambda rel: f"/lmu-setups/{rel}"
-    manager = MasterManager(download_manager=dm, dropbox_client=dbx, workers=1)
+    # No mapping.json matches by default, so setup.safe_car/safe_track fall
+    # through to their sanitized-raw-text default - unofficialized, matching
+    # this module's pre-mapping test data (Porsche 963, BMW M4, Spa, Imola...)
+    # unless a test below overrides the return value.
+    car_manager = MagicMock()
+    car_manager.get_car_name.return_value = None
+    track_manager = MagicMock()
+    track_manager.get_official_track_name.return_value = None
+    manager = MasterManager(
+        download_manager=dm, dropbox_client=dbx, workers=1,
+        car_manager=car_manager, track_manager=track_manager,
+    )
     return manager, dm, dbx, tmp_path
 
 
@@ -162,6 +173,43 @@ def test_upload_when_new(mm, mocker):
         assert ".metadata.json" in names
         assert json.loads(zf.read(".metadata.json"))["id"] == "id1"
     dbx.delete.assert_not_called()
+
+
+def test_upload_publishes_under_the_officialized_car_and_track_names(mm, mocker):
+    """mapping.json's `name` wins over the raw TrackTitan catalog text - e.g. a
+    raw "Oreca 07 Gibson 2024 (ELMS)" catalog car must publish under Dropbox's
+    "Oreca 07 (ELMS)" folder, not its own sanitized raw text."""
+    manager, dm, dbx, tmp = mm
+    manager.car_manager.get_car_name.return_value = "Oreca 07 (ELMS)"
+    manager.track_manager.get_official_track_name.return_value = "Spa"
+    setup = _setup(id="id1", ts=2000, car="Oreca 07 Gibson 2024 (ELMS)")
+    _pages(dm, [setup])
+    _downloadable(dm, tmp)
+    _fake_extraction(mocker, [_svm(tmp)])
+
+    manager.run()
+
+    manager.car_manager.get_car_name.assert_called_once_with("Oreca 07 Gibson 2024 (ELMS)")
+    manager.track_manager.get_official_track_name.assert_called_once_with("Spa")
+    dbx.upload.assert_called_once()
+    _, name_arg = dbx.upload.call_args[0]
+    assert name_arg == "Oreca 07 (ELMS)/Spa/" + setup.remote_filename
+    assert "Gibson" not in name_arg
+
+
+def test_relocate_target_uses_the_officialized_car_and_track_names(mm):
+    manager, dm, dbx, tmp = mm
+    manager.car_manager.get_car_name.return_value = "Oreca 07 (ELMS)"
+    dbx.list_setups.return_value = [
+        _remote("Oreca 07 Gibson 2024 (ELMS)/Spa/HYMO-Spa_Oreca_07_Gibson_2024__ELMS__id1_1000.zip", "id1", 1000)
+    ]
+    _pages(dm, [_setup(id="id1", ts=1000, car="Oreca 07 Gibson 2024 (ELMS)")])
+
+    manager.run()
+
+    dbx.move.assert_called_once()
+    _, target = dbx.move.call_args[0]
+    assert target.startswith("/lmu-setups/Oreca 07 (ELMS)/Spa/")
 
 
 def test_upload_and_delete_when_outdated(mm, mocker):
@@ -302,18 +350,6 @@ def test_records_progress_event_sequence(mm, mocker):
     manager.run()
 
     assert [e.kind for e in events] == [ProgressKind.START, ProgressKind.INSTALL, ProgressKind.FINISH]
-
-
-def test_omitting_on_progress_and_cancel_event_runs_to_completion(mm, mocker):
-    manager, dm, dbx, tmp = mm
-    setup = _setup(id="id1", ts=2000)
-    _pages(dm, [setup])
-    _downloadable(dm, tmp)
-    _fake_extraction(mocker, [_svm(tmp)])
-
-    manager.run()  # on_progress/cancel_event both left at their None defaults
-
-    dbx.upload.assert_called_once()
 
 
 def test_cancel_event_stops_dispatching_further_work(mm, mocker):

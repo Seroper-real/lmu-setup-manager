@@ -174,32 +174,22 @@ def test_requests_send_a_timeout(client, mocker):
 # ----- extract_tokens_from_cookies (the GUI's automatic token-fetch flow) -------
 
 
-def test_extract_tokens_from_cookies_matches_by_cognito_suffix():
-    from clients.track_titan_client import extract_tokens_from_cookies
-
-    cookies = {
+@pytest.mark.parametrize("cookies", [
+    {
         "CognitoIdentityServiceProvider.abc123.someuser.accessToken": "list-token-value",
         "CognitoIdentityServiceProvider.abc123.someuser.idToken": "download-token-value",
         "CognitoIdentityServiceProvider.abc123.LastAuthUser": "someuser",
-    }
-
-    assert extract_tokens_from_cookies(cookies) == {
-        "ACCESS_TOKEN_LIST": "list-token-value",
-        "ACCESS_TOKEN_DOWNLOAD": "download-token-value",
-        "USER_ID": "someuser",
-    }
-
-
-def test_extract_tokens_from_cookies_ignores_unrelated_cookies():
-    from clients.track_titan_client import extract_tokens_from_cookies
-
-    cookies = {
+    },
+    {
         "CognitoIdentityServiceProvider.abc123.someuser.accessToken": "list-token-value",
         "CognitoIdentityServiceProvider.abc123.someuser.idToken": "download-token-value",
         "CognitoIdentityServiceProvider.abc123.LastAuthUser": "someuser",
         "_ga": "GA1.2.12345",
         "cookie-consent": "accepted",
-    }
+    },
+], ids=["exact_match", "ignores_unrelated_cookies"])
+def test_extract_tokens_from_cookies_matches_by_cognito_suffix(cookies):
+    from clients.track_titan_client import extract_tokens_from_cookies
 
     assert extract_tokens_from_cookies(cookies) == {
         "ACCESS_TOKEN_LIST": "list-token-value",

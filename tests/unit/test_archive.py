@@ -1,17 +1,16 @@
 import hashlib
 
+import pytest
+
 from core.archive import sha256_file
 
 
-def test_sha256_file_matches_known_digest(tmp_path):
-    p = tmp_path / "a.txt"
-    p.write_bytes(b"hello world")
-    assert sha256_file(p) == hashlib.sha256(b"hello world").hexdigest()
-
-
-def test_sha256_file_correctness_across_multiple_chunks(tmp_path):
-    p = tmp_path / "big.bin"
-    payload = b"x" * (1024 * 1024 * 3 + 17)  # spans several 1 MiB chunk reads
+@pytest.mark.parametrize("payload", [
+    pytest.param(b"hello world", id="small_single_chunk"),
+    pytest.param(b"x" * (1024 * 1024 * 3 + 17), id="spans_multiple_chunk_reads"),
+])
+def test_sha256_file_matches_known_digest(tmp_path, payload):
+    p = tmp_path / "a.bin"
     p.write_bytes(payload)
     assert sha256_file(p) == hashlib.sha256(payload).hexdigest()
 

@@ -79,6 +79,13 @@ class TrackManager:
 
     def add_or_update_mapping(self, track: str, lmu_folder_name: str) -> None:
         settings_db.upsert_track_pattern(lmu_folder_name, re.escape(track))
+        # Also register a self-matching pattern for the folder name itself, so
+        # picking lmu_folder_name back out of get_known_folder_names() (e.g.
+        # the Upload tab's Track dropdown) resolves to this same existing
+        # folder instead of creating a new "<folder> - HYMO" one. Skipped when
+        # it's already identical to `track`'s own pattern - nothing to add.
+        if track != lmu_folder_name:
+            settings_db.upsert_track_pattern(lmu_folder_name, re.escape(lmu_folder_name))
 
     def refresh(self) -> None:
         # Rebuild from the now-updated file/DB. A plain attribute reassignment: safe

@@ -93,29 +93,21 @@ def test_list_setups_paginates(client):
     dbx.files_list_folder_continue.assert_called_once_with("c1")
 
 
-def test_upload_calls_sdk(client, tmp_path):
+@pytest.mark.parametrize("remote_name,expected_path", [
+    ("Spa_P_id_5.zip", "/lmu-setups/Spa_P_id_5.zip"),
+    ("Porsche_963/Spa_P_id_5.zip", "/lmu-setups/Porsche_963/Spa_P_id_5.zip"),
+])
+def test_upload_calls_sdk(client, tmp_path, remote_name, expected_path):
     c, dbx = client
     f = tmp_path / "pkg.zip"
     f.write_bytes(b"zipdata")
 
-    remote = c.upload(f, "Spa_P_id_5.zip")
+    remote = c.upload(f, remote_name)
 
-    assert remote == "/lmu-setups/Spa_P_id_5.zip"
+    assert remote == expected_path
     args, _ = dbx.files_upload.call_args
     assert args[0] == b"zipdata"
-    assert args[1] == "/lmu-setups/Spa_P_id_5.zip"
-
-
-def test_upload_calls_sdk_with_nested_name(client, tmp_path):
-    c, dbx = client
-    f = tmp_path / "pkg.zip"
-    f.write_bytes(b"zipdata")
-
-    remote = c.upload(f, "Porsche_963/Spa_P_id_5.zip")
-
-    assert remote == "/lmu-setups/Porsche_963/Spa_P_id_5.zip"
-    args, _ = dbx.files_upload.call_args
-    assert args[1] == "/lmu-setups/Porsche_963/Spa_P_id_5.zip"
+    assert args[1] == expected_path
 
 
 def test_download_to_calls_sdk(client, tmp_path):
@@ -197,14 +189,6 @@ def test_download_raises_auth_error_on_stone_catch_all_bug(client, tmp_path):
 def test_remote_path_builds_from_folder(client):
     c, dbx = client
     assert c.remote_path("Porsche_963/Spa/x.zip") == "/lmu-setups/Porsche_963/Spa/x.zip"
-
-
-def test_upload_uses_remote_path(client, tmp_path):
-    c, dbx = client
-    f = tmp_path / "pkg.zip"
-    f.write_bytes(b"data")
-    remote = c.upload(f, "Porsche_963/Spa/x.zip")
-    assert remote == c.remote_path("Porsche_963/Spa/x.zip")
 
 
 def test_move_calls_sdk(client):
@@ -320,16 +304,100 @@ def test_list_go_setups_raises_auth_error_on_expired_token(client):
         c.list_go_setups()
 
 
+# ----- delete_folder_if_empty / prune_empty_ancestor_folders -----------------
+
+
+def test_delete_folder_if_empty_deletes_when_no_entries(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(entries=[])
+
+    assert c.delete_folder_if_empty("/lmu-setups/Oreca 07/Imola") is True
+    dbx.files_list_folder.assert_called_once_with("/lmu-setups/Oreca 07/Imola")
+    dbx.files_delete_v2.assert_called_once_with("/lmu-setups/Oreca 07/Imola")
+
+
+def test_delete_folder_if_empty_keeps_a_non_empty_folder(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(
+        entries=[_entry("other.zip", "/lmu-setups/oreca 07/imola/other.zip")]
+    )
+
+    assert c.delete_folder_if_empty("/lmu-setups/Oreca 07/Imola") is False
+    dbx.files_delete_v2.assert_not_called()
+
+
+def test_delete_folder_if_empty_returns_false_when_folder_missing(client):
+    c, dbx = client
+    path_error = dropbox.files.ListFolderError.path(dropbox.files.LookupError.not_found)
+    dbx.files_list_folder.side_effect = dropbox.exceptions.ApiError("req-id", path_error, "msg", None)
+
+    assert c.delete_folder_if_empty("/lmu-setups/Gone/Track") is False
+    dbx.files_delete_v2.assert_not_called()
+
+
+def test_delete_folder_if_empty_reraises_other_api_errors(client):
+    c, dbx = client
+    dbx.files_list_folder.side_effect = dropbox.exceptions.ApiError(
+        "req-id", dropbox.files.ListFolderError.other, "msg", None
+    )
+
+    with pytest.raises(dropbox.exceptions.ApiError):
+        c.delete_folder_if_empty("/lmu-setups/Oreca 07/Imola")
+
+
+def test_prune_empty_ancestor_folders_deletes_track_then_car(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(entries=[])
+
+    c.prune_empty_ancestor_folders("/lmu-setups/Oreca 07/Imola/go-oreca.zip")
+
+    dbx.files_list_folder.assert_any_call("/lmu-setups/Oreca 07/Imola")
+    dbx.files_list_folder.assert_any_call("/lmu-setups/Oreca 07")
+    dbx.files_delete_v2.assert_any_call("/lmu-setups/Oreca 07/Imola")
+    dbx.files_delete_v2.assert_any_call("/lmu-setups/Oreca 07")
+
+
+def test_prune_empty_ancestor_folders_never_deletes_the_share_root(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(entries=[])
+
+    c.prune_empty_ancestor_folders("/lmu-setups/Oreca 07/x.zip")
+
+    dbx.files_list_folder.assert_called_once_with("/lmu-setups/Oreca 07")
+    dbx.files_delete_v2.assert_called_once_with("/lmu-setups/Oreca 07")
+
+
+def test_prune_empty_ancestor_folders_stops_as_soon_as_a_folder_is_not_empty(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(
+        entries=[_entry("sibling.zip", "/lmu-setups/oreca 07/spa/sibling.zip")]
+    )
+
+    c.prune_empty_ancestor_folders("/lmu-setups/Oreca 07/Imola/go-oreca.zip")
+
+    # The Car folder still holds another Track's files - never even checked
+    # once the Track folder itself turned out non-empty.
+    dbx.files_list_folder.assert_called_once_with("/lmu-setups/Oreca 07/Imola")
+    dbx.files_delete_v2.assert_not_called()
+
+
 # ----- OAuth "no redirect" flow helpers -----------------------------------------
 
-def test_get_authorization_url_starts_an_offline_flow(mocker):
+@pytest.mark.parametrize("scope", [None, "READ_ONLY_SCOPES"])
+def test_get_authorization_url_starts_an_offline_flow(mocker, scope):
+    # scope is looked up by name (rather than parametrized directly) so the
+    # None case and the READ_ONLY_SCOPES case share one test body while still
+    # covering both "no restriction" and "restricted below the app's scopes".
+    from clients.dropbox_client import READ_ONLY_SCOPES
+    scope = READ_ONLY_SCOPES if scope == "READ_ONLY_SCOPES" else None
+
     flow_cls = mocker.patch("clients.dropbox_client.dropbox.DropboxOAuth2FlowNoRedirect")
     flow_cls.return_value.start.return_value = "https://dropbox.com/oauth2/authorize?x=1"
     from clients.dropbox_client import get_authorization_url
 
-    url = get_authorization_url("app-key", "app-secret")
+    url = get_authorization_url("app-key", "app-secret", scope=scope)
 
-    flow_cls.assert_called_once_with("app-key", "app-secret", token_access_type="offline", scope=None)
+    flow_cls.assert_called_once_with("app-key", "app-secret", token_access_type="offline", scope=scope)
     assert url == "https://dropbox.com/oauth2/authorize?x=1"
 
 
@@ -340,16 +408,6 @@ def test_read_write_scopes_cover_both_content_read_and_write():
     from clients.dropbox_client import READ_WRITE_SCOPES
 
     assert set(READ_WRITE_SCOPES) == {"files.metadata.read", "files.content.read", "files.content.write"}
-
-
-def test_get_authorization_url_forwards_the_requested_scope(mocker):
-    flow_cls = mocker.patch("clients.dropbox_client.dropbox.DropboxOAuth2FlowNoRedirect")
-    flow_cls.return_value.start.return_value = "https://dropbox.com/oauth2/authorize?x=1"
-    from clients.dropbox_client import get_authorization_url, READ_ONLY_SCOPES
-
-    get_authorization_url("app-key", "app-secret", scope=READ_ONLY_SCOPES)
-
-    flow_cls.assert_called_once_with("app-key", "app-secret", token_access_type="offline", scope=READ_ONLY_SCOPES)
 
 
 def test_exchange_authorization_code_returns_the_refresh_token(mocker):

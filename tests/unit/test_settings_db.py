@@ -68,3 +68,15 @@ def test_get_custom_folder_names_sorted_and_deduped():
     settings_db.upsert_track_pattern("Alpha", "a2")
 
     assert settings_db.get_custom_folder_names() == ["Alpha", "Zeta"]
+
+
+def test_reset_to_factory_defaults_clears_everything():
+    settings_db.save_config({"ui": {"language": "en"}, "mode": "master"})
+    settings_db.save_secrets({"USER_ID": "some-id"})
+    settings_db.upsert_track_pattern("Spa", "spa")
+
+    settings_db.reset_to_factory_defaults()
+
+    assert settings_db.get_config() == settings_db.DEFAULT_CONFIG
+    assert settings_db.get_secret("USER_ID") is None
+    assert settings_db.get_custom_tracks() == []

@@ -172,6 +172,8 @@ def run_master(
 ) -> None:
     from orchestration.download_manager import DownloadManager
     from orchestration.master_manager import MasterManager
+    from processing.car_manager import CarManager
+    from processing.track_manager import TrackManager
     from clients.protocols import build_dropbox_client, build_track_titan_client
 
     download_manager = DownloadManager(database=None, client=build_track_titan_client(), cancel_event=cancel_event)
@@ -181,6 +183,8 @@ def run_master(
         download_manager=download_manager,
         dropbox_client=dropbox_client,
         client_factory=build_dropbox_client,
+        car_manager=CarManager(),
+        track_manager=TrackManager(),
         on_progress=on_progress,
         cancel_event=cancel_event,
     ).run()

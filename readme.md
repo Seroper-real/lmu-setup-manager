@@ -286,7 +286,7 @@ If you run Le Mans Ultimate on **more than one of your own PCs**, you can move y
 
 The setups this tool manages end to end come from TrackTitan and are published under the **HYMO** brand — that's the primary workflow, covered by all three modes above. **GO Setups**, a separate third-party provider, is only *compatible* with it, and only in Install only (`slave`) mode: the app never talks to GO's own systems, has no dedicated setup step for it, and doesn't publish anything on GO's behalf.
 
-GO archives ride on the same Dropbox tree Upload only already builds while publishing your HYMO setups: `<Dropbox folder>/<Car>/<Track>/`. **You don't create these folders by hand** — they exist because Upload only has already published at least one HYMO setup for that car and track. To add a GO setup, drop its zip (name starting with `GO`) into the matching, already-existing `<Car>/<Track>/` folder. No extra credentials needed; it reuses your existing Dropbox setup.
+GO archives ride on the same Dropbox tree Upload only builds while publishing your HYMO setups: `<Dropbox folder>/<Car>/<Track>/`. That folder does not need to already hold a HYMO setup for the same car and track — to add a GO setup, just drop its zip (name starting with `GO`) into the matching `<Car>/<Track>/` folder (create it yourself if it isn't there yet); Install only creates the matching LMU folder on its own, same as it would for any other setup. No extra credentials needed; it reuses your existing Dropbox setup.
 
 A GO archive's MoTeC telemetry files (`.ld`/`.ldx`) are installed alongside its `.svm` setups, intentionally — GO ships them together, so this tool treats them the same way: copied in, cleaned up when a newer version replaces them.
 

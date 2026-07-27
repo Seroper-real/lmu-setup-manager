@@ -51,20 +51,16 @@ def test_calculate_dir_known_track(sm, lmu_base):
     assert matched_track_id == "Spa"
 
 
-def test_calculate_dir_unknown_track(sm, lmu_base):
+@pytest.mark.parametrize("fallback_kwargs, expected_name", [
+    pytest.param({}, "Mystery Circuit-HYMO", id="default_hymo_suffix"),
+    pytest.param({"fallback_suffix": "GO"}, "Mystery Circuit-GO", id="go_suffix"),
+])
+def test_calculate_dir_unknown_track_uses_fallback_suffix(sm, lmu_base, fallback_kwargs, expected_name):
     sm.track_manager.get_track_folder_name.return_value = None
-    path, found, matched_track_id = sm._calculate_setup_installation_dir("Mystery Circuit")
+    path, found, matched_track_id = sm._calculate_setup_installation_dir("Mystery Circuit", **fallback_kwargs)
     assert found is False
-    assert "HYMO" in path.name
+    assert path.name == expected_name
     assert matched_track_id is None
-
-
-def test_calculate_dir_unknown_track_uses_go_fallback_suffix(sm, lmu_base):
-    sm.track_manager.get_track_folder_name.return_value = None
-    path, found, matched_track_id = sm._calculate_setup_installation_dir("Mystery Circuit", fallback_suffix="GO")
-    assert found is False
-    assert path.name == "Mystery Circuit-GO"
-    assert "HYMO" not in path.name
 
 
 def test_find_files_recursive(sm, tmp_path):
@@ -79,35 +75,25 @@ def test_find_files_recursive(sm, tmp_path):
     assert "b.txt" not in result
 
 
-def test_copy_to_lmu_copies_files(sm, tmp_path, lmu_base):
-    src = tmp_path / "extracted"
-    src.mkdir()
-    (src / "setup.svm").write_bytes(b"data")
-    dest = lmu_base / "Spa"
-    sm._copy_file_to_lmu(src, dest)
-    assert (dest / "setup.svm").exists()
-
-
-def test_copy_to_lmu_honors_explicit_extensions_override(sm, tmp_path, lmu_base):
+@pytest.mark.parametrize("extensions, expected_names", [
+    # extensions omitted (falls back to SETUP_FILE_EXTENSIONS, {".svm"} per the
+    # `sm` fixture) behaves identically to passing extensions=None explicitly -
+    # both hit the same `exts = extensions if extensions is not None else ...` branch.
+    pytest.param(None, {"setup.svm"}, id="defaults_to_setup_file_extensions"),
+    pytest.param({".ld", ".ldx"}, {"telemetry.ld", "telemetry.ldx"}, id="explicit_override"),
+])
+def test_copy_to_lmu_extensions_filter(sm, tmp_path, lmu_base, extensions, expected_names):
     src = tmp_path / "extracted"
     src.mkdir()
     (src / "setup.svm").write_bytes(b"x")
     (src / "telemetry.ld").write_bytes(b"x")
     (src / "telemetry.ldx").write_bytes(b"x")
     dest = lmu_base / "Spa"
-    copied = sm._copy_file_to_lmu(src, dest, extensions={".ld", ".ldx"})
-    names = {f.name for f in copied}
-    assert names == {"telemetry.ld", "telemetry.ldx"}
-    assert not (dest / "setup.svm").exists()
 
+    copied = sm._copy_file_to_lmu(src, dest, extensions=extensions)
 
-def test_copy_to_lmu_defaults_to_setup_file_extensions_when_none(sm, tmp_path, lmu_base):
-    src = tmp_path / "extracted"
-    src.mkdir()
-    (src / "setup.svm").write_bytes(b"x")
-    dest = lmu_base / "Spa"
-    copied = sm._copy_file_to_lmu(src, dest, extensions=None)
-    assert {f.name for f in copied} == {"setup.svm"}
+    assert {f.name for f in copied} == expected_names
+    assert {f.name for f in dest.iterdir()} == expected_names
 
 
 def test_copy_to_lmu_no_overwrite(sm, tmp_path, lmu_base):
@@ -122,24 +108,21 @@ def test_copy_to_lmu_no_overwrite(sm, tmp_path, lmu_base):
     assert (dest / "setup.svm").read_bytes() == b"old"
 
 
-def test_cleanup_temp_removes_extraction_dir(sm, tmp_path):
+@pytest.mark.parametrize("clean_download, zip_should_survive", [
+    pytest.param(False, True, id="clean_download_off_keeps_zip"),
+    pytest.param(True, False, id="clean_download_on_deletes_zip"),
+])
+def test_cleanup_temp_respects_clean_download_flag(sm, tmp_path, mocker, clean_download, zip_should_survive):
+    mocker.patch("processing.setup_manager.CLEAN_DOWNLOAD", clean_download)
     ext = tmp_path / "extracted"
     ext.mkdir()
     dl = tmp_path / "file.zip"
     dl.write_bytes(b"zip")
-    sm._cleanup_temp(dl, ext, installed=True)
-    assert not ext.exists()
-    assert dl.exists()  # CLEAN_DOWNLOAD=False
 
-
-def test_cleanup_temp_deletes_zip_when_enabled(sm, tmp_path, mocker):
-    mocker.patch("processing.setup_manager.CLEAN_DOWNLOAD", True)
-    ext = tmp_path / "extracted"
-    ext.mkdir()
-    dl = tmp_path / "file.zip"
-    dl.write_bytes(b"zip")
     sm._cleanup_temp(dl, ext, installed=True)
-    assert not dl.exists()
+
+    assert not ext.exists()  # extraction dir is always removed
+    assert dl.exists() == zip_should_survive
 
 
 def test_cleanup_old_removes_stale_files(sm, tmp_path):
@@ -157,19 +140,34 @@ def test_unzip_recursive_raises_if_missing(sm, tmp_path):
         sm._unzip_recursive(tmp_path / "missing.zip", tmp_path / "out")
 
 
-def test_install_setup_full_flow(sm, sample_setup, tmp_path, lmu_base, mocker):
+@pytest.fixture
+def install_setup_env(tmp_path, mocker):
+    """Common install_setup() plumbing shared by every test below: a writable
+    download dir, a real-archive-extractor stand-in that drops the given files
+    into outdir, and the source zip install_setup() expects to find on disk."""
     dl_path = tmp_path / "downloads"
     dl_path.mkdir()
     mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
 
-    def fake_extract(archive, outdir, verbosity):
-        Path(outdir).mkdir(parents=True, exist_ok=True)
-        (Path(outdir) / "car_spa.svm").write_bytes(b"setup bytes")
+    def _prepare(files: dict[str, bytes], zip_name: str = "fake.zip") -> Path:
+        def fake_extract(archive, outdir, verbosity):
+            Path(outdir).mkdir(parents=True, exist_ok=True)
+            for name, content in files.items():
+                (Path(outdir) / name).write_bytes(content)
 
-    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
+        mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
+        zip_path = dl_path / zip_name
+        zip_path.write_bytes(b"fake zip")
+        return zip_path
 
-    zip_path = dl_path / f"{sample_setup.safe_track}-{sample_setup.id}.zip"
-    zip_path.write_bytes(b"fake zip")
+    return _prepare
+
+
+def test_install_setup_full_flow(sm, sample_setup, lmu_base, install_setup_env):
+    zip_path = install_setup_env(
+        {"car_spa.svm": b"setup bytes"},
+        zip_name=f"{sample_setup.safe_track}-{sample_setup.id}.zip",
+    )
 
     sm.install_setup(zip_path, sample_setup)
 
@@ -177,97 +175,44 @@ def test_install_setup_full_flow(sm, sample_setup, tmp_path, lmu_base, mocker):
     assert sm.database.is_setup_installed_last_version(sample_setup) is True
 
 
-def test_install_setup_threads_sha256_and_setup_type_to_db(sm, sample_setup, tmp_path, lmu_base, mocker):
-    dl_path = tmp_path / "downloads"
-    dl_path.mkdir()
-    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
+@pytest.mark.parametrize("install_kwargs, expected_setup_type, expected_sha256", [
+    pytest.param({}, "HYMO", None, id="defaults_to_hymo"),
+    pytest.param(
+        {"setup_type": "GO", "fallback_suffix": "GO", "sha256": "abc123"}, "GO", "abc123",
+        id="threads_sha256_and_setup_type",
+    ),
+])
+def test_install_setup_records_setup_type_and_sha256_in_db(
+    sm, sample_setup, install_setup_env, install_kwargs, expected_setup_type, expected_sha256,
+):
+    zip_path = install_setup_env({"car_spa.svm": b"setup bytes"})
 
-    def fake_extract(archive, outdir, verbosity):
-        Path(outdir).mkdir(parents=True, exist_ok=True)
-        (Path(outdir) / "car_spa.svm").write_bytes(b"setup bytes")
-
-    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
-    zip_path = dl_path / "fake.zip"
-    zip_path.write_bytes(b"fake zip")
-
-    sm.install_setup(
-        zip_path, sample_setup,
-        setup_type="GO", fallback_suffix="GO", sha256="abc123",
-    )
+    sm.install_setup(zip_path, sample_setup, **install_kwargs)
 
     row = sm.database.fetch_installed_setup(sample_setup.id)
-    assert row.setup_type == "GO"
-    assert row.sha256 == "abc123"
+    assert row.setup_type == expected_setup_type
+    assert row.sha256 == expected_sha256
 
 
-def test_install_setup_defaults_setup_type_to_hymo(sm, sample_setup, tmp_path, lmu_base, mocker):
-    dl_path = tmp_path / "downloads"
-    dl_path.mkdir()
-    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
-
-    def fake_extract(archive, outdir, verbosity):
-        Path(outdir).mkdir(parents=True, exist_ok=True)
-        (Path(outdir) / "car_spa.svm").write_bytes(b"setup bytes")
-
-    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
-    zip_path = dl_path / "fake.zip"
-    zip_path.write_bytes(b"fake zip")
-
-    sm.install_setup(zip_path, sample_setup)
-
-    row = sm.database.fetch_installed_setup(sample_setup.id)
-    assert row.setup_type == "HYMO"
-    assert row.sha256 is None
-
-
-def test_install_setup_go_leaves_stale_files_when_delete_previous_version_is_off(sm, sample_setup, tmp_path, lmu_base, mocker):
-    # GO must respect DELETE_PREVIOUS_VERSION exactly like HYMO (see the
-    # companion HYMO test below) - no more hardcoded cleanup special-case.
+@pytest.mark.parametrize("setup_type, extra_kwargs", [
+    pytest.param("GO", {"setup_type": "GO"}, id="go"),
+    # HYMO is the default: no setup_type kwarg passed, same as a real HYMO install.
+    pytest.param("HYMO", {}, id="hymo"),
+])
+def test_install_setup_leaves_stale_files_when_delete_previous_version_is_off(
+    sm, sample_setup, lmu_base, install_setup_env, setup_type, extra_kwargs,
+):
+    # DELETE_PREVIOUS_VERSION must be respected identically regardless of
+    # setup_type - no hardcoded per-type cleanup special-case.
     # DELETE_PREVIOUS_VERSION is already patched False by the `sm` fixture.
     install_dir = lmu_base / "Spa"
     install_dir.mkdir(parents=True, exist_ok=True)
     (install_dir / "stale.svm").write_bytes(b"stale")
-    sm.database.add_installed_setup(sample_setup, [install_dir / "stale.svm"], True, install_dir, setup_type="GO")
+    sm.database.add_installed_setup(sample_setup, [install_dir / "stale.svm"], True, install_dir, setup_type=setup_type)
 
-    dl_path = tmp_path / "downloads"
-    dl_path.mkdir()
-    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
+    zip_path = install_setup_env({"fresh.svm": b"fresh"})
 
-    def fake_extract(archive, outdir, verbosity):
-        Path(outdir).mkdir(parents=True, exist_ok=True)
-        (Path(outdir) / "fresh.svm").write_bytes(b"fresh")
-
-    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
-    zip_path = dl_path / "fake.zip"
-    zip_path.write_bytes(b"fake zip")
-
-    sm.install_setup(zip_path, sample_setup, setup_type="GO")
-
-    assert (install_dir / "stale.svm").exists()
-    assert (install_dir / "fresh.svm").exists()
-
-
-def test_install_setup_hymo_leaves_stale_files_when_delete_previous_version_is_off(sm, sample_setup, tmp_path, lmu_base, mocker):
-    # Companion to the GO test above: setup_type="HYMO" (the default) must still
-    # respect DELETE_PREVIOUS_VERSION=False (patched by the `sm` fixture).
-    install_dir = lmu_base / "Spa"
-    install_dir.mkdir(parents=True, exist_ok=True)
-    (install_dir / "stale.svm").write_bytes(b"stale")
-    sm.database.add_installed_setup(sample_setup, [install_dir / "stale.svm"], True, install_dir)
-
-    dl_path = tmp_path / "downloads"
-    dl_path.mkdir()
-    mocker.patch("processing.setup_manager.DOWNLOAD_PATH", dl_path)
-
-    def fake_extract(archive, outdir, verbosity):
-        Path(outdir).mkdir(parents=True, exist_ok=True)
-        (Path(outdir) / "fresh.svm").write_bytes(b"fresh")
-
-    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
-    zip_path = dl_path / "fake.zip"
-    zip_path.write_bytes(b"fake zip")
-
-    sm.install_setup(zip_path, sample_setup)
+    sm.install_setup(zip_path, sample_setup, **extra_kwargs)
 
     assert (install_dir / "stale.svm").exists()
     assert (install_dir / "fresh.svm").exists()

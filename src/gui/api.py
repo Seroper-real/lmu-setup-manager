@@ -14,6 +14,7 @@ from core.progress import ProgressEvent, ProgressKind
 
 if TYPE_CHECKING:
     from domain.setup_db import InstalledSetup
+    from processing.car_manager import CarManager
 
 log = logging.getLogger("TrackTitanDownloader")
 
@@ -77,6 +78,14 @@ class Api:
         # this is what the native window-close handler below checks before
         # letting the app quit with unsaved edits.
         self._settings_dirty: bool = False
+        # Cached across calls (unlike TrackManager/SetupManager elsewhere in
+        # this file, which are cheap to rebuild per call): this one backs the
+        # Setup installati search box, which re-invokes list_installed_setups()
+        # on every debounced keystroke, and re-parsing (or re-fetching
+        # remotely) mapping.json that often would be wasteful. Invalidated in
+        # _reload_config() below whenever remote_mappings settings might have
+        # changed.
+        self._car_manager: Optional["CarManager"] = None
 
     # ----- mode -----------------------------------------------------------
 
@@ -151,6 +160,12 @@ class Api:
             },
         }
 
+    def _get_car_manager(self) -> "CarManager":
+        if self._car_manager is None:
+            from processing.car_manager import CarManager
+            self._car_manager = CarManager()
+        return self._car_manager
+
     def _installed_summary(self) -> tuple[bool, int]:
         # DB_PATH is not mode-conditional (core/config.py sets it regardless of
         # MODE), so it reflects whatever full/slave runs have installed on this
@@ -198,6 +213,16 @@ class Api:
 
         return {"groups": grouped, "totalCount": len(filtered), "grandTotal": len(setups)}
 
+    # Preferred display order for the known setup types; any other value that
+    # shows up (there is none today, but _ordered_setup_types() must not
+    # silently drop it - see below) is appended after these, sorted.
+    _TYPE_ORDER: tuple[str, ...] = ("HYMO", "GO")
+
+    def _ordered_setup_types(self, by_type: dict[str, list["InstalledSetup"]]) -> list[str]:
+        known = [t for t in self._TYPE_ORDER if t in by_type]
+        unknown = sorted(t for t in by_type if t not in self._TYPE_ORDER)
+        return known + unknown
+
     def _group_by_car_and_type(self, items: list["InstalledSetup"]) -> list[dict[str, object]]:
         # A car can have both a HYMO (TrackTitan) and a GO (third-party) setup
         # installed at once; without this, each showed as its own duplicate
@@ -207,13 +232,14 @@ class Api:
         for s in items:
             by_car.setdefault(s.car, {}).setdefault(s.setup_type, []).append(s)
 
+        car_manager = self._get_car_manager()
         return [
             {
                 "car": car,
+                "carClass": car_manager.get_car_class(car),
                 "types": [
-                    {"type": setup_type, "setups": [self._serialize_installed(s) for s in entries]}
-                    for setup_type in ("HYMO", "GO")
-                    if (entries := by_type.get(setup_type))
+                    {"type": setup_type, "setups": [self._serialize_installed(s) for s in by_type[setup_type]]}
+                    for setup_type in self._ordered_setup_types(by_type)
                 ],
             }
             for car, by_type in sorted(by_car.items())
@@ -271,9 +297,108 @@ class Api:
         deleted_count = sum(1 for setup_id in setup_ids if setup_manager.delete_setup(setup_id))
         return {"deletedCount": deleted_count}
 
+    def clean_dropbox_setups(self) -> dict[str, object]:
+        """Danger-zone action: deletes every setup currently on the shared Dropbox
+        folder (both HYMO/TrackTitan zips and GO Setups archives), then prunes the
+        <Car>/<Track> folders those zips lived in once they're empty - Dropbox
+        folders are real objects that don't disappear on their own when emptied.
+        Local installs and app data are untouched."""
+        from core.errors import AuthError
+        from clients.protocols import build_dropbox_client
+
+        try:
+            client = build_dropbox_client()
+            remotes = list(client.list_setups()) + list(client.list_go_setups())
+            deleted_count = sum(1 for remote in remotes if client.delete_if_exists(remote.path_lower))
+            # Run only after every delete above: a Track folder shared by
+            # several zips isn't actually empty until the last one is gone.
+            for remote in remotes:
+                client.prune_empty_ancestor_folders(remote.path_lower)
+            return {"ok": True, "deletedCount": deleted_count}
+        except AuthError as e:
+            log.exception("Dropbox cleanup failed: authentication error")
+            return {"ok": False, "error": str(e), "authError": True, "errorCode": e.code, "errorStatus": e.status}
+        except Exception as e:
+            log.exception("Dropbox cleanup failed")
+            return {"ok": False, "error": str(e), "authError": False}
+
+    def restore_factory_settings(self) -> dict[str, object]:
+        """Danger-zone action: deletes every locally installed setup and resets all
+        app data (settings, credentials, custom track mappings) to first-run
+        defaults. Does not touch Dropbox."""
+        from core.settings_db import reset_to_factory_defaults
+        from domain.setup_db import SetupDb
+        from processing.car_manager import CarManager
+        from processing.track_manager import TrackManager
+        from processing.setup_manager import SetupManager
+
+        database = SetupDb()
+        setup_manager = SetupManager(track_manager=TrackManager(), car_manager=CarManager(), database=database)
+        setup_ids = [s.setup_id for s in database.fetch_all_installed_setups()]
+        deleted_count = sum(1 for setup_id in setup_ids if setup_manager.delete_setup(setup_id))
+
+        reset_to_factory_defaults()
+        self._reload_config()
+        self._settings_dirty = False
+        return {"deletedCount": deleted_count}
+
     def get_track_folder_options(self) -> list[str]:
         from processing.track_manager import TrackManager
         return TrackManager().get_known_folder_names()
+
+    def get_car_options(self) -> list[dict[str, object]]:
+        return self._get_car_manager().get_all_cars()
+
+    # ----- carica setup / manual upload tab -----------------------------------
+
+    def pick_setup_zip_file(self) -> Optional[str]:
+        if self._window is None:
+            return None
+        result = self._window.create_file_dialog(webview.FileDialog.OPEN, file_types=("Zip files (*.zip)",))
+        if not result:
+            return None
+        return result[0]
+
+    def save_dropped_setup_file(self, file_name: str, data_base64: str) -> str:
+        """Persists a drag-and-dropped file's bytes to disk. Browsers (WebView2
+        included) never expose a dropped File's real filesystem path, so the JS
+        side reads the File as base64 and hands the bytes over here instead of
+        a path - the returned path can then be used exactly like
+        pick_setup_zip_file()'s return value."""
+        import base64
+        import uuid
+        from core.config import DOWNLOAD_PATH
+
+        safe_name = Path(file_name).name
+        dest = Path(DOWNLOAD_PATH) / f"dropped-{uuid.uuid4().hex}-{safe_name}"
+        dest.write_bytes(base64.b64decode(data_base64))
+        return str(dest)
+
+    def upload_manual_setup(self, zip_path: str, setup_type: str, track: str, car: str) -> dict[str, object]:
+        from core.errors import AuthError
+        from processing.manual_upload import build_manual_setup, install_manual_setup_locally, upload_manual_setup_to_dropbox
+
+        setup = build_manual_setup(track, car)
+        try:
+            if self.current_mode() == "master":
+                from clients.protocols import build_dropbox_client
+                upload_manual_setup_to_dropbox(build_dropbox_client(), zip_path, setup, setup_type)
+            else:
+                from domain.setup_db import SetupDb
+                from processing.setup_manager import SetupManager
+                from processing.track_manager import TrackManager
+
+                setup_manager = SetupManager(
+                    track_manager=TrackManager(), car_manager=self._get_car_manager(), database=SetupDb(),
+                )
+                install_manual_setup_locally(setup_manager, zip_path, setup, setup_type)
+            return {"ok": True}
+        except AuthError as e:
+            log.exception("Manual upload failed: authentication error")
+            return {"ok": False, "error": str(e), "authError": True, "errorCode": e.code, "errorStatus": e.status}
+        except Exception as e:
+            log.exception("Manual upload failed")
+            return {"ok": False, "error": str(e), "authError": False}
 
     def map_track(self, track: str, folder: str) -> dict[str, object]:
         from processing.car_manager import CarManager
@@ -438,6 +563,11 @@ class Api:
             module = sys.modules.get(name)
             if module is not None:
                 importlib.reload(module)
+
+        # A settings save may have changed remote_mappings' enabled/url/timeout -
+        # drop the cached instance so the next call rebuilds it against the
+        # reloaded processing.car_manager module and current config.
+        self._car_manager = None
 
         import main
         main.apply_log_level(config.LOG_LEVEL)

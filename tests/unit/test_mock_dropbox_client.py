@@ -64,22 +64,19 @@ def test_round_trip_upload_download_delete(client, package, tmp_path):
     assert client.list_setups() == []
 
 
-def test_non_conforming_names_are_skipped(client, share, caplog):
-    (share / "not-a-setup.zip").write_bytes(b"x")
-    (share / "notes.txt").write_bytes(b"x")
+@pytest.mark.parametrize("filename", [
+    "not-a-setup.zip",
+    # A conforming name lacking the HYMO- brand (e.g. manually dropped by a
+    # human) must not be picked up either.
+    "Spa_Porsche963_uuid-1_1700000000.zip",
+])
+def test_non_conforming_names_are_skipped(client, share, caplog, filename):
+    (share / filename).write_bytes(b"x")
+    (share / "notes.txt").write_bytes(b"x")  # never even considered: not a .zip
 
     with caplog.at_level("WARNING"):
         assert client.list_setups() == []
-    assert "not-a-setup.zip" in caplog.text
-
-
-def test_files_without_hymo_prefix_are_skipped(client, share, caplog):
-    """A conforming name lacking the HYMO- brand (e.g. manually dropped by a
-    human) must not be picked up."""
-    (share / "Spa_Porsche963_uuid-1_1700000000.zip").write_bytes(b"x")
-
-    with caplog.at_level("WARNING"):
-        assert client.list_setups() == []
+    assert filename in caplog.text
 
 
 def test_delete_is_idempotent(client, share):
@@ -96,6 +93,62 @@ def test_delete_if_exists_returns_true_and_removes_the_file(client, package):
 
 def test_delete_if_exists_returns_false_for_a_missing_file(client, share):
     assert client.delete_if_exists(str(share / "absent.zip")) is False
+
+
+# ----- delete_folder_if_empty / prune_empty_ancestor_folders -----------------
+
+
+def test_delete_folder_if_empty_deletes_an_empty_folder(client, share):
+    folder = share / "Oreca 07" / "Imola"
+    folder.mkdir(parents=True)
+
+    assert client.delete_folder_if_empty(str(folder)) is True
+    assert not folder.exists()
+
+
+def test_delete_folder_if_empty_keeps_a_non_empty_folder(client, share):
+    folder = share / "Oreca 07" / "Imola"
+    folder.mkdir(parents=True)
+    (folder / "other.zip").write_bytes(b"x")
+
+    assert client.delete_folder_if_empty(str(folder)) is False
+    assert folder.exists()
+
+
+def test_delete_folder_if_empty_returns_false_when_folder_missing(client, share):
+    assert client.delete_folder_if_empty(str(share / "Gone" / "Track")) is False
+
+
+def test_prune_empty_ancestor_folders_deletes_track_then_car(client, package, share):
+    client.upload(package, "Oreca 07/Imola/GO-ORECA.zip")
+    remote = client.list_go_setups()[0]
+    client.delete(remote.path_lower)
+
+    client.prune_empty_ancestor_folders(remote.path_lower)
+
+    assert not (share / "Oreca 07").exists()
+
+
+def test_prune_empty_ancestor_folders_never_deletes_the_share_root(client, package, share):
+    client.upload(package, "Oreca 07/GO-ORECA.zip")
+    remote_path = str(share / "Oreca 07" / "GO-ORECA.zip")
+    client.delete(remote_path)
+
+    client.prune_empty_ancestor_folders(remote_path, levels=2)
+
+    assert share.exists()
+
+
+def test_prune_empty_ancestor_folders_stops_when_a_sibling_file_remains(client, package, share):
+    client.upload(package, "Oreca 07/Imola/GO-ORECA.zip")
+    client.upload(package, "Oreca 07/Spa/GO-ORECA.zip")
+    imola_remote = next(s for s in client.list_go_setups() if s.track == "Imola")
+    client.delete(imola_remote.path_lower)
+
+    client.prune_empty_ancestor_folders(imola_remote.path_lower)
+
+    assert not (share / "Oreca 07" / "Imola").exists()
+    assert (share / "Oreca 07" / "Spa").exists()
 
 
 # ----- GO Setups (list_setups skip, list_go_setups, remote_path, move) ---------

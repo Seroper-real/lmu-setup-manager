@@ -55,7 +55,10 @@ EXPECTED_INSTALL = {
 }
 
 
-def test_run_master_publishes_through_the_factories(wired, log):
+def test_run_master_then_slave_installs_through_the_factories(wired, log):
+    """run_master alone (publish) and run_master+run_slave (install) share one
+    catalog pass instead of two - the slave phase builds directly on the
+    master phase's result rather than re-publishing from scratch."""
     import main
 
     box, real_tt, real_dbx = wired
@@ -65,12 +68,6 @@ def test_run_master_publishes_through_the_factories(wired, log):
     real_tt.assert_not_called()
     real_dbx.assert_not_called()
 
-
-def test_run_slave_installs_through_the_factories(wired, log):
-    import main
-
-    box, real_tt, real_dbx = wired
-    main.run_master(log)
     main.run_slave(log)
 
     assert EXPECTED_INSTALL <= box.installed_files()
@@ -78,7 +75,7 @@ def test_run_slave_installs_through_the_factories(wired, log):
     real_dbx.assert_not_called()
 
 
-def test_run_full_installs_without_tokens_or_a_game_install(wired, log):
+def test_run_full_installs_without_tokens_or_a_game_install_and_is_idempotent(wired, log):
     import main
 
     box, real_tt, real_dbx = wired
@@ -89,12 +86,6 @@ def test_run_full_installs_without_tokens_or_a_game_install(wired, log):
     # FULL never touches Dropbox.
     real_dbx.assert_not_called()
 
-
-def test_run_full_is_idempotent(wired, log):
-    import main
-
-    box, _, _ = wired
-    main.run_full(log)
     main.run_full(log)
 
     assert EXPECTED_INSTALL <= box.installed_files()

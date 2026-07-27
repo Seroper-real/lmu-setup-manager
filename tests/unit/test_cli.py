@@ -45,14 +45,10 @@ def test_mode_and_base_path(apply):
     assert os.environ["MOCK_BASE_PATH"] == "/tmp/sbx"
 
 
-def test_unknown_flag_is_a_usage_error(apply):
+@pytest.mark.parametrize("argv", [["--bogus"], ["--mode", "sideways"]])
+def test_invalid_cli_input_is_a_usage_error(apply, argv):
     with pytest.raises(SystemExit):
-        apply(["--bogus"])
-
-
-def test_invalid_mode_is_a_usage_error(apply):
-    with pytest.raises(SystemExit):
-        apply(["--mode", "sideways"])
+        apply(argv)
 
 
 def test_a_preexported_flag_survives_no_cli(apply, monkeypatch):

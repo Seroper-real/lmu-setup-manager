@@ -76,6 +76,26 @@ class Sandbox:
                 zf.writestr(name, content)
         return path
 
+    def add_manual_hymo_zip(self, car: str, track: str, members: dict[str, str]):
+        """Publish a manually-uploaded HYMO-type archive to the mock share by
+        driving the real build_manual_setup()/upload_manual_setup_to_dropbox()
+        (master-mode Upload tab code path) instead of hand-crafting a fixture,
+        so tests exercise the exact packaging a live manual upload produces.
+        Returns the synthetic Setup that was uploaded, for id/timestamp
+        assertions."""
+        from processing.manual_upload import build_manual_setup, upload_manual_setup_to_dropbox
+
+        setup = build_manual_setup(track, car)
+        staging = self.root / "manual_upload_source"
+        staging.mkdir(parents=True, exist_ok=True)
+        source_zip = staging / f"{setup.id}.zip"
+        with zipfile.ZipFile(source_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in members.items():
+                zf.writestr(name, content)
+
+        upload_manual_setup_to_dropbox(self.dropbox(), source_zip, setup, "HYMO")
+        return setup
+
     def set_tracks(self, mapping: list[tuple[str, str]]) -> None:
         """mapping is a list of (regex pattern, lmu folder name), in priority order."""
         self.tracks_file.write_text(
@@ -109,10 +129,15 @@ class Sandbox:
     def run_master(self, base_path: Optional[Path] = None):
         from orchestration.download_manager import DownloadManager
         from orchestration.master_manager import MasterManager
+        from processing.track_manager import TrackManager
+        from processing.car_manager import CarManager
 
         dbx = self.dropbox()
         dm = DownloadManager(database=None, client=self.tracktitan(base_path))
-        MasterManager(download_manager=dm, dropbox_client=dbx).run()
+        MasterManager(
+            download_manager=dm, dropbox_client=dbx,
+            car_manager=CarManager(), track_manager=TrackManager(),
+        ).run()
         return dbx
 
     def run_slave(self, database) -> None:

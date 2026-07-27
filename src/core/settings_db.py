@@ -1,15 +1,31 @@
 import json
+import os
 import sqlite3
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional
 
-from core.utils import get_data_dir
+from core.utils import get_data_dir, get_path
 
-# Never redirected by MOCK_LMU (unlike core.config.DB_PATH): a --mock-lmu-only
-# run (real TrackTitan/Dropbox credentials, fake install destination) must still
-# see the real settings, so this always resolves via the real per-user data dir.
-SETTINGS_DB_PATH: Path = get_data_dir() / "settings.db"
+# Redirected under any MOCK_* sandbox switch, same as core.config.DB_PATH.
+# Duplicated here (rather than imported from core.config) because core.config
+# itself imports this module - importing back would be circular. An earlier
+# version of this file deliberately kept settings.db un-redirected so a
+# --mock-lmu-only run could still use real credentials without re-entering
+# them; that let a sandbox run's "restore factory settings" action wipe the
+# real per-user settings.db (mode, language, TrackTitan/Dropbox credentials,
+# custom track mappings). Never again: any mock flag now means settings.db
+# lives under the sandbox root too, just like the setups DB does.
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+_SANDBOX_MODE: bool = _env_flag("MOCK_TRACKTITAN") or _env_flag("MOCK_LMU") or _env_flag("MOCK_DROPBOX")
+_SANDBOX_PATH: Path = get_path(os.getenv("MOCK_BASE_PATH") or "sandbox")
+
+SETTINGS_DB_PATH: Path = (
+    (_SANDBOX_PATH / "data" / "settings.db") if _SANDBOX_MODE else (get_data_dir() / "settings.db")
+)
 
 # Mirrors config/config.json's old shape. mode/ui deliberately differ from the
 # values that were checked into that file ("slave"/dismissed=True) - those were
@@ -101,6 +117,20 @@ def get_config() -> dict[str, Any]:
     try:
         row = conn.execute("SELECT data FROM config WHERE id = 1").fetchone()
         return _deep_merge(DEFAULT_CONFIG, json.loads(row[0])) if row else deepcopy(DEFAULT_CONFIG)
+    finally:
+        conn.close()
+
+
+def reset_to_factory_defaults() -> None:
+    """Wipe config, custom track mappings, and secrets, then reseed config with
+    DEFAULT_CONFIG - the Settings "Restore factory settings" danger-zone action."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("DELETE FROM config")
+            conn.execute("DELETE FROM tracks")
+            conn.execute("DELETE FROM env_secrets")
+            conn.execute("INSERT INTO config (id, data) VALUES (1, ?)", (json.dumps(DEFAULT_CONFIG),))
     finally:
         conn.close()
 

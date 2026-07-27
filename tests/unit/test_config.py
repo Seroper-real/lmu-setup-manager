@@ -124,6 +124,33 @@ def test_mock_lmu_redirects_lmu_and_db_paths(load_config, tmp_path):
     assert cfg.DB_PATH.parent.is_dir()
 
 
+def test_mock_lmu_redirects_settings_db(load_config, tmp_path):
+    load_config(MOCK_LMU="true")
+    from core import settings_db
+
+    sandbox_root = tmp_path / "sandbox"
+    assert settings_db.SETTINGS_DB_PATH == sandbox_root / "data" / "settings.db"
+
+
+def test_mock_tracktitan_or_dropbox_alone_also_redirects_settings_db(load_config, tmp_path):
+    sandbox_root = tmp_path / "sandbox"
+
+    load_config(MOCK_TRACKTITAN="true")
+    from core import settings_db as settings_db_tt
+    assert settings_db_tt.SETTINGS_DB_PATH == sandbox_root / "data" / "settings.db"
+
+    load_config(MOCK_DROPBOX="true")
+    from core import settings_db as settings_db_dbx
+    assert settings_db_dbx.SETTINGS_DB_PATH == sandbox_root / "data" / "settings.db"
+
+
+def test_without_any_mock_flag_settings_db_is_real(load_config, tmp_path):
+    load_config()
+    from core import settings_db
+
+    assert settings_db.SETTINGS_DB_PATH == tmp_path / "appdata" / "settings.db"
+
+
 def test_mock_base_path_relocates_the_sandbox(load_config, tmp_path):
     root = tmp_path / "elsewhere"
     cfg = load_config(MOCK_LMU="true", MOCK_BASE_PATH=str(root))

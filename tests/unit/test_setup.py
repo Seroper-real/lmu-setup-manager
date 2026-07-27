@@ -41,16 +41,13 @@ def test_track():
     assert _make(track="Le Mans/Bugatti").track == "Le Mans/Bugatti"
 
 
-def test_safe_track_replaces_slash():
-    assert _make(track="Le Mans/Bugatti").safe_track == "Le Mans_Bugatti"
-
-
-def test_safe_track_replaces_backslash():
-    assert _make(track="A\\B").safe_track == "A_B"
-
-
-def test_safe_track_replaces_hyphen():
-    assert _make(track="Spa-Francorchamps").safe_track == "Spa_Francorchamps"
+@pytest.mark.parametrize("track,expected", [
+    ("Le Mans/Bugatti", "Le Mans_Bugatti"),      # slash
+    ("A\\B", "A_B"),                              # backslash
+    ("Spa-Francorchamps", "Spa_Francorchamps"),   # hyphen
+])
+def test_safe_track_replaces_path_breaking_characters(track, expected):
+    assert _make(track=track).safe_track == expected
 
 
 def test_safe_track_setter():
@@ -59,24 +56,18 @@ def test_safe_track_setter():
     assert s.safe_track == "custom"
 
 
-def test_hotlap_link_none():
-    assert _make(hotlap=None).hotlap_link is None
-
-
-def test_hotlap_link_value():
-    assert _make(hotlap="https://example.com").hotlap_link == "https://example.com"
+@pytest.mark.parametrize("hotlap", [None, "https://example.com"])
+def test_hotlap_link_reflects_the_data(hotlap):
+    assert _make(hotlap=hotlap).hotlap_link == hotlap
 
 
 def test_last_updated():
     assert _make(last_updated=9999).last_updated == 9999
 
 
-def test_is_bundle_false():
-    assert _make(is_bundle=False).is_bundle is False
-
-
-def test_is_bundle_true():
-    assert _make(is_bundle=True).is_bundle is True
+@pytest.mark.parametrize("is_bundle", [False, True])
+def test_is_bundle_reflects_the_flag(is_bundle):
+    assert _make(is_bundle=is_bundle).is_bundle is is_bundle
 
 
 def test_combo_returns_first_element():

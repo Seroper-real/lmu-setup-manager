@@ -32,6 +32,7 @@ def sandbox(tmp_path, mocker) -> Sandbox:
         "orchestration.master_manager",
         "orchestration.slave_manager",
         "processing.setup_manager",
+        "processing.manual_upload",
     ):
         mocker.patch(f"{module}.DOWNLOAD_PATH", box.downloads)
 
@@ -42,6 +43,9 @@ def sandbox(tmp_path, mocker) -> Sandbox:
     mocker.patch("processing.setup_manager.OVERWRITE", setups["overwrite"])
     mocker.patch("processing.setup_manager.DELETE_PREVIOUS_VERSION", setups["delete_previous_version"])
     mocker.patch("processing.setup_manager.SETUP_FILE_EXTENSIONS", extensions)
+
+    mocker.patch("processing.manual_upload.CLEAN_DOWNLOAD", clean_download)
+    mocker.patch("processing.manual_upload.SETUP_FILE_EXTENSIONS", extensions)
 
     # No network: never fetch the remote mapping.json, and read ours instead.
     # Both managers bind REMOTE_MAPPINGS_ENABLED/get_path in their own module

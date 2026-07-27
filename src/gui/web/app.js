@@ -32,8 +32,30 @@ const state = {
   // setupId - reveals that one installed setup's individual file names on click.
   expandedCars: new Set(),
   trackFolderOptions: [],
+  // Lazy-fetched once (like trackFolderOptions above), for the Upload tab's
+  // car dropdown.
+  uploadCarOptions: [],
+  // { filePath, fileName, type, track, car } once a zip is picked on the
+  // Upload tab, else null (dropzone shown instead of the assignment form).
+  manualUpload: null,
+  // Which of the Upload tab's searchable dropdowns ("track" | "car") is
+  // currently open, plus each one's own in-progress search text - both reset
+  // whenever the panel closes or a value is picked.
+  uploadOpenDropdown: null,
+  uploadDropdownSearch: {},
+  // Keyboard-arrow highlight index into the currently filtered option list,
+  // keyed by dropdown id ("track" | "car") - reset to 0 whenever a dropdown
+  // opens or its search text changes.
+  uploadDropdownHighlight: {},
   correggiTarget: null,
   deleteTarget: null,
+  // Settings > Danger Zone confirm/busy dialog. { kind: "dropbox" | "factory" }
+  // while open, else null. dangerCountdown gates the confirm button (ticks down
+  // from 5 via _dangerTimer); dangerBusy swaps the dialog into a blocking
+  // spinner for the duration of the actual API call.
+  dangerTarget: null,
+  dangerCountdown: 0,
+  dangerBusy: false,
   dropboxOAuth: null,
   tracktitanFetch: null,
   validationErrors: null,
@@ -48,6 +70,10 @@ const state = {
   // tries to leave Settings (or close the app) with unsaved edits pending.
   unsavedChangesPrompt: null,
 };
+
+// Interval handle backing state.dangerCountdown - module-level rather than on
+// `state` itself since it's a live timer handle, not renderable data.
+let _dangerTimer = null;
 
 // ----- helpers --------------------------------------------------------------
 
@@ -70,6 +96,8 @@ const ICONS = {
   logo: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l4-9 4 6 3-4 5 7"></path></svg>`,
   navSetups: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"></rect><path d="M8 2.5v3M16 2.5v3M3.5 9.5h17"></path></svg>`,
   navDownload: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11M8 11l4 4 4-4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>`,
+  navUpload: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.5v-11M8 10l4-4 4 4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>`,
+  uploadCloud: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A5.5 5.5 0 0 1 17.3 8.1 4 4 0 0 1 17 16"></path><path d="M12 12v6.5M9.5 14.5 12 12l2.5 2.5"></path></svg>`,
   navSettings: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2.4M12 18.1v2.4M4.9 6.3l1.7 1.7M17.4 16l1.7 1.7M3.5 12H6M18 12h2.5M4.9 17.7l1.7-1.7M17.4 8l1.7-1.7"></path></svg>`,
   search: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M20 20l-4.35-4.35"></path></svg>`,
   filter: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 8v6l-4 2v-8Z"></path></svg>`,
@@ -311,6 +339,7 @@ function render() {
   renderSidebar();
   renderSetupsView();
   renderDownloadView();
+  renderUploadView();
   renderSettingsView();
   applyActiveView();
   renderModals();
@@ -338,6 +367,8 @@ function goToView(target) {
       renderSetupsView();
       renderSidebar();
     });
+  } else if (state.view === "upload") {
+    ensureUploadOptions().then(() => renderUploadView());
   }
 }
 
@@ -350,6 +381,7 @@ function renderSidebar() {
   const items = [
     { view: "setups", icon: ICONS.navSetups, label: t("navSetups") },
     { view: "download", icon: ICONS.navDownload, label: t("navDownload") },
+    { view: "upload", icon: ICONS.navUpload, label: t("navUpload") },
     { view: "settings", icon: ICONS.navSettings, label: t("navSettings") },
   ];
   nav.innerHTML = items
@@ -583,11 +615,16 @@ function renderCarGroup(group, carGroup) {
     .flatMap((ty) => ty.setups.map((s, i) => renderSetupEntry(s, group, ty, i === 0)))
     .join("");
 
+  const classLogo = carGroup.carClass
+    ? `<img class="car-class-logo" src="assets/class-logos/${encodeURIComponent(carGroup.carClass)}.png" alt="${escapeHtml(carGroup.carClass)}">`
+    : "";
+
   return `
     <div class="setup-car">
       <div class="setup-car-header">
         <button type="button" class="setup-car-toggle" data-toggle-car-group="${escapeHtml(key)}">
           <span class="chevron ${expanded ? "expanded" : ""}">${ICONS.chevron}</span>
+          ${classLogo}
           <span class="car">${escapeHtml(carGroup.car)}</span>
         </button>
         <span class="tag tag-outline group-count">${totalCount}</span>
@@ -655,27 +692,39 @@ async function openCorreggiModal(track) {
 
 // ----- Download ---------------------------------------------------------------
 
+// Desc-key family for each view's compact, read-only mode-summary card
+// (renderModeSummaryCard below), keyed by mode. Download and Upload each
+// phrase the same three modes' effects differently (Download: what a Start
+// download run does; Upload: what confirming a manual upload does), so they
+// don't share Settings' own general-purpose picker copy either (see
+// renderModePickerCards's modeGeneralFullDesc/MasterDesc/SlaveDesc).
+const DOWNLOAD_MODE_DESC_KEYS = { full: "fullDesc", master: "masterDesc", slave: "slaveDesc" };
+
+// Compact, read-only stand-in for the full mode picker (now in Settings, see
+// renderModePickerCards) - shows the active mode + a shortcut back to Settings
+// to change it. Shared by Download and Upload, which only differ in which
+// desc-key family they pass.
+function renderModeSummaryCard(descKeys) {
+  return `
+    <div class="card elev-sm mode-summary">
+      <div class="mode-summary-info">
+        <span class="tag tag-accent">${escapeHtml(modeDisplayName(state.selectedMode))}</span>
+        <p>${escapeHtml(t(descKeys[state.selectedMode]))}</p>
+      </div>
+      <button type="button" class="btn btn-secondary" data-goto-settings-mode>${escapeHtml(t("changeModeButton"))}</button>
+    </div>
+  `;
+}
+
+// No unsaved-changes guard here (unlike the sidebar nav, see renderSidebar):
+// that guard only matters when *leaving* Settings, not when navigating to it.
+function bindModeSummaryCard(el) {
+  const btn = el.querySelector("[data-goto-settings-mode]");
+  if (btn) btn.addEventListener("click", () => goToView("settings"));
+}
+
 function renderDownloadView() {
   const el = document.getElementById("view-download");
-  const modes = [
-    { key: "full", title: t("modeFullTitle"), desc: t("fullDesc") },
-    { key: "master", title: t("modeMasterTitle"), desc: t("masterDesc") },
-    { key: "slave", title: t("modeSlaveTitle"), desc: t("slaveDesc") },
-  ];
-
-  const cards = modes
-    .map(
-      (m) => `
-        <button type="button" class="mode-card ${state.selectedMode === m.key ? "selected" : ""}" data-mode="${m.key}">
-          <div class="card-header">
-            <h3>${m.title}</h3>
-            ${state.selectedMode === m.key ? `<span class="tag tag-accent">${escapeHtml(t("activeTag"))}</span>` : ""}
-          </div>
-          <p>${escapeHtml(m.desc)}</p>
-        </button>
-      `
-    )
-    .join("");
 
   const statusLabelKey =
     { idle: "statusIdle", running: "statusRunning", completed: "statusCompleted", stopped: "statusStopped", error: "statusError" }[state.runStatus] ||
@@ -700,10 +749,7 @@ function renderDownloadView() {
         <p>${escapeHtml(t("downloadDescPre"))}<strong>${escapeHtml(modeDisplayName(state.selectedMode))}</strong>${escapeHtml(t("downloadDescPost"))}</p>
       </div>
     </div>
-    <div>
-      <h6 class="text-muted">${escapeHtml(t("modeSectionHeading"))}</h6>
-      <div class="card elev-sm mode-cards">${cards}</div>
-    </div>
+    ${renderModeSummaryCard(DOWNLOAD_MODE_DESC_KEYS)}
     <div class="card elev-md status-card">
       <div class="status-left">
         <span class="status-dot ${state.running ? "running" : state.runStatus}"></span>
@@ -722,15 +768,7 @@ function renderDownloadView() {
     </div>
   `;
 
-  el.querySelectorAll(".mode-card").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      state.selectedMode = btn.dataset.mode;
-      await api().set_mode(state.selectedMode);
-      renderDownloadView();
-      renderSidebar();
-    });
-  });
-
+  bindModeSummaryCard(el);
   document.getElementById("start-stop-btn").addEventListener("click", onStartStopClick);
 
   const log = document.getElementById("activity-log");
@@ -777,6 +815,372 @@ async function onStartStopClick() {
     state.running = false;
     state.runStatus = "idle";
     renderDownloadView();
+  }
+}
+
+// ----- Carica Setup / manual upload ---------------------------------------
+
+const UPLOAD_MODE_DESC_KEYS = { full: "uploadFullDesc", master: "uploadMasterDesc", slave: "uploadSlaveDesc" };
+
+// Lazy-fetched once, like trackFolderOptions/uploadCarOptions above (see
+// openCorreggiModal for the same pattern applied to trackFolderOptions alone) -
+// both lists are static per mapping.json load, so a first visit to the Upload
+// tab is the only time either needs an IPC round trip.
+async function ensureUploadOptions() {
+  if (!state.trackFolderOptions.length) {
+    state.trackFolderOptions = await api().get_track_folder_options();
+  }
+  if (!state.uploadCarOptions.length) {
+    state.uploadCarOptions = await api().get_car_options();
+  }
+}
+
+async function onPickSetupZip() {
+  const picked = await api().pick_setup_zip_file();
+  if (!picked) return;
+  state.manualUpload = { filePath: picked, fileName: picked.split(/[\\/]/).pop(), type: "GO", track: null, car: null };
+  state.uploadOpenDropdown = null;
+  state.uploadDropdownSearch = {};
+  state.uploadDropdownHighlight = {};
+  await ensureUploadOptions();
+  renderUploadView();
+}
+
+// Base64-encodes an ArrayBuffer in chunks (avoids blowing the call stack on
+// String.fromCharCode.apply for larger files).
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+// Handles a file dropped on the upload-dropzone. WebView2 never exposes a
+// dropped File's real filesystem path, so the bytes are read client-side and
+// handed to save_dropped_setup_file(), which writes them to disk and hands
+// back a path usable exactly like pick_setup_zip_file()'s return value.
+async function onDropSetupZip(file) {
+  if (!file || !/\.zip$/i.test(file.name)) {
+    showToast(t("manualUploadInvalidFileToast"), "error");
+    return;
+  }
+  const base64 = arrayBufferToBase64(await file.arrayBuffer());
+  const savedPath = await api().save_dropped_setup_file(file.name, base64);
+  if (!savedPath) return;
+  state.manualUpload = { filePath: savedPath, fileName: file.name, type: "GO", track: null, car: null };
+  state.uploadOpenDropdown = null;
+  state.uploadDropdownSearch = {};
+  state.uploadDropdownHighlight = {};
+  await ensureUploadOptions();
+  renderUploadView();
+}
+
+// The WebView2 shell's default behavior for a file dropped anywhere on the
+// page is to navigate to it (opening a Windows Explorer window for a .zip) -
+// block that globally; the upload-dropzone's own handler (see
+// renderUploadView) is the only place a drop is actually handled. Setting
+// dropEffect to "none" also makes the OS show a forbidden/no-drop cursor
+// everywhere except the dropzone, whose own dragover handler below sets it
+// back to "copy" and stops the event from bubbling up to this listener.
+window.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+});
+window.addEventListener("drop", (e) => e.preventDefault());
+
+// Generic searchable dropdown shared by the Track and Car fields below -
+// options are `{value, label, carClass?}`; carClass (when withLogos is set)
+// renders the same class-logo <img> renderCarGroup() uses for installed setups.
+function renderSearchableSelect({ id, options, selected, placeholder, withLogos }) {
+  const isOpen = state.uploadOpenDropdown === id;
+  const query = (state.uploadDropdownSearch[id] || "").trim().toLowerCase();
+  const filtered = query ? options.filter((o) => o.label.toLowerCase().includes(query)) : options;
+  const selectedOption = options.find((o) => o.value === selected);
+  // Arrow-key highlight, clamped to the current (possibly filtered) list so a
+  // stale index from before a search never points past the end of it.
+  const highlighted = Math.min(Math.max(state.uploadDropdownHighlight[id] || 0, 0), Math.max(filtered.length - 1, 0));
+  const logo = (opt) =>
+    withLogos && opt && opt.carClass
+      ? `<img class="car-class-logo" src="assets/class-logos/${encodeURIComponent(opt.carClass)}.png" alt="">`
+      : "";
+
+  return `
+    <div class="select-dropdown" data-select-id="${id}">
+      <button type="button" class="input select-trigger" data-select-toggle="${id}">
+        <span class="select-trigger-value">
+          ${selectedOption ? `${logo(selectedOption)}${escapeHtml(selectedOption.label)}` : `<span class="text-muted">${escapeHtml(placeholder)}</span>`}
+        </span>
+        <span class="select-trigger-chevron">${ICONS.chevron}</span>
+      </button>
+      ${isOpen ? `
+        <div class="select-panel">
+          <input type="text" class="input" data-select-search="${id}" placeholder="${escapeHtml(t("manualUploadSearchPlaceholder"))}" value="${escapeHtml(state.uploadDropdownSearch[id] || "")}">
+          <div class="select-options">
+            ${filtered.length
+              ? filtered
+                  .map(
+                    (o, i) => `
+                      <button type="button" class="select-option ${o.value === selected ? "selected" : ""} ${i === highlighted ? "highlighted" : ""}" data-select-option="${id}" data-value="${escapeHtml(o.value)}">
+                        ${logo(o)}${escapeHtml(o.label)}
+                      </button>
+                    `
+                  )
+                  .join("")
+              : `<div class="select-empty">${escapeHtml(t("manualUploadNoResults"))}</div>`}
+          </div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+// Refocuses a dropdown's search input after a renderUploadView() call has
+// just replaced it with a fresh DOM node (search filters/highlights instantly
+// on every keystroke/arrow-press, so losing focus each time would make
+// keyboard use unusable), restoring the caret to the end of its text.
+function focusDropdownSearchInput(id) {
+  const fresh = document.querySelector(`[data-select-search="${id}"]`);
+  if (fresh) {
+    fresh.focus();
+    const pos = fresh.value.length;
+    fresh.setSelectionRange(pos, pos);
+  }
+}
+
+// Returns focus to a dropdown's own trigger button once Enter/Escape closes
+// its panel, so keyboard users don't lose their place when the search input
+// they were just typing in disappears from the DOM.
+function focusDropdownTrigger(id) {
+  const trigger = document.querySelector(`[data-select-toggle="${id}"]`);
+  if (trigger) trigger.focus();
+}
+
+// Binds one renderSearchableSelect() instance. `onSelect` mutates the caller's
+// own state (state.manualUpload.track/.car) directly rather than returning a
+// value, since the caller also owns when to re-render.
+function bindSearchableSelect(el, id, onSelect) {
+  const root = el.querySelector(`.select-dropdown[data-select-id="${id}"]`);
+  if (!root) return;
+
+  root.querySelector("[data-select-toggle]").addEventListener("click", () => {
+    const opening = state.uploadOpenDropdown !== id;
+    state.uploadOpenDropdown = opening ? id : null;
+    state.uploadDropdownSearch[id] = "";
+    state.uploadDropdownHighlight[id] = 0;
+    renderUploadView();
+    // renderUploadView() just built the search input fresh - focus it so
+    // users can start typing to filter immediately, without an extra click.
+    if (opening) focusDropdownSearchInput(id);
+  });
+
+  const searchInput = root.querySelector("[data-select-search]");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      state.uploadDropdownSearch[id] = e.target.value;
+      state.uploadDropdownHighlight[id] = 0;
+      renderUploadView();
+      focusDropdownSearchInput(id);
+    });
+
+    // Arrow keys move the highlight through the currently rendered (i.e.
+    // already filtered) option list; Enter picks whichever one is
+    // highlighted, same as a native <select>. Reading the option list back
+    // from the freshly-rendered DOM (rather than re-deriving the filter here)
+    // keeps this in sync with renderSearchableSelect's own filtering by
+    // construction.
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const count = root.querySelectorAll("[data-select-option]").length;
+        if (!count) return;
+        const current = state.uploadDropdownHighlight[id] || 0;
+        const next = e.key === "ArrowDown" ? Math.min(current + 1, count - 1) : Math.max(current - 1, 0);
+        state.uploadDropdownHighlight[id] = next;
+        renderUploadView();
+        focusDropdownSearchInput(id);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const optionEls = root.querySelectorAll("[data-select-option]");
+        const target = optionEls[state.uploadDropdownHighlight[id] || 0];
+        if (!target) return;
+        onSelect(target.dataset.value);
+        state.uploadOpenDropdown = null;
+        state.uploadDropdownSearch[id] = "";
+        renderUploadView();
+        focusDropdownTrigger(id);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        state.uploadOpenDropdown = null;
+        renderUploadView();
+        focusDropdownTrigger(id);
+      }
+    });
+  }
+
+  root.querySelectorAll("[data-select-option]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      onSelect(btn.dataset.value);
+      state.uploadOpenDropdown = null;
+      state.uploadDropdownSearch[id] = "";
+      renderUploadView();
+    });
+  });
+}
+
+// Closes whichever select-dropdown is open on an outside click - same pattern
+// as closeContextMenu()'s own outside-mousedown listener further down.
+document.addEventListener("mousedown", (e) => {
+  if (state.uploadOpenDropdown && !e.target.closest(".select-dropdown")) {
+    state.uploadOpenDropdown = null;
+    renderUploadView();
+  }
+});
+
+function renderManualUploadForm(upload) {
+  const trackOptions = state.trackFolderOptions.map((folder) => ({ value: folder, label: folder }));
+  const carOptions = state.uploadCarOptions.map((c) => ({ value: c.name, label: c.name, carClass: c.carClass }));
+  const canConfirm = !!(upload.track && upload.car);
+
+  return `
+    <div class="card elev-sm">
+      <div class="field">
+        <label>${escapeHtml(t("manualUploadFileLabel"))}</label>
+        <div class="input-group">
+          <input class="input" value="${escapeHtml(upload.fileName)}" readonly>
+          <button type="button" class="btn btn-secondary" id="manual-upload-change-file-btn">${escapeHtml(t("browseButton"))}</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>${escapeHtml(t("manualUploadTypeLabel"))}</label>
+        <select class="input" id="manual-upload-type-select">
+          <option value="GO" ${upload.type === "GO" ? "selected" : ""}>GO Setups</option>
+          <option value="HYMO" ${upload.type === "HYMO" ? "selected" : ""}>HYMO</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>${escapeHtml(t("manualUploadTrackLabel"))}</label>
+        ${renderSearchableSelect({ id: "track", options: trackOptions, selected: upload.track, placeholder: t("manualUploadTrackPlaceholder") })}
+      </div>
+      <div class="field">
+        <label>${escapeHtml(t("manualUploadCarLabel"))}</label>
+        ${renderSearchableSelect({ id: "car", options: carOptions, selected: upload.car, placeholder: t("manualUploadCarPlaceholder"), withLogos: true })}
+      </div>
+      <div class="dialog-actions" style="justify-content:flex-start; margin-top: var(--space-2);">
+        <button type="button" class="btn btn-ghost" id="manual-upload-cancel-btn">${escapeHtml(t("manualUploadCancel"))}</button>
+        <button type="button" class="btn btn-primary" id="manual-upload-confirm-btn" ${canConfirm ? "" : "disabled"}>${escapeHtml(t("manualUploadConfirm"))}</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindManualUploadForm(el, upload) {
+  document.getElementById("manual-upload-change-file-btn").addEventListener("click", onPickSetupZip);
+
+  document.getElementById("manual-upload-cancel-btn").addEventListener("click", () => {
+    state.manualUpload = null;
+    state.uploadOpenDropdown = null;
+    renderUploadView();
+  });
+
+  const typeSelect = document.getElementById("manual-upload-type-select");
+  if (typeSelect) {
+    typeSelect.addEventListener("change", () => { upload.type = typeSelect.value; });
+  }
+
+  bindSearchableSelect(el, "track", (value) => { upload.track = value; });
+  bindSearchableSelect(el, "car", (value) => { upload.car = value; });
+
+  const confirmBtn = document.getElementById("manual-upload-confirm-btn");
+  if (confirmBtn) confirmBtn.addEventListener("click", onConfirmManualUpload);
+}
+
+async function onConfirmManualUpload() {
+  const upload = state.manualUpload;
+  if (!upload || !upload.track || !upload.car) return;
+
+  const errors = await api().validate_start(state.selectedMode);
+  if (errors && errors.length) {
+    state.validationErrors = errors;
+    renderModals();
+    return;
+  }
+
+  const confirmBtn = document.getElementById("manual-upload-confirm-btn");
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  const result = await api().upload_manual_setup(upload.filePath, upload.type, upload.track, upload.car);
+  if (!result || !result.ok) {
+    if (result && result.authError) {
+      state.authErrorCode = result.errorCode || "generic";
+      state.authErrorStatus = result.errorStatus || null;
+      renderModals();
+    } else {
+      showToast((result && result.error) || t("manualUploadGenericErrorToast"), "error");
+    }
+    if (confirmBtn) confirmBtn.disabled = false;
+    return;
+  }
+
+  state.manualUpload = null;
+  state.uploadOpenDropdown = null;
+  renderUploadView();
+  showToast(t("manualUploadSuccessToast"), "success");
+
+  // Master never installs locally, so the Setup installati list has nothing
+  // new to show - only refresh it for the modes that actually write to the DB.
+  if (state.selectedMode !== "master") {
+    await refreshInstalled();
+    renderSetupsView();
+    renderSidebar();
+  }
+}
+
+function renderUploadView() {
+  const el = document.getElementById("view-upload");
+  const upload = state.manualUpload;
+
+  const dropzoneHtml = `
+    <div class="card elev-sm upload-dropzone" id="upload-dropzone-trigger" role="button" tabindex="0">
+      <span class="upload-dropzone-icon">${ICONS.uploadCloud}</span>
+      <h3>${escapeHtml(t("uploadDropzoneTitle"))}</h3>
+      <p>${escapeHtml(t("uploadDropzoneDesc"))}</p>
+    </div>
+  `;
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div>
+        <h2>${escapeHtml(t("uploadPageTitle"))}</h2>
+        <p>${escapeHtml(t("uploadPageDesc"))}</p>
+      </div>
+    </div>
+    ${renderModeSummaryCard(UPLOAD_MODE_DESC_KEYS)}
+    ${upload ? renderManualUploadForm(upload) : dropzoneHtml}
+  `;
+
+  bindModeSummaryCard(el);
+
+  if (upload) {
+    bindManualUploadForm(el, upload);
+  } else {
+    const dropzone = document.getElementById("upload-dropzone-trigger");
+    dropzone.addEventListener("click", onPickSetupZip);
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      dropzone.classList.add("drag-over");
+    });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag-over"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove("drag-over");
+      onDropSetupZip(e.dataTransfer.files[0]);
+    });
   }
 }
 
@@ -874,6 +1278,31 @@ function copyField(id, label, value, type, titleAction) {
   `;
 }
 
+// The full, clickable 3-mode picker - lives here (rather than Download/Upload,
+// which now only show renderModeSummaryCard's compact read-only stand-in)
+// since the mode is an app-wide setting, not something specific to either of
+// those workflows.
+function renderModePickerCards() {
+  const modes = [
+    { key: "full", title: t("modeFullTitle"), desc: t("modeGeneralFullDesc") },
+    { key: "master", title: t("modeMasterTitle"), desc: t("modeGeneralMasterDesc") },
+    { key: "slave", title: t("modeSlaveTitle"), desc: t("modeGeneralSlaveDesc") },
+  ];
+  return modes
+    .map(
+      (m) => `
+        <button type="button" class="mode-card ${state.selectedMode === m.key ? "selected" : ""}" data-mode="${m.key}">
+          <div class="card-header">
+            <h3>${m.title}</h3>
+            ${state.selectedMode === m.key ? `<span class="tag tag-accent">${escapeHtml(t("activeTag"))}</span>` : ""}
+          </div>
+          <p>${escapeHtml(m.desc)}</p>
+        </button>
+      `
+    )
+    .join("");
+}
+
 function renderSettingsView() {
   const el = document.getElementById("view-settings");
   if (!state.settingsForm) {
@@ -894,6 +1323,12 @@ function renderSettingsView() {
       </div>
     </div>
 
+    <div>
+      <h6 class="text-muted">${escapeHtml(t("modeSectionHeading"))}</h6>
+      <div class="card elev-sm mode-cards">${renderModePickerCards()}</div>
+    </div>
+
+    <div class="hr"></div>
     <div>
       <h6 class="text-muted">${escapeHtml(t("langHeading"))}</h6>
       <div class="card elev-sm">
@@ -970,7 +1405,46 @@ function renderSettingsView() {
       </div>
       ${state.advancedOpen ? `<div class="card elev-sm">${renderAdvancedFields(f)}</div>` : ""}
     </div>
+
+    <div class="hr"></div>
+    <div>
+      <h6 class="text-danger">${escapeHtml(t("dangerZoneHeading"))}</h6>
+      <div class="card elev-sm card-danger">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); padding:var(--space-2) 0;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <span style="font-size:14px; color:var(--color-text);">${escapeHtml(t("dangerCleanSetupsTitle"))}</span>
+            <span style="font-size:12.5px; color:var(--color-neutral-500);">${escapeHtml(t("dangerCleanSetupsDesc"))}</span>
+          </div>
+          <button type="button" class="btn btn-danger" id="danger-clean-dropbox-btn" style="white-space:nowrap; flex:none;">${escapeHtml(t("dangerCleanSetupsButton"))}</button>
+        </div>
+        <div class="hr" style="margin:0;"></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); padding:var(--space-2) 0;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <span style="font-size:14px; color:var(--color-text);">${escapeHtml(t("dangerCleanAllTitle"))}</span>
+            <span style="font-size:12.5px; color:var(--color-neutral-500);">${escapeHtml(t("dangerCleanAllDesc"))}</span>
+          </div>
+          <button type="button" class="btn btn-danger" id="danger-restore-factory-btn" style="white-space:nowrap; flex:none;">${escapeHtml(t("dangerCleanAllButton"))}</button>
+        </div>
+      </div>
+    </div>
   `;
+
+  el.querySelectorAll(".mode-cards .mode-card").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      // state.selectedMode is not part of the captured settingsForm snapshot
+      // (see its declaration at the top of this file) - it's persisted and
+      // applied immediately via set_mode(), not queued for the next Save. Still
+      // capture first, since the innerHTML replace below (renderSettingsView())
+      // would otherwise discard whatever the user typed into other fields but
+      // hasn't saved yet.
+      captureSettingsForm();
+      state.selectedMode = btn.dataset.mode;
+      await api().set_mode(state.selectedMode);
+      renderSettingsView();
+      renderDownloadView();
+      renderSidebar();
+    });
+  });
 
   document.getElementById("toggle-token-secrets").addEventListener("click", () => {
     captureSettingsForm();
@@ -1061,6 +1535,85 @@ function renderSettingsView() {
     state.advancedOpen = !state.advancedOpen;
     renderSettingsView();
   });
+
+  document.getElementById("danger-clean-dropbox-btn").addEventListener("click", () => {
+    startDangerCountdown("dropbox");
+    renderModals();
+  });
+
+  document.getElementById("danger-restore-factory-btn").addEventListener("click", () => {
+    startDangerCountdown("factory");
+    renderModals();
+  });
+}
+
+// ----- danger zone (settings) ------------------------------------------------
+
+function startDangerCountdown(kind) {
+  clearInterval(_dangerTimer);
+  state.dangerTarget = { kind };
+  state.dangerCountdown = 5;
+  state.dangerBusy = false;
+  _dangerTimer = setInterval(() => {
+    state.dangerCountdown -= 1;
+    if (state.dangerCountdown <= 0) {
+      clearInterval(_dangerTimer);
+      state.dangerCountdown = 0;
+    }
+    renderModals();
+  }, 1000);
+}
+
+function cancelDangerConfirm() {
+  clearInterval(_dangerTimer);
+  state.dangerTarget = null;
+  state.dangerCountdown = 0;
+  state.dangerBusy = false;
+  renderModals();
+}
+
+async function confirmDangerAction() {
+  if (!state.dangerTarget || state.dangerCountdown > 0 || state.dangerBusy) return;
+  clearInterval(_dangerTimer);
+  const kind = state.dangerTarget.kind;
+  state.dangerBusy = true;
+  renderModals();
+
+  if (kind === "dropbox") {
+    const result = await api().clean_dropbox_setups();
+    state.dangerTarget = null;
+    state.dangerBusy = false;
+    renderModals();
+    if (!result || !result.ok) {
+      if (result && result.authError) {
+        state.authErrorCode = result.errorCode || "generic";
+        state.authErrorStatus = result.errorStatus || null;
+        renderModals();
+      } else {
+        showToast((result && result.error) || t("dangerCleanGenericErrorToast"), "error");
+      }
+      return;
+    }
+    showToast(t("dangerCleanedSetupsToast"), "success");
+  } else {
+    await api().restore_factory_settings();
+    state.dangerTarget = null;
+    state.dangerBusy = false;
+
+    state.bootstrap = await api().get_bootstrap();
+    state.language = state.bootstrap.language || "it";
+    state.selectedMode = state.bootstrap.mode || "full";
+    state.showWarning = !state.bootstrap.hymoWarningDismissed;
+    state.settingsForm = buildSettingsForm(state.bootstrap);
+    state.settingsSavedSnapshot = JSON.stringify(state.settingsForm);
+    await refreshInstalled();
+
+    renderSettingsView();
+    renderSetupsView();
+    renderSidebar();
+    renderModals();
+    showToast(t("dangerCleanedAllToast"), "success");
+  }
 }
 
 function renderAdvancedFields(f) {
@@ -1302,6 +1855,41 @@ function renderModals() {
     `;
   }
 
+  if (state.dangerTarget) {
+    if (state.dangerBusy) {
+      html += `
+        <div class="dialog-backdrop" data-modal="danger-busy">
+          <div class="dialog elev-lg">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="spinner"></div>
+              <div class="dialog-title" style="margin:0;">${escapeHtml(t("dangerBusyTitle"))}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      const isDropbox = state.dangerTarget.kind === "dropbox";
+      const dangerTitle = isDropbox ? t("dangerConfirmSetupsTitle") : t("dangerConfirmAllTitle");
+      const dangerBody = isDropbox ? t("dangerConfirmSetupsBody") : t("dangerConfirmAllBody");
+      const dangerConfirmLabel = state.dangerCountdown > 0 ? tFn("dangerConfirmWaitLabel", state.dangerCountdown) : t("dangerConfirmButton");
+      html += `
+        <div class="dialog-backdrop" data-modal="danger-confirm">
+          <div class="dialog elev-lg">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+              ${ICONS.warning}
+              <div class="dialog-title" style="margin:0; color:var(--color-danger);">${escapeHtml(dangerTitle)}</div>
+            </div>
+            <div class="dialog-body">${escapeHtml(dangerBody)}</div>
+            <div class="dialog-actions">
+              <button type="button" class="btn btn-ghost" id="danger-cancel">${escapeHtml(t("deleteConfirmCancel"))}</button>
+              <button type="button" class="btn btn-danger" id="danger-confirm" ${state.dangerCountdown > 0 ? "disabled" : ""}>${escapeHtml(dangerConfirmLabel)}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
   if (state.dropboxOAuth && state.dropboxOAuth.step === "choice") {
     html += `
       <div class="dialog-backdrop" data-modal="dropbox-oauth-choice">
@@ -1471,6 +2059,16 @@ function renderModals() {
       renderSidebar();
       showToast(t(allInstalled ? "deletedAllInstalledToast" : all ? "deletedAllToast" : "deletedToast"), "success");
     });
+  }
+
+  const dangerCancel = document.getElementById("danger-cancel");
+  if (dangerCancel) {
+    dangerCancel.addEventListener("click", cancelDangerConfirm);
+  }
+
+  const dangerConfirm = document.getElementById("danger-confirm");
+  if (dangerConfirm) {
+    dangerConfirm.addEventListener("click", confirmDangerAction);
   }
 
   const dropboxOauthChoiceCancel = document.getElementById("dropbox-oauth-choice-cancel");

@@ -384,26 +384,6 @@ def test_fetch_installed_go_setup_ignores_a_hymo_row_with_the_same_car_and_track
     assert row.setup_id == "go-uuid"
 
 
-# --- has_installed_hymo_setup --------------------------------------------------
-
-
-def test_has_installed_hymo_setup_true_when_a_hymo_row_matches(in_memory_db, tmp_path):
-    in_memory_db.add_installed_setup(
-        _setup(id="h1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa", setup_type="HYMO",
-    )
-    assert in_memory_db.has_installed_hymo_setup("Ferrari", "Spa") is True
-
-
-def test_has_installed_hymo_setup_false_when_absent(in_memory_db):
-    assert in_memory_db.has_installed_hymo_setup("Ferrari", "Spa") is False
-
-
-def test_has_installed_hymo_setup_ignores_a_go_row_with_the_same_car_and_track(in_memory_db, tmp_path):
-    in_memory_db.add_installed_setup(
-        _setup(id="g1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa", setup_type="GO",
-    )
-    assert in_memory_db.has_installed_hymo_setup("Ferrari", "Spa") is False
-
 
 # --- car/track sanitization on write -------------------------------------------
 
