@@ -431,6 +431,7 @@ body { overflow: hidden; }
 .mode-summary { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
 .mode-summary-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mode-summary-info p { margin: 0; font-size: 13.5px; color: var(--color-neutral-500); }
+.mode-summary-info .tag { font-size: 15px; padding: 5px 14px; }
 
 .upload-dropzone {
   align-items: center; text-align: center; gap: var(--space-2);

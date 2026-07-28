@@ -1,9 +1,19 @@
-todo:
-- Caricando due volte lo stesso setup manualmente, sia in modalità master che in modalità slave, il secondo deve sovrascrivere il primo, i parametri per capire se è un aggiornamento sono: tipologia (HYMO o GO), track e car. Se facendo upload manuale esiste già un setup con quei valori, allora si sta caricando un aggiornamento. Su dropbox significa eliminare il precedente e caricare il nuovo (avrà lo stesso ID ma data diversa nel nome), in locale significa fare update rispettando i flag di impostazione (come se si stesse scaricando un setup aggiornato da HYMO).
-Inoltre nei caricamenti manuali (modalità slave), non viene popolato il campo SHA 256 sul DB
+Cambio funzionalità impattante per il matching dei setup con track e car.
+Ad oggi se un setup non fa match con pista/auto censiti in mapping.json, viene installato con -HYMO o -GO (oppure caricato su dropbox con il nome pista originale)
 
+Voglio invece che se un setup non fa match, venga ignorato in tutte le modalità:
+- Full: non installato
+- Master: non caricato
+- Slave: non installato
 
-- Verifica (se non esiste fai un junit) questa sequenza: 1) mode master: upload manuale di un setup 2)mode slave: download e installazione di quel setup 3) Mode slave: download e quel setup deve essere skippato 4) mode master: upload manuale dello stesso setup (deve andare in update 5)mode slave: download e il setup deve essere riscaricato e aggiornato
+Durante il download da tracktitan o dropbox tutti i setup che non fanno match,
+devono essere tracciati in memoria e alla fine dell'esecuzione, mostrata una finestra di dialogo di warning,
+con l'elenco dei setup che non matchano mostrando: il nome della pista e auto di tracktitan (o dropbox) e ci deve essere la possibilità di fare correggi, l'utente quindi può scegliere auto e tracciato (analogo a come succede per i caricamenti manuali)
 
-- Nella danger zone, quando si eliminano tutti i setup da dropbox, mettiamo un messaggio dinamico che dice "Eliminazione in corso: eliminati {n} setups"
+Le correzioni applicate dall'utente, vengono tracciate su database, in una nuova tabella (manual_mapping) con colonne: (UUID auto generato, type (track o car), name (il valore ufficiale dell'applicazione, presente in mapping.json, scelto da menu a tendina), matcher (regex che deve matchare il valore di tracktitan o dropbox)) (notare che in caso oggi l'utente faccia match di un valore per un name e successivamente di un altro valore per lo stesso name, va aggiornata la regex non creata una nuova riga sul DB)
 
+La nuova tabella deve essere usata per fare match come fallback DOPO il mapping.json, in tutti i punti in cui è richiesto fare match di pista e auto.
+
+Nella finestra di dialogo deve essere presente anche un tasto "copia" (come quelli già presenti affianco ai campi di testo dei token), che copi come testo tutti i valori di car e track che NON hanno matchato. (serve perchè gli utenti me lo incolleranno così che io possa aggiornare il mapping.json)
+
+Nella finestra di dialogo ci deve essere scritto anche di riprovare il download/caricamento dopo aver scelto tutte le correzioni per processare questi setup.

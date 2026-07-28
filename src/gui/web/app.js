@@ -1875,7 +1875,7 @@ function renderModals() {
         : t("dangerBusyTitle");
       html += `
         <div class="dialog-backdrop" data-modal="danger-busy">
-          <div class="dialog elev-lg">
+          <div class="dialog elev-lg" style="width: min(560px, 100%);">
             <div style="display:flex; align-items:center; gap:10px;">
               <div class="spinner"></div>
               <div class="dialog-title" style="margin:0;">${escapeHtml(busyTitle)}</div>
