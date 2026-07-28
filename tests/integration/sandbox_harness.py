@@ -48,8 +48,17 @@ class Sandbox:
         self.lmu.mkdir(parents=True, exist_ok=True)
         (self.catalog_dir / "setups").mkdir(parents=True, exist_ok=True)
 
+        self._tracks_mapping: list[tuple[str, str]] = []
+        # make_setup()'s own default car is "Porsche 963" - seeded here so
+        # this harness's overwhelmingly track-focused tests don't each need
+        # their own boilerplate set_cars() call just to keep that one default
+        # car resolvable now that an unmatched car blocks install/publish
+        # just like an unmatched track does. A test using a different car
+        # calls set_cars() itself, same as it already does for set_tracks().
+        self._cars_mapping: list[tuple[str, str]] = [("963", "Porsche 963")]
+
         self.write_catalog([])
-        self.set_tracks([])
+        self._write_mapping()
 
     # ----- fixture authoring -------------------------------------------------
 
@@ -96,14 +105,31 @@ class Sandbox:
         upload_manual_setup_to_dropbox(self.dropbox(), source_zip, setup, "HYMO")
         return setup
 
-    def set_tracks(self, mapping: list[tuple[str, str]]) -> None:
-        """mapping is a list of (regex pattern, lmu folder name), in priority order."""
+    def _write_mapping(self) -> None:
+        """tracks_file backs both TrackManager and CarManager in the sandbox
+        fixture (see tests/integration/conftest.py), so a track and a car
+        write must land in the same file - one combined writer for both."""
         self.tracks_file.write_text(
             json.dumps({
-                "tracks": [{"name": f, "matcher": [p], "lmu_folder": f} for p, f in mapping],
+                "tracks": [{"name": f, "matcher": [p], "lmu_folder": f} for p, f in self._tracks_mapping],
+                "cars": [{"name": n, "matcher": [p]} for p, n in self._cars_mapping],
             }),
             encoding="utf-8",
         )
+
+    def set_tracks(self, mapping: list[tuple[str, str]]) -> None:
+        """mapping is a list of (regex pattern, lmu folder name), in priority order."""
+        self._tracks_mapping = mapping
+        self._write_mapping()
+
+    def set_cars(self, mapping: list[tuple[str, str]]) -> None:
+        """mapping is a list of (regex pattern, official car name), in
+        priority order - same shape as set_tracks(). Replaces (does not merge
+        with) the default "963" -> "Porsche 963" seed from __init__, so a
+        test using a non-default car alongside the default one must list
+        both explicitly."""
+        self._cars_mapping = mapping
+        self._write_mapping()
 
     # ----- inspection --------------------------------------------------------
 
@@ -154,7 +180,6 @@ class Sandbox:
 
         dm = DownloadManager(database=database, client=self.tracktitan(base_path))
         sm = self.setup_manager(database)
-        sm.update_tracks_not_found()
 
         while setups := dm.get_setups_list():
             for setup in setups:

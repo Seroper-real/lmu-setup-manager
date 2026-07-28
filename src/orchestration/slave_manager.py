@@ -11,8 +11,9 @@ from clients.protocols import DropboxClientProtocol
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, GO_SETUP_FILE_EXTENSIONS
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from domain.go_setup import RemoteGoSetup
-from domain.setup import RemoteSetup, Setup, sanitize_identity
+from domain.setup import RemoteSetup, Setup
 from domain.setup_db import SetupDb
+from domain.unmatched import UnmatchedTracker
 from processing.setup_manager import SetupManager
 
 log = logging.getLogger("TrackTitanDownloader")
@@ -33,31 +34,31 @@ class SlaveManager:
         *,
         on_progress: Optional[ProgressCallback] = None,
         cancel_event: Optional[threading.Event] = None,
+        unmatched: Optional[UnmatchedTracker] = None,
     ) -> None:
         self.dropbox_client = dropbox_client
         self.setup_manager = setup_manager
         self.database = database
         self.on_progress = on_progress
         self.cancel_event = cancel_event
+        self.unmatched = unmatched if unmatched is not None else UnmatchedTracker()
 
     def _emit(self, event: ProgressEvent) -> None:
         if self.on_progress is not None:
             self.on_progress(event)
 
     def run(self) -> None:
-        # FULL-compat housekeeping: relocate setups whose track mapping changed.
-        self.setup_manager.update_tracks_not_found()
         for remote in self.dropbox_client.list_setups():
             if self.cancel_event is not None and self.cancel_event.is_set():
-                self._emit(ProgressEvent(ProgressKind.STOPPED, "Install stopped"))
+                self._emit(ProgressEvent(ProgressKind.STOPPED, "Install stopped", unmatched=self.unmatched.serialize()))
                 return
             self._process(remote)
         for go_remote in self.dropbox_client.list_go_setups():
             if self.cancel_event is not None and self.cancel_event.is_set():
-                self._emit(ProgressEvent(ProgressKind.STOPPED, "Install stopped"))
+                self._emit(ProgressEvent(ProgressKind.STOPPED, "Install stopped", unmatched=self.unmatched.serialize()))
                 return
             self._process_go(go_remote)
-        self._emit(ProgressEvent(ProgressKind.FINISH, "Install completed"))
+        self._emit(ProgressEvent(ProgressKind.FINISH, "Install completed", unmatched=self.unmatched.serialize()))
 
     def _process(self, remote: RemoteSetup) -> None:
         log.info("#################")
@@ -79,6 +80,22 @@ class SlaveManager:
             return
 
         setup = Setup(metadata)
+
+        # Unmatched car/track: ignored outright, never installed under a
+        # placeholder "-HYMO" name - recorded for the end-of-run correction
+        # dialog instead. Checked before START is even emitted, so a fully
+        # ignored setup never appears in the activity log at all.
+        car_matched = self.setup_manager.car_manager.get_car_name(setup.car) is not None
+        track_matched = self.setup_manager.track_manager.get_track_folder_name(setup.track) is not None
+        if not car_matched or not track_matched:
+            log.warning(f"Setup not matched, skipping: {setup.track} - {setup.car}")
+            self.unmatched.record(
+                setup.track, setup.car, "dropbox", track_matched=track_matched, car_matched=car_matched,
+            )
+            if CLEAN_DOWNLOAD and local_zip.exists():
+                local_zip.unlink()
+            return
+
         # "<Track> - <Car> Setup" reads far better in the activity log than the
         # archive filename (e.g. Spa_Porsche_963_id1_1000.zip) it replaces.
         label = f"{setup.track} - {setup.car} Setup"
@@ -97,9 +114,18 @@ class SlaveManager:
         # stored even when the raw folder text differs from the official name
         # but still matches its `matcher` regex. Resolved up front (rather than
         # after the download, as before) so the activity log can show
-        # "<Track> - <Car> Setup" instead of the raw archive filename.
-        car = self.setup_manager.car_manager.get_car_name(remote.car) or sanitize_identity(remote.car)
-        track = self.setup_manager.track_manager.get_official_track_name(remote.track) or sanitize_identity(remote.track)
+        # "<Track> - <Car> Setup" instead of the raw archive filename, and so
+        # an unmatched pair can be skipped before ever downloading it (the
+        # GO folder layout carries car/track without needing the zip's
+        # content, unlike a HYMO archive's embedded metadata).
+        car = self.setup_manager.car_manager.get_car_name(remote.car)
+        track = self.setup_manager.track_manager.get_official_track_name(remote.track)
+        if car is None or track is None:
+            log.warning(f"GO Setup not matched, skipping: {remote.track} - {remote.car}")
+            self.unmatched.record(
+                remote.track, remote.car, "dropbox", track_matched=track is not None, car_matched=car is not None,
+            )
+            return
         label = f"{track} - {car} Setup"
 
         log.info("#################")
@@ -132,7 +158,7 @@ class SlaveManager:
         })
         self.setup_manager.install_setup(
             local_zip, setup,
-            extensions=GO_SETUP_FILE_EXTENSIONS, setup_type="GO", fallback_suffix="GO",
+            extensions=GO_SETUP_FILE_EXTENSIONS, setup_type="GO",
             sha256=sha256,
         )
         self._emit(ProgressEvent(ProgressKind.INSTALL, label))

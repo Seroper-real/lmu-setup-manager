@@ -141,7 +141,7 @@ def test_list_installed_setups_available_in_master_mode(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     assert result["totalCount"] == 1
     assert result["groups"][0]["track"] == "Spa"
@@ -154,8 +154,8 @@ def test_list_installed_setups_constructs_a_fresh_setupdb_per_call(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = []
 
-    api.list_installed_setups("", False)
-    api.list_installed_setups("", False)
+    api.list_installed_setups("")
+    api.list_installed_setups("")
 
     assert db_cls.call_count == 2
 
@@ -168,8 +168,8 @@ def test_list_installed_setups_reuses_the_cached_car_manager(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = [_fake_installed(setup_id="1")]
 
-    api.list_installed_setups("", False)
-    api.list_installed_setups("", False)
+    api.list_installed_setups("")
+    api.list_installed_setups("")
 
     cm_cls.assert_called_once()
 
@@ -185,7 +185,7 @@ def test_list_installed_setups_groups_by_track(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     assert result["totalCount"] == 3
     tracks = {g["track"] for g in result["groups"]}
@@ -210,27 +210,11 @@ def test_list_installed_setups_groups_by_matched_track_id_across_raw_names(api, 
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     assert len(result["groups"]) == 1
     assert result["groups"][0]["track"] == "Bahrain"
     assert len(result["groups"][0]["cars"]) == 2
-
-
-def test_list_installed_setups_unmapped_only_filters(api, mocker):
-    mocker.patch.object(api, "current_mode", return_value="full")
-    mocker.patch("processing.car_manager.CarManager")
-    setups = [
-        _fake_installed(setup_id="1", track="Spa", track_found=True),
-        _fake_installed(setup_id="2", track="Imola-HYMO", track_found=False, matched_track_id=None),
-    ]
-    db_cls = mocker.patch("domain.setup_db.SetupDb")
-    db_cls.return_value.fetch_all_installed_setups.return_value = setups
-
-    result = api.list_installed_setups("", True)
-
-    assert result["totalCount"] == 1
-    assert result["groups"][0]["track"] == "Imola-HYMO"
 
 
 def test_list_installed_setups_search_matches_track_or_car(api, mocker):
@@ -243,7 +227,7 @@ def test_list_installed_setups_search_matches_track_or_car(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("bmw", False)
+    result = api.list_installed_setups("bmw")
 
     assert result["totalCount"] == 1
     assert result["groups"][0]["track"] == "Imola"
@@ -257,7 +241,7 @@ def test_list_installed_setups_serializes_file_names(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     assert result["groups"][0]["cars"][0]["types"][0]["setups"][0]["fileNames"] == ["a.svm", "b.svm"]
 
@@ -272,7 +256,7 @@ def test_list_installed_setups_serializes_setup_type(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     car_group = result["groups"][0]["cars"][0]
     types = {ty["type"]: [s["setupId"] for s in ty["setups"]] for ty in car_group["types"]}
@@ -293,7 +277,7 @@ def test_list_installed_setups_preserves_an_unknown_setup_type_instead_of_droppi
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     types = [ty["type"] for ty in result["groups"][0]["cars"][0]["types"]]
     assert types == ["HYMO", "GO", "MYSTERY"]
@@ -312,7 +296,7 @@ def test_list_installed_setups_nests_hymo_and_go_under_one_car(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     cars = result["groups"][0]["cars"]
     assert [c["car"] for c in cars] == ["BMW M4", "Porsche 963"]
@@ -330,7 +314,7 @@ def test_list_installed_setups_includes_car_class_from_car_manager(api, mocker):
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
 
-    result = api.list_installed_setups("", False)
+    result = api.list_installed_setups("")
 
     assert result["groups"][0]["cars"][0]["carClass"] == "HYPERCAR"
     cm_cls.return_value.get_car_class.assert_called_once_with("Porsche 963")
@@ -469,17 +453,24 @@ def test_get_track_folder_options_delegates_to_track_manager(api, mocker):
     assert api.get_track_folder_options() == ["Imola", "Spa"]
 
 
-def test_map_track_updates_refreshes_and_relocates(api, managers):
+def test_map_track_updates_and_refreshes(api, managers):
     tm_instance = managers.track_manager.return_value
 
     result = api.map_track("Imola - WEC", "Imola")
 
     tm_instance.add_or_update_mapping.assert_called_once_with("Imola - WEC", "Imola")
     tm_instance.refresh.assert_called_once()
-    managers.setup_manager.assert_called_once_with(
-        track_manager=tm_instance, car_manager=managers.car_manager.return_value, database=managers.setup_db.return_value,
-    )
-    managers.setup_manager.return_value.update_tracks_not_found.assert_called_once()
+    assert result == {}
+
+
+def test_map_car_updates_and_refreshes(api, managers):
+    """Mirrors map_track above, for the car half of an "unmatched setups" dialog row."""
+    cm_instance = managers.car_manager.return_value
+
+    result = api.map_car("BMW GTLM Hybrid", "BMW M4")
+
+    cm_instance.add_or_update_mapping.assert_called_once_with("BMW GTLM Hybrid", "BMW M4")
+    cm_instance.refresh.assert_called_once()
     assert result == {}
 
 
@@ -728,6 +719,29 @@ def test_push_progress_includes_the_auth_error_flag_in_the_js_payload(api, mocke
     assert '"errorCode": "dropbox"' in js_call
 
 
+def test_push_progress_includes_the_unmatched_list_in_the_js_payload(api, mocker):
+    from core.progress import ProgressEvent, ProgressKind
+
+    api._window = mocker.Mock()
+    api._push_progress(ProgressEvent(
+        kind=ProgressKind.FINISH, title="Download completed",
+        unmatched=[{"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan"}],
+    ))
+
+    js_call = api._window.evaluate_js.call_args[0][0]
+    assert '"unmatched": [{"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan"}]' in js_call
+
+
+def test_push_progress_unmatched_defaults_to_null_in_the_js_payload(api, mocker):
+    from core.progress import ProgressEvent, ProgressKind
+
+    api._window = mocker.Mock()
+    api._push_progress(ProgressEvent(kind=ProgressKind.FINISH, title="Download completed"))
+
+    js_call = api._window.evaluate_js.call_args[0][0]
+    assert '"unmatched": null' in js_call
+
+
 @pytest.mark.parametrize(
     "attr,call",
     [
@@ -961,8 +975,11 @@ def test_clean_dropbox_setups_pushes_live_progress_after_every_delete(api, mocke
     api.clean_dropbox_setups()
 
     # Only the two successful deletes count, in order, and the failed one
-    # (delete_if_exists -> False) must not bump the count.
-    assert [call.args[0] for call in push.call_args_list] == [1, 2]
+    # (delete_if_exists -> False) must not bump the count. A final push (still
+    # carrying the last count) switches the busy dialog to the folder-cleanup
+    # phase once every delete is done.
+    assert [call.args[0] for call in push.call_args_list] == [1, 2, 2]
+    assert push.call_args_list[-1].kwargs == {"phase": "cleaning_folders"}
 
 
 def test_push_danger_progress_evaluates_js_with_the_deleted_count(api, mocker):
@@ -973,6 +990,18 @@ def test_push_danger_progress_evaluates_js_with_the_deleted_count(api, mocker):
     js_call = api._window.evaluate_js.call_args[0][0]
     assert "onDangerProgress" in js_call
     assert "3" in js_call
+    assert '"deleting"' in js_call
+
+
+def test_push_danger_progress_evaluates_js_with_the_given_phase(api, mocker):
+    api._window = mocker.Mock()
+
+    api._push_danger_progress(5, phase="cleaning_folders")
+
+    js_call = api._window.evaluate_js.call_args[0][0]
+    assert "onDangerProgress" in js_call
+    assert "5" in js_call
+    assert '"cleaning_folders"' in js_call
 
 
 def test_clean_dropbox_setups_reports_an_auth_error(api, mocker):

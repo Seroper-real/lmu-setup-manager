@@ -14,8 +14,9 @@ def lmu_base(tmp_path):
 def mock_track_manager():
     m = MagicMock()
     m.get_track_folder_name.return_value = "Spa"
-    # None: leaves setup.safe_track at its sanitize_identity default, same
-    # graceful degradation as a real TrackManager with no catalog match.
+    # None: install_setup() falls back to track_folder_name as the official
+    # name (get_official_track_name(...) or track_folder_name), same as a
+    # real TrackManager whose custom layer has no distinct `name`.
     m.get_official_track_name.return_value = None
     return m
 
@@ -23,7 +24,11 @@ def mock_track_manager():
 @pytest.fixture
 def mock_car_manager():
     m = MagicMock()
-    m.get_car_name.return_value = None
+    # Matched by default (matches sample_setup's car, see conftest.py) - a
+    # car/track that fails to resolve is no longer installed at all (see the
+    # dedicated "unmatched" tests below), so most of this module's tests need
+    # both managers to report a match to exercise what they're actually about.
+    m.get_car_name.return_value = "Porsche 963"
     return m
 
 
@@ -45,22 +50,13 @@ def sm(in_memory_db, mock_track_manager, mock_car_manager, lmu_base, mocker):
 
 
 def test_calculate_dir_known_track(sm, lmu_base):
-    path, found, matched_track_id = sm._calculate_setup_installation_dir("Spa-Francorchamps")
-    assert found is True
+    path = sm._calculate_setup_installation_dir("Spa-Francorchamps")
     assert path == lmu_base / "Spa"
-    assert matched_track_id == "Spa"
 
 
-@pytest.mark.parametrize("fallback_kwargs, expected_name", [
-    pytest.param({}, "Mystery Circuit-HYMO", id="default_hymo_suffix"),
-    pytest.param({"fallback_suffix": "GO"}, "Mystery Circuit-GO", id="go_suffix"),
-])
-def test_calculate_dir_unknown_track_uses_fallback_suffix(sm, lmu_base, fallback_kwargs, expected_name):
+def test_calculate_dir_unknown_track_returns_none(sm):
     sm.track_manager.get_track_folder_name.return_value = None
-    path, found, matched_track_id = sm._calculate_setup_installation_dir("Mystery Circuit", **fallback_kwargs)
-    assert found is False
-    assert path.name == expected_name
-    assert matched_track_id is None
+    assert sm._calculate_setup_installation_dir("Mystery Circuit") is None
 
 
 def test_find_files_recursive(sm, tmp_path):
@@ -178,7 +174,7 @@ def test_install_setup_full_flow(sm, sample_setup, lmu_base, install_setup_env):
 @pytest.mark.parametrize("install_kwargs, expected_setup_type, expected_sha256", [
     pytest.param({}, "HYMO", None, id="defaults_to_hymo"),
     pytest.param(
-        {"setup_type": "GO", "fallback_suffix": "GO", "sha256": "abc123"}, "GO", "abc123",
+        {"setup_type": "GO", "sha256": "abc123"}, "GO", "abc123",
         id="threads_sha256_and_setup_type",
     ),
 ])
@@ -216,6 +212,53 @@ def test_install_setup_leaves_stale_files_when_delete_previous_version_is_off(
 
     assert (install_dir / "stale.svm").exists()
     assert (install_dir / "fresh.svm").exists()
+
+
+# --- install_setup: unmatched car/track is ignored, not installed ----------
+
+
+@pytest.mark.parametrize("break_track, break_car", [
+    pytest.param(True, False, id="track_unmatched"),
+    pytest.param(False, True, id="car_unmatched"),
+    pytest.param(True, True, id="both_unmatched"),
+])
+def test_install_setup_skips_when_unmatched(sm, sample_setup, lmu_base, install_setup_env, break_track, break_car):
+    if break_track:
+        sm.track_manager.get_track_folder_name.return_value = None
+    if break_car:
+        sm.car_manager.get_car_name.return_value = None
+    zip_path = install_setup_env({"car_spa.svm": b"setup bytes"})
+
+    result = sm.install_setup(zip_path, sample_setup)
+
+    assert result is False
+    assert not (lmu_base / "Spa" / "car_spa.svm").exists()
+    assert sm.database.fetch_installed_setup(sample_setup.id) is None
+
+
+def test_install_setup_matched_returns_true(sm, sample_setup, install_setup_env):
+    zip_path = install_setup_env({"car_spa.svm": b"setup bytes"})
+    assert sm.install_setup(zip_path, sample_setup) is True
+
+
+def test_install_setup_unmatched_deletes_download_when_clean_download_enabled(
+    sm, sample_setup, install_setup_env, mocker,
+):
+    mocker.patch("processing.setup_manager.CLEAN_DOWNLOAD", True)
+    sm.car_manager.get_car_name.return_value = None
+    zip_path = install_setup_env({"car_spa.svm": b"setup bytes"})
+
+    assert sm.install_setup(zip_path, sample_setup) is False
+    assert not zip_path.exists()
+
+
+def test_install_setup_unmatched_keeps_download_when_clean_download_disabled(sm, sample_setup, install_setup_env):
+    # CLEAN_DOWNLOAD is already patched False by the `sm` fixture.
+    sm.car_manager.get_car_name.return_value = None
+    zip_path = install_setup_env({"car_spa.svm": b"setup bytes"})
+
+    assert sm.install_setup(zip_path, sample_setup) is False
+    assert zip_path.exists()
 
 
 def test_delete_setup_removes_files_and_db_row(sm, in_memory_db, lmu_base, sample_setup):
@@ -259,26 +302,3 @@ def test_setup_manager_creates_a_missing_lmu_base_path_on_init(in_memory_db, moc
     assert missing.is_dir()
 
 
-def test_update_tracks_not_found_relocates_setup(sm, in_memory_db, lmu_base, mocker):
-    old_dir = lmu_base / "Spa-Francorchamps-HYMO"
-    old_dir.mkdir(parents=True)
-    (old_dir / "setup.svm").write_bytes(b"x")
-
-    from domain.setup import Setup
-    s = Setup({
-        "id": "relocate-me",
-        "title": "T",
-        "setupCombos": [{"car": {"name": "Ferrari"}, "track": {"name": "Spa-Francorchamps"}}],
-        "hotlapLink": None,
-        "lastUpdatedAt": 1,
-        "isBundle": False,
-    })
-    in_memory_db.add_installed_setup(s, [old_dir / "setup.svm"], False, old_dir)
-
-    sm.track_manager.get_track_folder_name.return_value = "Spa"
-    sm.update_tracks_not_found()
-
-    assert (lmu_base / "Spa" / "setup.svm").exists()
-    assert in_memory_db.is_track_found("relocate-me") is True
-    relocated = in_memory_db.fetch_all_installed_setups()[0]
-    assert relocated.matched_track_id == "Spa"

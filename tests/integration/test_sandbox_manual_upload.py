@@ -62,6 +62,9 @@ def test_manually_uploaded_and_tracktitan_hymo_setups_coexist_in_one_slave_run(
     one rides the exact same list_setups()/_process() path rather than a
     parallel one that could silently diverge."""
     tt_id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+    # set_cars() replaces (not merges with) the harness's default "963" ->
+    # "Porsche 963" seed, so it must be re-included alongside "Cadillac Race".
+    sandbox.set_cars([("963", "Porsche 963"), ("cadillac race", "Cadillac Race")])
     sandbox.write_catalog([make_setup(tt_id, "Spa", car="Cadillac Race")])
     sandbox.add_archive(tt_id, {"tt_quali.svm": "tt"})
     sandbox.run_master()

@@ -206,8 +206,27 @@ a { color: var(--color-accent); text-underline-offset: 3px; }
 }
 .tag-accent { background: var(--color-accent-800); color: var(--color-accent-100); }
 .tag-accent-2 { background: var(--color-accent-2-800); color: var(--color-accent-2-100); }
-.tag-neutral { background: var(--color-neutral-800); color: var(--color-neutral-100); }
 .tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+
+.unmatched-identified { display: flex; flex-direction: column; gap: 4px; font-size: 14px; margin-bottom: var(--space-3); }
+.unmatched-identified > div { color: var(--color-neutral-500); }
+.unmatched-identified strong { color: var(--color-text); font-weight: 600; }
+.unmatched-stepper { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-top: var(--space-4); }
+.unmatched-stepper-dots {
+  display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start;
+  gap: 6px; max-width: 320px; max-height: 54px; overflow-y: auto; padding: 2px;
+}
+.unmatched-stepper-dot {
+  width: 9px; height: 9px; padding: 0; flex: none; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--color-neutral-500); background: transparent;
+}
+.unmatched-stepper-dot:hover { border-color: var(--color-accent); }
+.unmatched-stepper-dot.skipped { border-color: var(--color-warning); background: transparent; }
+.unmatched-stepper-dot.active {
+  background: var(--color-accent); border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+.unmatched-stepper-progress { text-align: center; font-size: 12px; color: var(--color-neutral-500); margin: var(--space-1) 0 0; }
 
 .dialog-backdrop {
   position: fixed; inset: 0; display: grid; place-items: center;
@@ -223,7 +242,10 @@ a { color: var(--color-accent); text-underline-offset: 3px; }
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
   font-size: 20px; display: flex; align-items: center; gap: 8px;
 }
-.dialog-body { font-size: 14px; opacity: 0.85; }
+/* color (not opacity) so the muted tone only affects inherited text - a
+   floating child like .select-panel (the track/car choice menu) sets its
+   own color/background and must stay fully opaque, not fade with its parent. */
+.dialog-body { font-size: 14px; color: color-mix(in srgb, var(--color-text) 85%, transparent); }
 .dialog-body ul { margin: var(--space-2) 0 0; padding-left: 18px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 
@@ -333,22 +355,11 @@ body { overflow: hidden; }
 .search-field svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 .search-field .input { padding-left: 32px; max-width: none; }
 
-.toggle-chip {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 14px; border-radius: var(--radius-md);
-  border: 1px solid var(--color-divider); background: transparent;
-  color: var(--color-neutral-400); cursor: pointer; font-size: 14px; font-family: inherit;
-}
-.toggle-chip.active {
-  border-color: var(--color-accent); color: var(--color-accent-300);
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-}
 .results-count { font-size: 12px; }
 .toolbar-push-end { margin-left: auto; }
 
 .setups-list { display: flex; flex-direction: column; gap: var(--space-3); }
 .track-group-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: var(--space-2); flex-wrap: wrap; }
-.track-group-header .arrow { font-size: 13px; color: var(--color-neutral-500); }
 
 .track-toggle {
   display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto;

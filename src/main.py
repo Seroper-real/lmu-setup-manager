@@ -121,6 +121,7 @@ def run_full(
     cancel_event: Optional[threading.Event] = None,
 ) -> None:
     from domain.setup_db import SetupDb
+    from domain.unmatched import UnmatchedTracker
     from processing.car_manager import CarManager
     from processing.track_manager import TrackManager
     from orchestration.download_manager import DownloadManager
@@ -132,18 +133,27 @@ def run_full(
     car_manager = CarManager()
     download_manager = DownloadManager(database=database, client=build_track_titan_client(), cancel_event=cancel_event)
     setup_manager = SetupManager(track_manager=track_manager, car_manager=car_manager, database=database)
-
-    setup_manager.update_tracks_not_found()
+    unmatched = UnmatchedTracker()
 
     def _emit(event: ProgressEvent) -> None:
         if on_progress is not None:
             on_progress(event)
 
+    # The TrackTitan API can hand back the same id on two adjacent pages (see
+    # MasterManager._dispatch's own _dispatched set for the same guard) - without
+    # this, that setup would be downloaded and installed twice in one run.
+    dispatched: set[str] = set()
+
     while setups := download_manager.get_setups_list():
         for setup in setups:
             if cancel_event is not None and cancel_event.is_set():
-                _emit(ProgressEvent(ProgressKind.STOPPED, "Download stopped"))
+                _emit(ProgressEvent(ProgressKind.STOPPED, "Download stopped", unmatched=unmatched.serialize()))
                 return
+
+            if setup.id in dispatched:
+                log.info(f"Already processed in this run, skipping duplicate page entry: {setup.id}")
+                continue
+            dispatched.add(setup.id)
 
             log.info(f"#################")
             log.info(f"{setup.title}")
@@ -155,13 +165,28 @@ def run_full(
             if setup.is_bundle:
                 log.info(f"Skipping bundle.")
                 continue  # Non scarichiamo i bundle
+
+            # Unmatched car/track: ignored outright, never installed under a
+            # placeholder "-HYMO" name - recorded for the end-of-run
+            # correction dialog instead. Checked before the download, since
+            # car/track are already known from the TrackTitan API response.
+            car_name = car_manager.get_car_name(setup.car)
+            track_name = track_manager.get_official_track_name(setup.track)
+            if car_name is None or track_name is None:
+                log.warning(f"Setup not matched, skipping: {setup.track} - {setup.car}")
+                unmatched.record(
+                    setup.track, setup.car, "tracktitan",
+                    track_matched=track_name is not None, car_matched=car_name is not None,
+                )
+                continue
+
             path = download_manager.download(setup)
 
             if path:
                 setup_manager.install_setup(path, setup)
                 _emit(ProgressEvent(ProgressKind.INSTALL, setup.title, meta=f"{setup.track} - {setup.car}"))
 
-    _emit(ProgressEvent(ProgressKind.FINISH, "Download completed"))
+    _emit(ProgressEvent(ProgressKind.FINISH, "Download completed", unmatched=unmatched.serialize()))
 
 
 def run_master(
@@ -170,6 +195,7 @@ def run_master(
     on_progress: Optional[ProgressCallback] = None,
     cancel_event: Optional[threading.Event] = None,
 ) -> None:
+    from domain.unmatched import UnmatchedTracker
     from orchestration.download_manager import DownloadManager
     from orchestration.master_manager import MasterManager
     from processing.car_manager import CarManager
@@ -187,6 +213,7 @@ def run_master(
         track_manager=TrackManager(),
         on_progress=on_progress,
         cancel_event=cancel_event,
+        unmatched=UnmatchedTracker(),
     ).run()
 
 
@@ -197,6 +224,7 @@ def run_slave(
     cancel_event: Optional[threading.Event] = None,
 ) -> None:
     from domain.setup_db import SetupDb
+    from domain.unmatched import UnmatchedTracker
     from processing.car_manager import CarManager
     from processing.track_manager import TrackManager
     from processing.setup_manager import SetupManager
@@ -214,6 +242,7 @@ def run_slave(
         database=database,
         on_progress=on_progress,
         cancel_event=cancel_event,
+        unmatched=UnmatchedTracker(),
     ).run()
 
 

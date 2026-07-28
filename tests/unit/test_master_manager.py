@@ -41,14 +41,18 @@ def mm(mocker, tmp_path):
     dbx = MagicMock()
     dbx.list_setups.return_value = []
     dbx.remote_path.side_effect = lambda rel: f"/lmu-setups/{rel}"
-    # No mapping.json matches by default, so setup.safe_car/safe_track fall
-    # through to their sanitized-raw-text default - unofficialized, matching
-    # this module's pre-mapping test data (Porsche 963, BMW M4, Spa, Imola...)
-    # unless a test below overrides the return value.
+    # Matched by default, echoing the raw text straight back as the
+    # "official" name - equivalent to every setup in this module's
+    # pre-mapping test data (Porsche 963, BMW M4, Spa, Imola...) resolving to
+    # itself, byte for byte, same as the old None-means-unofficialized
+    # fallback used to produce for text with nothing sanitize_identity would
+    # touch. A test that needs a genuinely different officialized name (or an
+    # unmatched one) overrides .side_effect (not .return_value - side_effect
+    # takes priority over it once set) below.
     car_manager = MagicMock()
-    car_manager.get_car_name.return_value = None
+    car_manager.get_car_name.side_effect = lambda car: car
     track_manager = MagicMock()
-    track_manager.get_official_track_name.return_value = None
+    track_manager.get_official_track_name.side_effect = lambda track: track
     manager = MasterManager(
         download_manager=dm, dropbox_client=dbx, workers=1,
         car_manager=car_manager, track_manager=track_manager,
@@ -155,6 +159,113 @@ def test_skip_bundle(mm):
     dm.download.assert_not_called()
 
 
+# --- unmatched car/track: ignored outright, recorded for the correction dialog -
+
+
+@pytest.mark.parametrize("break_track, break_car", [
+    pytest.param(True, False, id="track_unmatched"),
+    pytest.param(False, True, id="car_unmatched"),
+    pytest.param(True, True, id="both_unmatched"),
+])
+def test_unmatched_setup_is_never_downloaded_or_published(mm, break_track, break_car):
+    manager, dm, dbx, tmp = mm
+    if break_track:
+        manager.track_manager.get_official_track_name.side_effect = lambda track: None
+    if break_car:
+        manager.car_manager.get_car_name.side_effect = lambda car: None
+    _pages(dm, [_setup(id="id1", ts=2000)])
+
+    manager.run()
+
+    dm.download.assert_not_called()
+    dbx.upload.assert_not_called()
+
+
+def test_unmatched_setup_is_recorded_with_raw_track_and_car(mm):
+    manager, dm, dbx, tmp = mm
+    manager.car_manager.get_car_name.side_effect = lambda car: None
+    _pages(dm, [_setup(id="id1", ts=2000, track="Mystery Circuit", car="Mystery Car")])
+
+    manager.run()
+
+    assert manager.unmatched.serialize() == [
+        {"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan", "trackMatched": True, "carMatched": False},
+    ]
+
+
+def test_unmatched_setups_are_deduped_across_the_run(mm):
+    manager, dm, dbx, tmp = mm
+    manager.car_manager.get_car_name.side_effect = lambda car: None
+    _pages(dm, [
+        _setup(id="id1", ts=2000, track="Mystery Circuit", car="Mystery Car"),
+        _setup(id="id2", ts=2000, track="Mystery Circuit", car="Mystery Car"),
+    ])
+
+    manager.run()
+
+    assert manager.unmatched.serialize() == [
+        {"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan", "trackMatched": True, "carMatched": False},
+    ]
+
+
+def test_finish_event_carries_the_unmatched_list(mm):
+    manager, dm, dbx, tmp = mm
+    manager.car_manager.get_car_name.side_effect = lambda car: None
+    _pages(dm, [_setup(id="id1", ts=2000, track="Mystery Circuit", car="Mystery Car")])
+    events = []
+    manager.on_progress = events.append
+
+    manager.run()
+
+    finish = next(e for e in events if e.kind == ProgressKind.FINISH)
+    assert finish.unmatched == [
+        {"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan", "trackMatched": True, "carMatched": False},
+    ]
+
+
+def test_finish_event_unmatched_is_none_when_everything_matched(mm, mocker):
+    manager, dm, dbx, tmp = mm
+    setup = _setup(id="id1", ts=2000)
+    _pages(dm, [setup])
+    _downloadable(dm, tmp)
+    _fake_extraction(mocker, [_svm(tmp)])
+    events = []
+    manager.on_progress = events.append
+
+    manager.run()
+
+    finish = next(e for e in events if e.kind == ProgressKind.FINISH)
+    assert finish.unmatched is None
+
+
+def test_a_shared_unmatched_tracker_can_be_injected(mocker, tmp_path):
+    from orchestration.master_manager import MasterManager
+    from domain.unmatched import UnmatchedTracker
+
+    mocker.patch("orchestration.master_manager.DOWNLOAD_PATH", tmp_path)
+    dm = MagicMock()
+    dbx = MagicMock()
+    dbx.list_setups.return_value = []
+    car_manager = MagicMock()
+    car_manager.get_car_name.side_effect = lambda car: None
+    track_manager = MagicMock()
+    track_manager.get_official_track_name.side_effect = lambda track: track
+    tracker = UnmatchedTracker()
+
+    manager = MasterManager(
+        download_manager=dm, dropbox_client=dbx, workers=1,
+        car_manager=car_manager, track_manager=track_manager, unmatched=tracker,
+    )
+    dm.get_setups_list.side_effect = [[_setup(id="id1", ts=2000)], []]
+
+    manager.run()
+
+    assert manager.unmatched is tracker
+    assert tracker.serialize() == [
+        {"track": "Spa", "car": "Porsche 963", "source": "tracktitan", "trackMatched": True, "carMatched": False},
+    ]
+
+
 def test_upload_when_new(mm, mocker):
     manager, dm, dbx, tmp = mm
     setup = _setup(id="id1", ts=2000)
@@ -180,8 +291,8 @@ def test_upload_publishes_under_the_officialized_car_and_track_names(mm, mocker)
     raw "Oreca 07 Gibson 2024 (ELMS)" catalog car must publish under Dropbox's
     "Oreca 07 (ELMS)" folder, not its own sanitized raw text."""
     manager, dm, dbx, tmp = mm
-    manager.car_manager.get_car_name.return_value = "Oreca 07 (ELMS)"
-    manager.track_manager.get_official_track_name.return_value = "Spa"
+    manager.car_manager.get_car_name.side_effect = lambda car: "Oreca 07 (ELMS)"
+    manager.track_manager.get_official_track_name.side_effect = lambda track: "Spa"
     setup = _setup(id="id1", ts=2000, car="Oreca 07 Gibson 2024 (ELMS)")
     _pages(dm, [setup])
     _downloadable(dm, tmp)
@@ -199,7 +310,7 @@ def test_upload_publishes_under_the_officialized_car_and_track_names(mm, mocker)
 
 def test_relocate_target_uses_the_officialized_car_and_track_names(mm):
     manager, dm, dbx, tmp = mm
-    manager.car_manager.get_car_name.return_value = "Oreca 07 (ELMS)"
+    manager.car_manager.get_car_name.side_effect = lambda car: "Oreca 07 (ELMS)"
     dbx.list_setups.return_value = [
         _remote("Oreca 07 Gibson 2024 (ELMS)/Spa/HYMO-Spa_Oreca_07_Gibson_2024__ELMS__id1_1000.zip", "id1", 1000)
     ]

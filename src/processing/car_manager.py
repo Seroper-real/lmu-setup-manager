@@ -4,16 +4,18 @@ import logging
 from typing import Optional
 from core.config import REMOTE_MAPPINGS_ENABLED, REMOTE_MAPPINGS_TIMEOUT, REMOTE_MAPPINGS_URL
 from core.utils import get_path
+from core import settings_db
 from processing.catalog_loader import compile_patterns, extract_value_map, load_catalog_with_fallback
 
 log = logging.getLogger("TrackTitanDownloader")
 
 class CarManager:
-    """Single-layer car matcher: config/mapping.json's "cars" section
-    (dev-maintained, pushed to the repo/remote mirror without a release).
-    Unlike TrackManager, there is no per-user "Correggi" override layer - not
-    requested for cars, and cars have no physical-folder concept to resolve
-    separately from their official name."""
+    """Two-layer car matcher: config/mapping.json's "cars" section
+    (dev-maintained, pushed to the repo/remote mirror without a release)
+    first, then settings.db's manual_mapping per-user customizations
+    (type="car"), same fallback layer TrackManager has always had for
+    tracks. A None result means the setup is skipped entirely by callers
+    (see SetupManager.install_setup, MasterManager, SlaveManager)."""
 
     # mapping.json's raw "class" values -> the class-logo asset name
     # (assets/class-logos/<LABEL>.png). "lmp2 (elms)" is a distinct raw value
@@ -30,6 +32,7 @@ class CarManager:
     def __init__(self) -> None:
         self.mapping_json_path = get_path("config/mapping.json")
         self.car_patterns: list[tuple[re.Pattern[str], str]] = []
+        self.custom_car_patterns: list[tuple[re.Pattern[str], str]] = []
         self.car_classes: dict[str, str] = {}
         self._car_entries: list[dict] = []
         self.refresh()
@@ -55,10 +58,16 @@ class CarManager:
             for name, raw in raw_classes.items()
             if (normalized := self._normalize_class(raw)) is not None
         }
+        # Same "|"-joined-single-regex shape as TrackManager.custom_track_patterns.
+        custom_entries = [{"name": m["name"], "matcher": [m["matcher"]]} for m in settings_db.get_manual_mappings("car")]
+        self.custom_car_patterns = compile_patterns(custom_entries, pattern_key="matcher", name_key="name")
 
     def get_car_name(self, car: str) -> str | None:
         normalized = self._normalize_car(car)
         for pattern, name in self.car_patterns:
+            if pattern.search(normalized):
+                return name
+        for pattern, name in self.custom_car_patterns:
             if pattern.search(normalized):
                 return name
         return None
@@ -73,6 +82,19 @@ class CarManager:
             {"name": entry["name"], "carClass": self.car_classes.get(entry["name"])}
             for entry in self._car_entries
         ]
+
+    def add_or_update_mapping(self, car: str, name: str) -> None:
+        settings_db.upsert_manual_mapping("car", name, car)
+        # Same self-matching safeguard TrackManager.add_or_update_mapping
+        # uses: picking `name` back out of get_all_cars() (e.g. the Upload
+        # tab's Car dropdown) must resolve to itself, not stay unmatched.
+        # Skipped when `name` already resolves on its own (a known
+        # mapping.json car, most commonly) - otherwise this would pollute
+        # that car's matcher with its own name as a spurious extra
+        # alternative (see TrackManager.add_or_update_mapping for the
+        # "Nordschleife"/"Monza" example this mirrors).
+        if car != name and self.get_car_name(name) is None:
+            settings_db.upsert_manual_mapping("car", name, name)
 
     def refresh(self) -> None:
         self.build_car_patterns()

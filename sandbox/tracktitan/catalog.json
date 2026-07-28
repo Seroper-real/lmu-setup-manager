@@ -612,6 +612,108 @@
         "hotlapLink": "https://example.invalid/hotlap/2337e6f6-7d52-439d-a30c-b1c793cfaaaf",
         "lastUpdatedAt": 1700003500,
         "isBundle": false
+      },
+      {
+        "id": "f01f1594-e317-4226-89a2-697a6396e61a",
+        "title": "Unmapped Track Setup 2",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Porsche 963"
+            },
+            "track": {
+              "name": "Suzuka Circuit"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/f01f1594-e317-4226-89a2-697a6396e61a",
+        "lastUpdatedAt": 1700003600,
+        "isBundle": false
+      },
+      {
+        "id": "4603e000-90da-48af-a6d8-1f4eacc363f2",
+        "title": "Unmapped Track Setup 3",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Porsche 963"
+            },
+            "track": {
+              "name": "Mount Panorama Circuit"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/4603e000-90da-48af-a6d8-1f4eacc363f2",
+        "lastUpdatedAt": 1700003700,
+        "isBundle": false
+      },
+      {
+        "id": "f68b2ecc-72f1-4ce0-a27a-ab28d99ccfff",
+        "title": "Unmapped Car+Track Setup 1",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Radical SR10"
+            },
+            "track": {
+              "name": "Laguna Seca"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/f68b2ecc-72f1-4ce0-a27a-ab28d99ccfff",
+        "lastUpdatedAt": 1700003800,
+        "isBundle": false
+      },
+      {
+        "id": "15c17d99-0fa9-4a7c-9598-7ee3082c41be",
+        "title": "Unmapped Car+Track Setup 2",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Multimatic Mk1"
+            },
+            "track": {
+              "name": "Zandvoort"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/15c17d99-0fa9-4a7c-9598-7ee3082c41be",
+        "lastUpdatedAt": 1700003900,
+        "isBundle": false
+      },
+      {
+        "id": "8002bdc9-4065-443a-acd0-d4707ce66687",
+        "title": "Unmapped Car Setup 1",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Praga R1"
+            },
+            "track": {
+              "name": "Sebring"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/8002bdc9-4065-443a-acd0-d4707ce66687",
+        "lastUpdatedAt": 1700004000,
+        "isBundle": false
+      },
+      {
+        "id": "d5beebcd-4e5b-45b3-879f-8a443fcaca86",
+        "title": "Unmapped Car Setup 2",
+        "setupCombos": [
+          {
+            "car": {
+              "name": "Vanwall Vandervell"
+            },
+            "track": {
+              "name": "Silverstone"
+            }
+          }
+        ],
+        "hotlapLink": "https://example.invalid/hotlap/d5beebcd-4e5b-45b3-879f-8a443fcaca86",
+        "lastUpdatedAt": 1700004100,
+        "isBundle": false
       }
     ]
   }

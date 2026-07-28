@@ -14,6 +14,7 @@ from core.errors import AuthError
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from orchestration.download_manager import DownloadManager
 from domain.setup import RemoteSetup, Setup
+from domain.unmatched import UnmatchedTracker
 from processing.car_manager import CarManager
 from processing.track_manager import TrackManager
 
@@ -43,6 +44,7 @@ class MasterManager:
         track_manager: Optional[TrackManager] = None,
         on_progress: Optional[ProgressCallback] = None,
         cancel_event: Optional[threading.Event] = None,
+        unmatched: Optional[UnmatchedTracker] = None,
     ) -> None:
         self.download_manager = download_manager
         # Used for list_setups() on the producer thread, and by the workers too when
@@ -62,6 +64,7 @@ class MasterManager:
         self._dispatched: set[str] = set()
         self.on_progress = on_progress
         self.cancel_event = cancel_event
+        self.unmatched = unmatched if unmatched is not None else UnmatchedTracker()
         # Publish workers may emit concurrently; serialize the calls into on_progress.
         self._progress_lock = threading.Lock()
 
@@ -96,9 +99,9 @@ class MasterManager:
 
         self._report(pending)
         if self._cancelled():
-            self._emit(ProgressEvent(ProgressKind.STOPPED, "Publish stopped"))
+            self._emit(ProgressEvent(ProgressKind.STOPPED, "Publish stopped", unmatched=self.unmatched.serialize()))
         else:
-            self._emit(ProgressEvent(ProgressKind.FINISH, "Publish completed"))
+            self._emit(ProgressEvent(ProgressKind.FINISH, "Publish completed", unmatched=self.unmatched.serialize()))
 
     def _dispatch(
         self,
@@ -121,15 +124,26 @@ class MasterManager:
         # setup.safe_car/safe_track: both _relocate_if_stale_path and _publish
         # build the Dropbox path from them.
         car_name = self.car_manager.get_car_name(setup.car)
-        if car_name:
-            setup.safe_car = car_name
         track_name = self.track_manager.get_official_track_name(setup.track)
-        if track_name:
-            setup.safe_track = track_name
 
         if setup.is_bundle:
             log.info("Skipping bundle.")
             return
+
+        # Unmatched car/track: ignored outright, never uploaded under a raw/
+        # placeholder name - recorded for the end-of-run correction dialog
+        # instead. Checked before the download, since car/track are already
+        # known from the TrackTitan API response.
+        if car_name is None or track_name is None:
+            log.warning(f"Setup not matched, skipping publish: {setup.track} - {setup.car}")
+            self.unmatched.record(
+                setup.track, setup.car, "tracktitan",
+                track_matched=track_name is not None, car_matched=car_name is not None,
+            )
+            return
+
+        setup.safe_car = car_name
+        setup.safe_track = track_name
 
         # The API can hand back the same id on two pages; the share listing is only
         # read once at startup, so without this it would be published twice.

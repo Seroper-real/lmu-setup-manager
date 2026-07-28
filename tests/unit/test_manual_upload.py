@@ -59,7 +59,10 @@ def mock_track_manager():
 @pytest.fixture
 def mock_car_manager():
     m = MagicMock()
-    m.get_car_name.return_value = None
+    # Matched by default (matches every build_manual_setup(..., "Porsche 963")
+    # call in this module) - install_setup() now skips entirely on an
+    # unmatched car/track rather than installing under a placeholder name.
+    m.get_car_name.return_value = "Porsche 963"
     return m
 
 

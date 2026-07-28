@@ -159,7 +159,7 @@ def test_get_official_track_name_not_found_returns_none(local_manager):
 
 def test_get_official_track_name_falls_back_to_custom_folder_name(local_manager):
     from core import settings_db
-    settings_db.upsert_track_pattern("Nurburgring", re.escape("Nordschleife"))
+    settings_db.upsert_manual_mapping("track", "Nurburgring", "Nordschleife")
     local_manager.refresh()
 
     # No distinct `name` exists for a user "Correggi" mapping - lmu_folder_name doubles as it.
@@ -177,22 +177,22 @@ def test_add_or_update_mapping_appends_to_existing_entry(local_manager):
     local_manager.add_or_update_mapping("Spa 24h", "Spa")
 
     from core import settings_db
-    custom = settings_db.get_custom_tracks()
-    spa = next(t for t in custom if t["lmu_folder_name"] == "Spa")
-    assert re.escape("Spa 24h") in spa["tt_patterns"]
-    # No new entry was created for an lmu_folder_name that already existed.
-    assert len([t for t in custom if t["lmu_folder_name"] == "Spa"]) == 1
+    custom = settings_db.get_manual_mappings("track")
+    spa = next(t for t in custom if t["name"] == "Spa")
+    assert re.escape("Spa 24h") in spa["matcher"].split("|")
+    # No new entry was created for a name that already existed.
+    assert len([t for t in custom if t["name"] == "Spa"]) == 1
 
 
 def test_add_or_update_mapping_creates_new_entry(local_manager):
     local_manager.add_or_update_mapping("Monza Circuit", "Monza")
 
     from core import settings_db
-    custom = settings_db.get_custom_tracks()
-    monza = next(t for t in custom if t["lmu_folder_name"] == "Monza")
+    custom = settings_db.get_manual_mappings("track")
+    monza = next(t for t in custom if t["name"] == "Monza")
     # Both the raw track's own pattern and a self-matching one for the folder
     # name itself (see test_add_or_update_mapping_folder_name_resolves_to_itself).
-    assert monza["tt_patterns"] == [re.escape("Monza Circuit"), re.escape("Monza")]
+    assert monza["matcher"] == "|".join([re.escape("Monza Circuit"), re.escape("Monza")])
     # get_known_folder_names merges file-derived and DB-customization names.
     assert local_manager.get_known_folder_names() == ["Imola", "Monza", "Spa"]
 
@@ -207,13 +207,28 @@ def test_add_or_update_mapping_folder_name_resolves_to_itself(local_manager):
     assert local_manager.get_track_folder_name("Monza") == "Monza"
 
 
+def test_add_or_update_mapping_skips_self_match_when_folder_already_resolves(local_manager):
+    # "Spa" already resolves via the file's own "spa|francorchamps" pattern -
+    # the self-matching safeguard must not add it as an extra alternative on
+    # its own matcher (that would incorrectly merge unrelated future
+    # corrections onto the same folder into one shared entry, e.g. mapping
+    # "Nordschleife" onto an existing "Monza" must leave Monza's matcher as
+    # just "Nordschleife", not "Nordschleife|Monza").
+    local_manager.add_or_update_mapping("Spa 24h", "Spa")
+
+    from core import settings_db
+    custom = settings_db.get_manual_mappings("track")
+    spa = next(t for t in custom if t["name"] == "Spa")
+    assert spa["matcher"] == re.escape("Spa 24h")
+
+
 def test_add_or_update_mapping_skips_duplicate_pattern_when_track_equals_folder(local_manager):
     local_manager.add_or_update_mapping("Monza", "Monza")
 
     from core import settings_db
-    custom = settings_db.get_custom_tracks()
-    monza = next(t for t in custom if t["lmu_folder_name"] == "Monza")
-    assert monza["tt_patterns"] == [re.escape("Monza")]
+    custom = settings_db.get_manual_mappings("track")
+    monza = next(t for t in custom if t["name"] == "Monza")
+    assert monza["matcher"] == re.escape("Monza")
 
 
 def test_refresh_picks_up_new_mapping(local_manager):
@@ -235,7 +250,7 @@ def test_refresh_picks_up_new_mapping(local_manager):
 
 def test_db_customization_used_when_file_has_no_match(local_manager):
     from core import settings_db
-    settings_db.upsert_track_pattern("Nurburgring", re.escape("Nordschleife"))
+    settings_db.upsert_manual_mapping("track", "Nurburgring", "Nordschleife")
     local_manager.refresh()
 
     assert local_manager.get_track_folder_name("Nordschleife") == "Nurburgring"
@@ -245,7 +260,7 @@ def test_file_pattern_wins_over_conflicting_db_customization(local_manager):
     from core import settings_db
     # "Spa-Francorchamps" already matches the file's "spa|francorchamps" pattern
     # for lmu_folder_name "Spa" - a DB customization pointing it elsewhere must lose.
-    settings_db.upsert_track_pattern("WrongFolder", re.escape("Spa-Francorchamps"))
+    settings_db.upsert_manual_mapping("track", "WrongFolder", "Spa-Francorchamps")
     local_manager.refresh()
 
     assert local_manager.get_track_folder_name("Spa-Francorchamps") == "Spa"
@@ -253,7 +268,7 @@ def test_file_pattern_wins_over_conflicting_db_customization(local_manager):
 
 def test_neither_file_nor_db_match_returns_none(local_manager):
     from core import settings_db
-    settings_db.upsert_track_pattern("SomeFolder", "totally-unrelated-pattern")
+    settings_db.upsert_manual_mapping("track", "SomeFolder", "totally-unrelated-pattern")
     local_manager.refresh()
 
     assert local_manager.get_track_folder_name("Unknown Circuit") is None

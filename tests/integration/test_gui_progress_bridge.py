@@ -10,7 +10,7 @@ import threading
 
 import pytest
 
-from sandbox_harness import REPO_FIXTURES, Sandbox
+from sandbox_harness import REPO_FIXTURES, Sandbox, make_setup
 
 
 @pytest.fixture
@@ -73,6 +73,11 @@ def _wire_orchestration_seams(mocker, box: Sandbox) -> None:
 
 def _wire_all(mocker, box: Sandbox, repo_fixtures) -> None:
     box.set_tracks([("spa", "Spa"), ("monza", "Monza")])
+    # Two cars so at least two of the shipped fixture catalog's setups
+    # actually match both track and car (Porsche 963/Spa - WEC, Genesis
+    # GMR-001/Monza) - test_cancel_event_mid_run_yields_strictly_fewer_
+    # installed_files needs >= 2 installed setups to observe a mid-run cancel.
+    box.set_cars([("963", "Porsche 963"), ("genesis", "Genesis GMR-001")])
     _wire_orchestration_seams(mocker, box)
     _wire_main_seams(mocker, box, repo_fixtures)
 
@@ -146,6 +151,31 @@ def test_cancel_event_emits_a_stopped_event(tmp_path_factory, mocker, log):
     main.run_full(log, on_progress=on_progress, cancel_event=cancel_event)
 
     assert any(e.kind == "stopped" for e in events)
+
+
+def test_run_full_does_not_install_a_setup_twice_when_a_page_repeats_its_id(sandbox, repo_fixtures, mocker, log):
+    """The TrackTitan API can hand the same setup id back on two adjacent pages
+    (a known pagination overlap - see MasterManager._dispatch's own guard for
+    the same issue on the master-mode side). run_full must download/install
+    it only once, not once per page it appears on."""
+    _wire_all(mocker, sandbox, repo_fixtures)
+    # Use a synthetic per-test catalog (instead of the checked-in repo fixture
+    # _wire_main_seams points at) so a duplicate id can be crafted deliberately,
+    # and force one setup per page so the duplicate straddles a page boundary.
+    mocker.patch("clients.mocks.mock_track_titan_client.SANDBOX_TRACKTITAN_PATH", sandbox.catalog_dir)
+    mocker.patch("orchestration.download_manager.PAGE_SIZE", 1)
+
+    dup = make_setup("dup-id", "Spa", car="Porsche 963")
+    sandbox.write_catalog([dup, dup])
+    sandbox.add_archive("dup-id", {"setup.svm": "content"})
+
+    import main
+
+    events = []
+    main.run_full(log, on_progress=events.append)
+
+    assert sum(1 for e in events if e.kind == "install") == 1
+    assert sum(1 for e in events if e.kind == "start") == 1
 
 
 def test_run_master_and_run_slave_accept_progress_kwargs(sandbox, repo_fixtures, mocker, log):

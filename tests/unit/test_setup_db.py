@@ -51,36 +51,13 @@ def test_fetch_setup_files_missing_id(in_memory_db):
     assert in_memory_db.fetch_setup_files("ghost") == []
 
 
-def test_is_track_found_true(in_memory_db, tmp_path):
-    in_memory_db.add_installed_setup(_setup(id="t1"), [], True, tmp_path / "T")
-    assert in_memory_db.is_track_found("t1") is True
-
-
-def test_is_track_found_false(in_memory_db, tmp_path):
-    in_memory_db.add_installed_setup(_setup(id="t2"), [], False, tmp_path / "T")
-    assert in_memory_db.is_track_found("t2") is False
-
-
-def test_is_track_found_missing_id(in_memory_db):
-    assert in_memory_db.is_track_found("ghost") is False
-
-
-def test_fetch_tracks_not_found(in_memory_db, tmp_path):
-    dir_ = tmp_path / "T"
-    in_memory_db.add_installed_setup(_setup(id="found"), [], True, dir_)
-    in_memory_db.add_installed_setup(_setup(id="notfound"), [], False, dir_)
-    ids = [r.setup_id for r in in_memory_db.fetch_tracks_not_found()]
-    assert "notfound" in ids
-    assert "found" not in ids
-
-
 def test_update_installed_setup(in_memory_db, tmp_path):
     in_memory_db.add_installed_setup(_setup(id="upd"), [], False, tmp_path / "Old")
-    row = in_memory_db.fetch_tracks_not_found()[0]
+    row = in_memory_db.fetch_installed_setup("upd")
     row.track_found = True
     row.installation_folder = "New"
     in_memory_db.update_installed_setup(row)
-    assert in_memory_db.is_track_found("upd") is True
+    assert in_memory_db.fetch_installed_setup("upd").track_found is True
 
 
 def test_is_installed_last_version_by_id_ts(in_memory_db, tmp_path):
@@ -432,11 +409,10 @@ def test_add_installed_setup_sanitizes_car_and_track(in_memory_db, tmp_path):
 
 
 def test_update_installed_setup_does_not_re_sanitize_car_and_track(in_memory_db, tmp_path):
-    """By the time a row reaches update_installed_setup (only ever called from
-    SetupManager._try_relocate_setup, which never rewrites .car/.track), its
-    car/track are already resolved/official - re-running sanitize_identity
-    here would silently mangle an official name containing a hyphen (e.g.
-    "Cadillac V-Series.R") on every relocate cycle."""
+    """By the time a row reaches update_installed_setup, its car/track are
+    already resolved/official - re-running sanitize_identity here would
+    silently mangle an official name containing a hyphen (e.g.
+    "Cadillac V-Series.R")."""
     in_memory_db.add_installed_setup(_setup(id="san2", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa")
     row = in_memory_db.fetch_installed_setup("san2")
     row.car = "Cadillac V-Series.R"

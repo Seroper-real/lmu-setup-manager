@@ -178,7 +178,7 @@ class Api:
 
     # ----- setup installati tab ---------------------------------------------
 
-    def list_installed_setups(self, search: str, unmapped_only: bool) -> dict[str, object]:
+    def list_installed_setups(self, search: str) -> dict[str, object]:
         from domain.setup_db import SetupDb, InstalledSetup
 
         database = SetupDb()
@@ -187,8 +187,7 @@ class Api:
         query: str = (search or "").strip().lower()
         filtered: list[InstalledSetup] = [
             s for s in setups
-            if (not unmapped_only or not s.track_found)
-            and (not query or query in s.track.lower() or query in s.car.lower())
+            if not query or query in s.track.lower() or query in s.car.lower()
         ]
 
         # Group by the matched LMU folder when the track resolved, not by the raw
@@ -316,6 +315,10 @@ class Api:
                     self._push_danger_progress(deleted_count)
             # Run only after every delete above: a Track folder shared by
             # several zips isn't actually empty until the last one is gone.
+            # This phase has no per-item count of its own, so the busy dialog
+            # switches to a plain "cleaning up" message instead of sitting on
+            # the now-stale deleted-count text while it runs.
+            self._push_danger_progress(deleted_count, phase="cleaning_folders")
             for remote in remotes:
                 client.prune_empty_ancestor_folders(remote.path_lower)
             return {"ok": True, "deletedCount": deleted_count}
@@ -405,19 +408,23 @@ class Api:
             return {"ok": False, "error": str(e), "authError": False}
 
     def map_track(self, track: str, folder: str) -> dict[str, object]:
-        from processing.car_manager import CarManager
+        """Persists one track correction from the end-of-run "unmatched
+        setups" dialog (see map_car below for the car half of the same
+        action)."""
         from processing.track_manager import TrackManager
-        from processing.setup_manager import SetupManager
-        from domain.setup_db import SetupDb
 
         track_manager = TrackManager()
         track_manager.add_or_update_mapping(track, folder)
         track_manager.refresh()
 
-        database = SetupDb()
-        setup_manager = SetupManager(track_manager=track_manager, car_manager=CarManager(), database=database)
-        setup_manager.update_tracks_not_found()
+        return {}
 
+    def map_car(self, car: str, name: str) -> dict[str, object]:
+        """Persists one car correction from the end-of-run "unmatched setups"
+        dialog (see map_track above for the track half of the same action)."""
+        car_manager = self._get_car_manager()
+        car_manager.add_or_update_mapping(car, name)
+        car_manager.refresh()
         return {}
 
     # ----- download tab ------------------------------------------------------
@@ -500,20 +507,21 @@ class Api:
             "authError": event.is_auth_error,
             "errorCode": event.error_code,
             "errorStatus": event.error_status,
+            "unmatched": event.unmatched,
         })
         try:
             self._window.evaluate_js(f"window.onProgress && window.onProgress({payload})")
         except Exception as e:
             log.debug(f"Failed to push progress to the window: {e}")
 
-    def _push_danger_progress(self, deleted_count: int) -> None:
-        """Live deleted-count for the Danger Zone's "cleaning Dropbox setups"
-        busy dialog (see clean_dropbox_setups) - pushed the same way
+    def _push_danger_progress(self, deleted_count: int, phase: str = "deleting") -> None:
+        """Live deleted-count (plus phase) for the Danger Zone's "cleaning Dropbox
+        setups" busy dialog (see clean_dropbox_setups) - pushed the same way
         _push_progress feeds the Download tab's activity log."""
         if self._window is None:
             return
         try:
-            self._window.evaluate_js(f"window.onDangerProgress && window.onDangerProgress({deleted_count})")
+            self._window.evaluate_js(f"window.onDangerProgress && window.onDangerProgress({deleted_count}, {json.dumps(phase)})")
         except Exception as e:
             log.debug(f"Failed to push danger-zone progress to the window: {e}")
 

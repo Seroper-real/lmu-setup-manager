@@ -20,6 +20,11 @@ NESTED_ID = "3d4e5f6a-7b8c-4d9e-8f0a-2b3c4d5e6f70"
 @pytest.fixture(autouse=True)
 def _tracks(sandbox):
     sandbox.set_tracks([("spa", "Spa"), ("monza", "Monza")])
+    # Cadillac V-Series.R for NESTED_ID; Porsche 963 is already the harness's
+    # own default. UNMAPPED_ID's car (Ferrari 499P) is deliberately left
+    # unmapped too - its track (Nordschleife) already isn't, and either one
+    # alone is enough to make it ignored (see the tests below).
+    sandbox.set_cars([("963", "Porsche 963"), ("cadillac", "Cadillac V-Series.R")])
 
 
 def test_master_publishes_every_non_bundle_setup_with_svm_plus_metadata(sandbox, repo_fixtures):
@@ -28,8 +33,11 @@ def test_master_publishes_every_non_bundle_setup_with_svm_plus_metadata(sandbox,
     dbx = sandbox.run_master(base_path=repo_fixtures)
 
     published = {r.setup_id: r for r in dbx.list_setups()}
-    assert {SPA_ID, UNMAPPED_ID, NESTED_ID} <= set(published)
+    assert {SPA_ID, NESTED_ID} <= set(published)
     assert BUNDLE_ID not in published, "bundles must never be published"
+    # Nordschleife has no mapped track in this fixture - ignored outright
+    # (skipped, never published), not uploaded under its raw track text.
+    assert UNMAPPED_ID not in published
 
     # The catalog's raw track text is "Spa - WEC" - officialized against
     # mapping.json to plain "Spa", not published verbatim.
@@ -55,13 +63,15 @@ def test_slave_installs_published_setups_into_mock_lmu_and_a_second_run_is_a_no_
     assert {
         "Spa/Spa_Porsche963_Quali.svm",
         "Monza/Monza_Cadillac_Race.svm",
-        # Unmapped track lands in the -HYMO fallback folder.
-        "Nordschleife-HYMO/Nordschleife_Ferrari499P.svm",
     } <= sandbox.installed_files()
+    # Nordschleife/Ferrari 499P was never even published (see the master
+    # test above), so it's never installed either.
+    assert "Nordschleife-HYMO/Nordschleife_Ferrari499P.svm" not in sandbox.installed_files()
 
     assert in_memory_db.is_installed_last_version(SPA_ID, 1700000000) is True
-    assert in_memory_db.is_track_found(SPA_ID) is True
-    assert in_memory_db.is_track_found(UNMAPPED_ID) is False
+    assert in_memory_db.fetch_installed_setup(SPA_ID).track_found is True
+    # The ignored setup was never installed - no row for it at all.
+    assert in_memory_db.fetch_installed_setup(UNMAPPED_ID) is None
 
     from clients.mocks.mock_dropbox_client import MockDropboxClient
     spy = mocker.spy(MockDropboxClient, "download_to")

@@ -2,7 +2,7 @@
 // TRANSLATIONS is copied verbatim from the real Claude Design mock
 // ("HYMO Dashboard.dc.html", project e3c73bba-52dd-4857-af41-8135e141fe03) -
 // same flat keys, same Italian/English copy, including the function-valued
-// entries the mock interpolates by calling them directly (e.g. t.mapSavedMessage(...)).
+// entries the mock interpolates by calling them directly (e.g. t.summaryRunning(...)).
 //
 // EXTRA below fills the handful of real app states the mock's fixed MOCK_SETUPS
 // fixture never needed to cover (a genuinely empty setup list, Master's no-DB
@@ -18,8 +18,6 @@ const TRANSLATIONS = {
     goToDownload: "Vai al download",
     searchPlaceholder: "Cerca per pista o auto…",
     resultsWord: "risultati",
-    unmappedOnlyFilter: "Da mappare",
-    unmappedTag: "da mappare",
     filesUnit: "file",
     hotlapTitle: "Guarda l'hotlap su YouTube",
     hotlapLabel: "Hotlap",
@@ -74,10 +72,14 @@ const TRANSLATIONS = {
     uploadWorkersLabel: "Upload workers", uploadWorkersTip: "Numero di file caricati in parallelo su Dropbox.",
     savedToast: "✓ Impostazioni salvate",
     browseButton: "Sfoglia…",
-    correctButton: "Correggi", mapFolderPlaceholder: "Scegli la cartella LMU…", mapFolderCancel: "Annulla", mapConfirm: "Conferma",
-    mapDialogTitle: "Correggi la cartella",
-    mapDialogBodyPrefix: "Il track Hymo ", mapDialogBodySuffix: " corrisponde a:",
-    mapSavedMessage: (track, folder) => `"${track}" mappata su "${folder}".`,
+    mapFolderCancel: "Annulla", mapConfirm: "Conferma",
+    unmatchedDialogTitle: "Setup non riconosciuti",
+    unmatchedDialogIntro: "Questi setup non corrispondono a una pista o auto conosciuta e sono stati ignorati. Mappa il campo segnalato solo se la pista o l'auto corretta è già presente nell'elenco, poi riprova il download/caricamento per elaborarli.",
+    unmatchedDialogSkipHint: "Se la pista o l'auto corretta non è nell'elenco, usa \"Salta\" per passare al setup successivo senza mapparlo.",
+    unmatchedCopyButton: "Copia elenco", unmatchedCopyTracksLabel: "Piste:", unmatchedCopyCarsLabel: "Auto:",
+    unmatchedSaveCloseButton: "Salva e Chiudi", unmatchedSaveRerunButton: "Salva e Risegui",
+    unmatchedSkipButton: "Salta", unmatchedSkippedTag: "Saltato ✓",
+    unmatchedStepperProgress: (current, total) => `Setup ${current} di ${total}`,
     downloadTitle: "Download",
     downloadDescPre: "Scarica e installa i nuovi setup TrackTitan in modalità ", downloadDescPost: ".",
     modeSectionHeading: "Modalità di funzionamento", activeTag: "attiva",
@@ -126,8 +128,6 @@ const TRANSLATIONS = {
     goToDownload: "Go to download",
     searchPlaceholder: "Search by track or car…",
     resultsWord: "results",
-    unmappedOnlyFilter: "To map",
-    unmappedTag: "to map",
     filesUnit: "files",
     hotlapTitle: "Watch the hotlap on YouTube",
     hotlapLabel: "Hotlap",
@@ -182,10 +182,14 @@ const TRANSLATIONS = {
     uploadWorkersLabel: "Upload workers", uploadWorkersTip: "Number of files uploaded to Dropbox in parallel.",
     savedToast: "✓ Settings saved",
     browseButton: "Browse…",
-    correctButton: "Fix", mapFolderPlaceholder: "Choose the LMU folder…", mapFolderCancel: "Cancel", mapConfirm: "Confirm",
-    mapDialogTitle: "Fix the folder",
-    mapDialogBodyPrefix: "The Hymo track ", mapDialogBodySuffix: " corresponds to:",
-    mapSavedMessage: (track, folder) => `"${track}" mapped to "${folder}".`,
+    mapFolderCancel: "Cancel", mapConfirm: "Confirm",
+    unmatchedDialogTitle: "Unrecognized setups",
+    unmatchedDialogIntro: "These setups don't match a known track or car and were ignored. Only map the flagged field if the correct track or car is already in the list, then retry the download/upload to process them.",
+    unmatchedDialogSkipHint: "If the correct track or car isn't in the list, use \"Skip\" to move to the next setup without mapping it.",
+    unmatchedCopyButton: "Copy list", unmatchedCopyTracksLabel: "Tracks:", unmatchedCopyCarsLabel: "Cars:",
+    unmatchedSaveCloseButton: "Save and Close", unmatchedSaveRerunButton: "Save and Rerun",
+    unmatchedSkipButton: "Skip", unmatchedSkippedTag: "Skipped ✓",
+    unmatchedStepperProgress: (current, total) => `Setup ${current} of ${total}`,
     downloadTitle: "Download",
     downloadDescPre: "Download and install new TrackTitan setups in ", downloadDescPost: " mode.",
     modeSectionHeading: "Operating mode", activeTag: "active",
@@ -233,7 +237,6 @@ const EXTRA = {
   it: {
     sidebarVersion: "Versione",
     emptySetupsList: "Nessun setup installato. Avvia un download dalla scheda Download.",
-    noMatchingSetups: "Nessun setup trovato.",
     statusStopped: "Interrotto",
     statusError: "Errore",
     authErrorTitle: "Autenticazione scaduta",
@@ -290,11 +293,11 @@ const EXTRA = {
     manualUploadGenericErrorToast: "Impossibile caricare il setup. Riprova.",
     manualUploadInvalidFileToast: "È supportato solo il formato .zip.",
     dangerCleanupProgress: (n) => `Eliminazione in corso: eliminati ${n} setups`,
+    dangerCleanupFoldersProgress: "Pulizia cartelle in corso...",
   },
   en: {
     sidebarVersion: "Version",
     emptySetupsList: "No setups installed yet. Start a download from the Download tab.",
-    noMatchingSetups: "No setups found.",
     statusStopped: "Stopped",
     statusError: "Error",
     authErrorTitle: "Authentication expired",
@@ -351,5 +354,6 @@ const EXTRA = {
     manualUploadGenericErrorToast: "Couldn't upload the setup. Please try again.",
     manualUploadInvalidFileToast: "Only the .zip format is supported.",
     dangerCleanupProgress: (n) => `Deletion in progress: ${n} setups deleted`,
+    dangerCleanupFoldersProgress: "Cleaning up folders...",
   },
 };

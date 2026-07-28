@@ -17,7 +17,6 @@ const state = {
   runStatus: "idle", // idle | running | completed | stopped | error
   activity: [],
   installedSearch: "",
-  installedUnmappedOnly: false,
   installedData: { groups: [], totalCount: 0, grandTotal: 0 },
   // Track cards default to collapsed (perf: >400 setups rendered fully expanded
   // was the main source of startup jank) and open on user click; the Set holds
@@ -47,7 +46,10 @@ const state = {
   // keyed by dropdown id ("track" | "car") - reset to 0 whenever a dropdown
   // opens or its search text changes.
   uploadDropdownHighlight: {},
-  correggiTarget: null,
+  // End-of-run "unmatched setups" dialog (see window.onProgress). Holds
+  // { items: [{ track, car, source, selectedTrack, selectedCar, saved }] }
+  // once populated by openUnmatchedModal(), else null.
+  unmatchedTarget: null,
   deleteTarget: null,
   // Settings > Danger Zone confirm/busy dialog. { kind: "dropbox" | "factory" }
   // while open, else null. dangerCountdown gates the confirm button (ticks down
@@ -60,6 +62,10 @@ const state = {
   // action, pushed from Python via window.onDangerProgress - reset to 0
   // whenever that action starts.
   dangerDeletedCount: 0,
+  // "deleting" while zips are being removed (dangerDeletedCount is
+  // meaningful), "cleaning_folders" during the trailing empty-folder prune
+  // that has no per-item count of its own - see window.onDangerProgress.
+  dangerPhase: "deleting",
   dropboxOAuth: null,
   tracktitanFetch: null,
   validationErrors: null,
@@ -104,9 +110,7 @@ const ICONS = {
   uploadCloud: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A5.5 5.5 0 0 1 17.3 8.1 4 4 0 0 1 17 16"></path><path d="M12 12v6.5M9.5 14.5 12 12l2.5 2.5"></path></svg>`,
   navSettings: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2.4M12 18.1v2.4M4.9 6.3l1.7 1.7M17.4 16l1.7 1.7M3.5 12H6M18 12h2.5M4.9 17.7l1.7-1.7M17.4 8l1.7-1.7"></path></svg>`,
   search: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M20 20l-4.35-4.35"></path></svg>`,
-  filter: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 8v6l-4 2v-8Z"></path></svg>`,
   chevron: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>`,
-  edit: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="M14.5 5.5l3 3"></path></svg>`,
   folder: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path></svg>`,
   folderBrowse: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path></svg>`,
   hotlap: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.5v-7l6.3 3.5-6.3 3.5Z"></path></svg>`,
@@ -120,6 +124,7 @@ const ICONS = {
   stop: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>`,
   activityStopped: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"></path></svg>`,
   activityError: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6"></path><circle cx="12" cy="16.7" r="0.6" fill="currentColor"></circle></svg>`,
+  activityInstalled: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.3l2.6 2.6L16 9.3"></path></svg>`,
   warning: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-accent-300)"></circle></svg>`,
   fieldWarning: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-warning)"></circle></svg>`,
   validation: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6"></path><circle cx="12" cy="16.7" r="0.6" fill="var(--color-accent-300)"></circle></svg>`,
@@ -135,8 +140,8 @@ function t(key) {
 }
 
 // Calls one of TRANSLATIONS' (or EXTRA's) function-valued entries
-// (mapSavedMessage, summaryRunning, deleteConfirmBody, ...) directly, the same
-// fallback order t() uses for plain string keys.
+// (summaryRunning, deleteConfirmBody, ...) directly, the same fallback order
+// t() uses for plain string keys.
 function tFn(key, ...args) {
   const dict = TRANSLATIONS[state.language] || TRANSLATIONS.it;
   if (key in dict) return dict[key](...args);
@@ -265,13 +270,31 @@ async function init() {
 }
 
 async function refreshInstalled() {
-  state.installedData = await api().list_installed_setups(state.installedSearch, state.installedUnmappedOnly);
+  state.installedData = await api().list_installed_setups(state.installedSearch);
 }
 
 // ----- progress push channel (Python -> JS) -----------------------------------
 
 window.onProgress = function onProgress(event) {
-  state.activity.push(event);
+  // START and INSTALL fire back-to-back for the same setup with the identical
+  // title/meta (see main.py/slave_manager.py's shared `label`), and
+  // renderActivityItem gives neither an icon - pushed as two separate items
+  // they read as the same setup logged twice. Update the still-open "start"
+  // row in place instead of appending a second one; only search backward
+  // for one still in the "start" kind, so an already-installed row with a
+  // reused title (e.g. a second run) isn't mistaken for this one.
+  if (event.kind === "install") {
+    const pending = [...state.activity].reverse().find(
+      (e) => e.kind === "start" && e.title === event.title && e.meta === event.meta,
+    );
+    if (pending) {
+      pending.kind = "install";
+    } else {
+      state.activity.push(event);
+    }
+  } else {
+    state.activity.push(event);
+  }
   let runEnded = false;
   if (event.kind === "start") {
     state.running = true;
@@ -306,13 +329,21 @@ window.onProgress = function onProgress(event) {
       if (state.view === "setups") renderSetupsView();
     });
   }
+
+  // Setups skipped this run because their car/track didn't match -
+  // mapping.json + manual_mapping fallback both missed. Offer the
+  // end-of-run correction dialog (see openUnmatchedModal below).
+  if ((event.kind === "finish" || event.kind === "stopped") && event.unmatched && event.unmatched.length) {
+    openUnmatchedModal(event.unmatched);
+  }
 };
 
 // Live progress push channel for the Danger Zone's "clean Dropbox setups"
 // action (see confirmDangerAction/api.py's clean_dropbox_setups) - fires
 // repeatedly while that one blocking API call is still in flight.
-window.onDangerProgress = function onDangerProgress(deletedCount) {
+window.onDangerProgress = function onDangerProgress(deletedCount, phase) {
   state.dangerDeletedCount = deletedCount;
+  state.dangerPhase = phase || "deleting";
   if (state.dangerTarget && state.dangerBusy) renderModals();
 };
 
@@ -451,8 +482,6 @@ function renderSetupsView() {
   const search = state.installedSearch.trim();
   const emptyText = search
     ? `${t("noResultsPrefix")}${escapeHtml(search)}${t("noResultsSuffix")}`
-    : state.installedUnmappedOnly
-    ? escapeHtml(t("noMatchingSetups"))
     : escapeHtml(t("emptySetupsList"));
 
   const groupsHtml = state.installedData.groups.length
@@ -471,7 +500,6 @@ function renderSetupsView() {
         ${ICONS.search}
         <input type="text" class="input" id="setups-search" placeholder="${escapeHtml(t("searchPlaceholder"))}" value="${escapeHtml(state.installedSearch)}">
       </div>
-      <button type="button" class="toggle-chip ${state.installedUnmappedOnly ? "active" : ""}" id="setups-unmapped-toggle">${ICONS.filter}${escapeHtml(t("unmappedOnlyFilter"))}</button>
       <span class="tag tag-outline results-count">${state.installedData.totalCount} ${escapeHtml(t("resultsWord"))}</span>
       <button type="button" class="btn btn-ghost text-danger toolbar-push-end" id="setups-delete-all-btn" ${state.installedData.grandTotal ? "" : "disabled"}>${ICONS.trash}${escapeHtml(t("deleteAllInstalledButton"))}</button>
     </div>
@@ -485,25 +513,14 @@ function renderSetupsView() {
       refreshInstalled().then(() => {
         renderSetupsView();
         renderSidebar();
+        focusSetupsSearchInput();
       });
     }, 250)
   );
 
-  document.getElementById("setups-unmapped-toggle").addEventListener("click", () => {
-    state.installedUnmappedOnly = !state.installedUnmappedOnly;
-    refreshInstalled().then(() => {
-      renderSetupsView();
-      renderSidebar();
-    });
-  });
-
   document.getElementById("setups-delete-all-btn").addEventListener("click", () => {
     state.deleteTarget = { allInstalled: true };
     renderModals();
-  });
-
-  el.querySelectorAll("[data-correggi]").forEach((btn) => {
-    btn.addEventListener("click", () => openCorreggiModal(btn.dataset.correggi));
   });
 
   el.querySelectorAll("[data-toggle-track]").forEach((btn) => {
@@ -585,12 +602,6 @@ function renderTrackGroup(group) {
   const rows = group.cars.map((c) => renderCarGroup(group, c)).join("");
   const setupIds = allSetups.map((s) => s.setupId);
 
-  const unmappedTag = !group.trackFound
-    ? `<span class="tag tag-neutral">${escapeHtml(t("unmappedTag"))}</span>
-       <button type="button" class="btn btn-ghost" data-correggi="${escapeHtml(group.track)}">${ICONS.edit}${escapeHtml(t("correctButton"))}</button>
-       <span class="arrow">&rarr; ${escapeHtml((allSetups[0] && allSetups[0].installationFolder) || "")}</span>`
-    : "";
-
   return `
     <div class="card elev-sm setup-track-card">
       <div class="track-group-header">
@@ -599,7 +610,6 @@ function renderTrackGroup(group) {
           <h4>${escapeHtml(group.track)}</h4>
         </button>
         <div class="track-group-actions">
-          ${unmappedTag}
           <span class="tooltip">
             <button type="button" class="btn btn-ghost text-danger" data-delete-track="${escapeHtml(group.track)}" data-delete-track-ids="${escapeHtml(JSON.stringify(setupIds))}">${ICONS.trash}</button>
             <span class="tooltip-text">${escapeHtml(t("deleteAllButton"))}</span>
@@ -694,14 +704,6 @@ function renderSetupEntry(s, group, ty, isFirst) {
   `;
 }
 
-async function openCorreggiModal(track) {
-  state.correggiTarget = { track };
-  if (!state.trackFolderOptions.length) {
-    state.trackFolderOptions = await api().get_track_folder_options();
-  }
-  renderModals();
-}
-
 // ----- Download ---------------------------------------------------------------
 
 // Desc-key family for each view's compact, read-only mode-summary card
@@ -791,6 +793,7 @@ function renderActivityItem(item) {
   const icons = {
     stopped: ICONS.activityStopped,
     error: ICONS.activityError,
+    install: ICONS.activityInstalled,
   };
   const icon = icons[item.kind];
   return `
@@ -804,12 +807,11 @@ function renderActivityItem(item) {
   `;
 }
 
-async function onStartStopClick() {
-  if (state.running) {
-    await api().stop_download();
-    return;
-  }
-
+// Validates and kicks off a run in state.selectedMode. Shared by the Download
+// tab's start button (onStartStopClick below) and the unmatched-setups
+// dialog's "Salva e Risegui" (see renderModals' data-unmatched-save-rerun
+// binding), which restarts the same run after saving new mappings.
+async function startRun() {
   const errors = await api().validate_start(state.selectedMode);
   if (errors && errors.length) {
     state.validationErrors = errors;
@@ -830,14 +832,20 @@ async function onStartStopClick() {
   }
 }
 
+async function onStartStopClick() {
+  if (state.running) {
+    await api().stop_download();
+    return;
+  }
+  await startRun();
+}
+
 // ----- Carica Setup / manual upload ---------------------------------------
 
 const UPLOAD_MODE_DESC_KEYS = { full: "uploadFullDesc", master: "uploadMasterDesc", slave: "uploadSlaveDesc" };
 
-// Lazy-fetched once, like trackFolderOptions/uploadCarOptions above (see
-// openCorreggiModal for the same pattern applied to trackFolderOptions alone) -
-// both lists are static per mapping.json load, so a first visit to the Upload
-// tab is the only time either needs an IPC round trip.
+// Lazy-fetched once: both lists are static per mapping.json load, so a first
+// visit to the Upload tab is the only time either needs an IPC round trip.
 async function ensureUploadOptions() {
   if (!state.trackFolderOptions.length) {
     state.trackFolderOptions = await api().get_track_folder_options();
@@ -962,6 +970,19 @@ function focusDropdownSearchInput(id) {
   }
 }
 
+// Same rebuilt-input-loses-focus problem as focusDropdownSearchInput above,
+// for the "setup installati" page's own search box (renderSetupsView's
+// debounced input handler rebuilds #setups-search via innerHTML on every
+// keystroke pause, which drops focus unless it's explicitly restored here).
+function focusSetupsSearchInput() {
+  const fresh = document.getElementById("setups-search");
+  if (fresh) {
+    fresh.focus();
+    const pos = fresh.value.length;
+    fresh.setSelectionRange(pos, pos);
+  }
+}
+
 // Returns focus to a dropdown's own trigger button once Enter/Escape closes
 // its panel, so keyboard users don't lose their place when the search input
 // they were just typing in disappears from the DOM.
@@ -970,10 +991,14 @@ function focusDropdownTrigger(id) {
   if (trigger) trigger.focus();
 }
 
-// Binds one renderSearchableSelect() instance. `onSelect` mutates the caller's
-// own state (state.manualUpload.track/.car) directly rather than returning a
-// value, since the caller also owns when to re-render.
-function bindSearchableSelect(el, id, onSelect) {
+// Binds one renderSearchableSelect() instance. `onSelect` mutates the
+// caller's own state (state.manualUpload.track/.car, or one row of
+// state.unmatchedTarget.items) directly rather than returning a value,
+// since the caller also owns when to re-render - which is why `rerender`
+// is passed in explicitly rather than hardcoded: the Upload tab re-renders
+// itself via renderUploadView(), the end-of-run unmatched-setups dialog via
+// renderModals(), same component either way.
+function bindSearchableSelect(el, id, onSelect, rerender) {
   const root = el.querySelector(`.select-dropdown[data-select-id="${id}"]`);
   if (!root) return;
 
@@ -982,9 +1007,9 @@ function bindSearchableSelect(el, id, onSelect) {
     state.uploadOpenDropdown = opening ? id : null;
     state.uploadDropdownSearch[id] = "";
     state.uploadDropdownHighlight[id] = 0;
-    renderUploadView();
-    // renderUploadView() just built the search input fresh - focus it so
-    // users can start typing to filter immediately, without an extra click.
+    rerender();
+    // rerender() just built the search input fresh - focus it so users can
+    // start typing to filter immediately, without an extra click.
     if (opening) focusDropdownSearchInput(id);
   });
 
@@ -993,7 +1018,7 @@ function bindSearchableSelect(el, id, onSelect) {
     searchInput.addEventListener("input", (e) => {
       state.uploadDropdownSearch[id] = e.target.value;
       state.uploadDropdownHighlight[id] = 0;
-      renderUploadView();
+      rerender();
       focusDropdownSearchInput(id);
     });
 
@@ -1011,7 +1036,7 @@ function bindSearchableSelect(el, id, onSelect) {
         const current = state.uploadDropdownHighlight[id] || 0;
         const next = e.key === "ArrowDown" ? Math.min(current + 1, count - 1) : Math.max(current - 1, 0);
         state.uploadDropdownHighlight[id] = next;
-        renderUploadView();
+        rerender();
         focusDropdownSearchInput(id);
       } else if (e.key === "Enter") {
         e.preventDefault();
@@ -1021,12 +1046,12 @@ function bindSearchableSelect(el, id, onSelect) {
         onSelect(target.dataset.value);
         state.uploadOpenDropdown = null;
         state.uploadDropdownSearch[id] = "";
-        renderUploadView();
+        rerender();
         focusDropdownTrigger(id);
       } else if (e.key === "Escape") {
         e.preventDefault();
         state.uploadOpenDropdown = null;
-        renderUploadView();
+        rerender();
         focusDropdownTrigger(id);
       }
     });
@@ -1037,17 +1062,20 @@ function bindSearchableSelect(el, id, onSelect) {
       onSelect(btn.dataset.value);
       state.uploadOpenDropdown = null;
       state.uploadDropdownSearch[id] = "";
-      renderUploadView();
+      rerender();
     });
   });
 }
 
 // Closes whichever select-dropdown is open on an outside click - same pattern
-// as closeContextMenu()'s own outside-mousedown listener further down.
+// as closeContextMenu()'s own outside-mousedown listener further down. Picks
+// the rerender matching whichever surface (Upload tab vs. the unmatched-setups
+// dialog) actually owns the currently-open dropdown id.
 document.addEventListener("mousedown", (e) => {
   if (state.uploadOpenDropdown && !e.target.closest(".select-dropdown")) {
     state.uploadOpenDropdown = null;
-    renderUploadView();
+    if (state.unmatchedTarget) renderModals();
+    else renderUploadView();
   }
 });
 
@@ -1102,8 +1130,8 @@ function bindManualUploadForm(el, upload) {
     typeSelect.addEventListener("change", () => { upload.type = typeSelect.value; });
   }
 
-  bindSearchableSelect(el, "track", (value) => { upload.track = value; });
-  bindSearchableSelect(el, "car", (value) => { upload.car = value; });
+  bindSearchableSelect(el, "track", (value) => { upload.track = value; }, renderUploadView);
+  bindSearchableSelect(el, "car", (value) => { upload.car = value; }, renderUploadView);
 
   const confirmBtn = document.getElementById("manual-upload-confirm-btn");
   if (confirmBtn) confirmBtn.addEventListener("click", onConfirmManualUpload);
@@ -1593,6 +1621,7 @@ async function confirmDangerAction() {
 
   if (kind === "dropbox") {
     state.dangerDeletedCount = 0;
+    state.dangerPhase = "deleting";
     const result = await api().clean_dropbox_setups();
     state.dangerTarget = null;
     state.dangerBusy = false;
@@ -1768,7 +1797,7 @@ async function startDropboxOauthFlow(tokenType) {
   renderModals();
 }
 
-// ----- modals (warning / correggi / validation) --------------------------------
+// ----- modals (warning / validation) --------------------------------
 
 // Our real check_credentials() returns a flat list of missing/invalid field
 // names rather than the mock's single validateCredentials() error type, since
@@ -1799,6 +1828,47 @@ function authErrorBody(code, status) {
   return t("authErrorGenericBody");
 }
 
+// Populates and opens the end-of-run "unmatched setups" dialog. Reuses
+// ensureUploadOptions() (see the Upload tab above) for the same two
+// dropdown option lists (track folders, cars) the per-row corrections pick
+// from - already cached after a first Upload tab visit, so this is a no-op
+// IPC-wise in the common case.
+async function openUnmatchedModal(items) {
+  await ensureUploadOptions();
+  state.unmatchedTarget = {
+    // Shown one setup at a time via the dialog's stepper (see renderModals) -
+    // saving the current one advances this to the next.
+    currentIndex: 0,
+    items: items.map((it) => ({
+      track: it.track, car: it.car, source: it.source,
+      // A setup can be skipped with only one side unmatched (e.g. the car
+      // resolved fine, only the track didn't) - trackMatched/carMatched say
+      // which field(s) actually need a correction, so only those get a
+      // picker and only those get persisted on save.
+      trackMatched: !!it.trackMatched, carMatched: !!it.carMatched,
+      selectedTrack: null, selectedCar: null,
+      // Set when the user has no matching entry to pick (the correct track/
+      // car isn't in the dropdown yet) and hits "Salta" instead of mapping.
+      skipped: false,
+    })),
+  };
+  renderModals();
+}
+
+// Persists every populated, valid selection across all unmatched items in one
+// batch - only track/car fields that were actually unmatched and have a
+// picked value get saved; an item left blank (or explicitly skipped) simply
+// contributes nothing. Shared by the dialog's "Salva e Chiudi"/"Salva e
+// Risegui" buttons (see the data-unmatched-save-close/-rerun bindings).
+async function saveAllUnmatchedMappings() {
+  const calls = [];
+  for (const item of state.unmatchedTarget.items) {
+    if (!item.trackMatched && item.selectedTrack) calls.push(api().map_track(item.track, item.selectedTrack));
+    if (!item.carMatched && item.selectedCar) calls.push(api().map_car(item.car, item.selectedCar));
+  }
+  await Promise.all(calls);
+}
+
 function renderModals() {
   const root = document.getElementById("modal-root");
   let html = "";
@@ -1817,24 +1887,90 @@ function renderModals() {
     `;
   }
 
-  if (state.correggiTarget) {
-    const options = state.trackFolderOptions
-      .map((folder) => `<option value="${escapeHtml(folder)}">${escapeHtml(folder)}</option>`)
+  if (state.unmatchedTarget) {
+    const trackOptions = state.trackFolderOptions.map((folder) => ({ value: folder, label: folder }));
+    const carOptions = state.uploadCarOptions.map((c) => ({ value: c.name, label: c.name, carClass: c.carClass }));
+    const items = state.unmatchedTarget.items;
+    const total = items.length;
+    // Clamped defensively; currentIndex only ever moves within [0, total-1]
+    // via prev/next/goto/save below, so this is a no-op in practice.
+    const idx = Math.max(0, Math.min(state.unmatchedTarget.currentIndex, total - 1));
+    const item = items[idx];
+    const needsTrack = !item.trackMatched;
+    const needsCar = !item.carMatched;
+
+    // Only the field(s) that actually failed to match get a picker - a
+    // side that already resolved has nothing to correct, so it's dropped
+    // entirely rather than shown as a disabled placeholder.
+    const trackFieldHtml = needsTrack ? `
+          <div class="field">
+            <label>${escapeHtml(t("manualUploadTrackLabel"))}</label>
+            ${renderSearchableSelect({
+              id: `unmatched-track-${idx}`, options: trackOptions, selected: item.selectedTrack,
+              placeholder: t("manualUploadTrackPlaceholder"),
+            })}
+          </div>` : "";
+    const carFieldHtml = needsCar ? `
+          <div class="field">
+            <label>${escapeHtml(t("manualUploadCarLabel"))}</label>
+            ${renderSearchableSelect({
+              id: `unmatched-car-${idx}`, options: carOptions, selected: item.selectedCar,
+              placeholder: t("manualUploadCarPlaceholder"), withLogos: true,
+            })}
+          </div>` : "";
+    const fieldsHtml = needsTrack && needsCar
+      ? `<div class="field-row">${trackFieldHtml}${carFieldHtml}</div>`
+      : `${trackFieldHtml}${carFieldHtml}`;
+
+    const rowHtml = `
+      <div class="card elev-sm">
+        <div class="unmatched-identified">
+          <div>${escapeHtml(t("manualUploadTrackLabel"))}: <strong>${escapeHtml(item.track)}</strong></div>
+          <div>${escapeHtml(t("manualUploadCarLabel"))}: <strong>${escapeHtml(item.car)}</strong></div>
+        </div>
+        ${fieldsHtml}
+        <div class="dialog-actions" style="margin-top:0;">
+          <button type="button" class="btn btn-ghost" data-unmatched-skip="${idx}" ${item.skipped ? "disabled" : ""}>
+            ${escapeHtml(item.skipped ? t("unmatchedSkippedTag") : t("unmatchedSkipButton"))}
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Stepper: one dot per setup, so a step can be jumped to directly instead
+    // of only walking through prev/next - ringed when current, outlined amber
+    // when skipped (no mapping will be saved for it), so progress stays
+    // visible at a glance even for a long run. There's no more per-item
+    // "saved" state to show: saving now happens in one batch at the bottom
+    // (see unmatched-save-close/unmatched-save-rerun below), which closes
+    // the dialog immediately, so a dot never needs to reflect it.
+    const dotsHtml = items
+      .map((it, i) => `<button type="button" class="unmatched-stepper-dot ${i === idx ? "active" : ""} ${it.skipped ? "skipped" : ""}" data-unmatched-goto="${i}" title="${escapeHtml(it.track)} - ${escapeHtml(it.car)}"></button>`)
       .join("");
+
     html += `
-      <div class="dialog-backdrop" data-modal="correggi">
-        <div class="dialog elev-lg">
-          <div class="dialog-title">${escapeHtml(t("mapDialogTitle"))}</div>
+      <div class="dialog-backdrop" data-modal="unmatched">
+        <div class="dialog elev-lg" style="width: min(560px, 100%);">
+          <div class="dialog-title">${ICONS.warning}${escapeHtml(t("unmatchedDialogTitle"))}</div>
           <div class="dialog-body">
-            ${escapeHtml(t("mapDialogBodyPrefix"))}"${escapeHtml(state.correggiTarget.track)}"${escapeHtml(t("mapDialogBodySuffix"))}
-            <select class="input" id="correggi-select" style="margin-top:12px;">
-              <option value="" disabled selected>${escapeHtml(t("mapFolderPlaceholder"))}</option>
-              ${options}
-            </select>
+            <p>${escapeHtml(t("unmatchedDialogIntro"))}</p>
+            <p>${escapeHtml(t("unmatchedDialogSkipHint"))}</p>
+            <div style="margin-top: var(--space-2);">
+              ${rowHtml}
+            </div>
+            <div class="unmatched-stepper">
+              <button type="button" class="btn btn-ghost" id="unmatched-prev" ${idx === 0 ? "disabled" : ""}>
+                <span style="display:inline-flex; transform:rotate(180deg);">${ICONS.chevron}</span>
+              </button>
+              <div class="unmatched-stepper-dots">${dotsHtml}</div>
+              <button type="button" class="btn btn-ghost" id="unmatched-next" ${idx === total - 1 ? "disabled" : ""}>${ICONS.chevron}</button>
+            </div>
+            <p class="unmatched-stepper-progress">${tFn("unmatchedStepperProgress", idx + 1, total)}</p>
           </div>
           <div class="dialog-actions">
-            <button type="button" class="btn btn-ghost" id="correggi-cancel">${escapeHtml(t("mapFolderCancel"))}</button>
-            <button type="button" class="btn btn-primary" id="correggi-confirm">${escapeHtml(t("mapConfirm"))}</button>
+            <button type="button" class="btn btn-secondary" id="unmatched-copy">${ICONS.copy}${escapeHtml(t("unmatchedCopyButton"))}</button>
+            <button type="button" class="btn btn-secondary" id="unmatched-save-close" style="margin-left:auto;">${escapeHtml(t("unmatchedSaveCloseButton"))}</button>
+            <button type="button" class="btn btn-primary" id="unmatched-save-rerun">${escapeHtml(t("unmatchedSaveRerunButton"))}</button>
           </div>
         </div>
       </div>
@@ -1870,9 +2006,11 @@ function renderModals() {
 
   if (state.dangerTarget) {
     if (state.dangerBusy) {
-      const busyTitle = state.dangerTarget.kind === "dropbox"
-        ? tFn("dangerCleanupProgress", state.dangerDeletedCount)
-        : t("dangerBusyTitle");
+      const busyTitle = state.dangerTarget.kind !== "dropbox"
+        ? t("dangerBusyTitle")
+        : state.dangerPhase === "cleaning_folders"
+        ? t("dangerCleanupFoldersProgress")
+        : tFn("dangerCleanupProgress", state.dangerDeletedCount);
       html += `
         <div class="dialog-backdrop" data-modal="danger-busy">
           <div class="dialog elev-lg" style="width: min(560px, 100%);">
@@ -2024,29 +2162,87 @@ function renderModals() {
     });
   }
 
-  const correggiCancel = document.getElementById("correggi-cancel");
-  if (correggiCancel) {
-    correggiCancel.addEventListener("click", () => {
-      state.correggiTarget = null;
-      renderModals();
-    });
-  }
+  if (state.unmatchedTarget) {
+    const unmatchedIdx = Math.max(0, Math.min(state.unmatchedTarget.currentIndex, state.unmatchedTarget.items.length - 1));
+    // Only the current step's pair of selects exist in the DOM - bindSearchableSelect
+    // no-ops on an id it can't find, so this stays a single unconditional call.
+    bindSearchableSelect(root, `unmatched-track-${unmatchedIdx}`, (value) => { state.unmatchedTarget.items[unmatchedIdx].selectedTrack = value; }, renderModals);
+    bindSearchableSelect(root, `unmatched-car-${unmatchedIdx}`, (value) => { state.unmatchedTarget.items[unmatchedIdx].selectedCar = value; }, renderModals);
 
-  const correggiConfirm = document.getElementById("correggi-confirm");
-  if (correggiConfirm) {
-    correggiConfirm.addEventListener("click", async () => {
-      const select = document.getElementById("correggi-select");
-      const folder = select.value;
-      if (!folder) return;
-      const track = state.correggiTarget.track;
-      await api().map_track(track, folder);
-      state.correggiTarget = null;
-      renderModals();
-      showToast(tFn("mapSavedMessage", track, folder), "success");
-      await refreshInstalled();
-      renderSetupsView();
-      renderSidebar();
+    root.querySelectorAll("[data-unmatched-skip]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = state.unmatchedTarget.items[Number(btn.dataset.unmatchedSkip)];
+        if (!item || item.skipped) return;
+        // No api call: skipping just means "I have nothing to map this to
+        // yet", so nothing is persisted and the setup stays unmatched.
+        item.skipped = true;
+        if (state.unmatchedTarget.currentIndex < state.unmatchedTarget.items.length - 1) {
+          state.unmatchedTarget.currentIndex += 1;
+        }
+        renderModals();
+      });
     });
+
+    const unmatchedPrev = document.getElementById("unmatched-prev");
+    if (unmatchedPrev) {
+      unmatchedPrev.addEventListener("click", () => {
+        if (state.unmatchedTarget.currentIndex > 0) state.unmatchedTarget.currentIndex -= 1;
+        renderModals();
+      });
+    }
+
+    const unmatchedNext = document.getElementById("unmatched-next");
+    if (unmatchedNext) {
+      unmatchedNext.addEventListener("click", () => {
+        if (state.unmatchedTarget.currentIndex < state.unmatchedTarget.items.length - 1) state.unmatchedTarget.currentIndex += 1;
+        renderModals();
+      });
+    }
+
+    root.querySelectorAll("[data-unmatched-goto]").forEach((dot) => {
+      dot.addEventListener("click", () => {
+        state.unmatchedTarget.currentIndex = Number(dot.dataset.unmatchedGoto);
+        renderModals();
+      });
+    });
+
+    const unmatchedCopy = document.getElementById("unmatched-copy");
+    if (unmatchedCopy) {
+      unmatchedCopy.addEventListener("click", async () => {
+        // Only the field(s) that actually failed to match are worth pasting
+        // into mapping.json - a side that already resolved has nothing to add.
+        const tracks = [...new Set(state.unmatchedTarget.items.filter((it) => !it.trackMatched).map((it) => it.track))].sort();
+        const cars = [...new Set(state.unmatchedTarget.items.filter((it) => !it.carMatched).map((it) => it.car))].sort();
+        const sections = [];
+        if (tracks.length) sections.push(`${t("unmatchedCopyTracksLabel")}\n${tracks.join("\n")}`);
+        if (cars.length) sections.push(`${t("unmatchedCopyCarsLabel")}\n${cars.join("\n")}`);
+        await copyTextToClipboard(sections.join("\n\n"));
+        showToast(t("copiedToast"), "success");
+      });
+    }
+
+    const unmatchedSaveClose = document.getElementById("unmatched-save-close");
+    const unmatchedSaveRerun = document.getElementById("unmatched-save-rerun");
+    if (unmatchedSaveClose && unmatchedSaveRerun) {
+      unmatchedSaveClose.addEventListener("click", async () => {
+        unmatchedSaveClose.disabled = true;
+        unmatchedSaveRerun.disabled = true;
+        await saveAllUnmatchedMappings();
+        state.unmatchedTarget = null;
+        renderModals();
+      });
+      unmatchedSaveRerun.addEventListener("click", async () => {
+        unmatchedSaveClose.disabled = true;
+        unmatchedSaveRerun.disabled = true;
+        await saveAllUnmatchedMappings();
+        state.unmatchedTarget = null;
+        renderModals();
+        // Re-run the same mode's download/upload now that the mappings that
+        // caused these skips are in place, so the freshly-mapped setups get
+        // picked up without the user having to go find the Start button.
+        await startRun();
+      });
+    }
   }
 
   const deleteCancel = document.getElementById("delete-cancel");

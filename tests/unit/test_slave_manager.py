@@ -58,12 +58,16 @@ def sm(mocker, tmp_path):
     dbx = MagicMock()
     dbx.list_go_setups.return_value = []
     setup_manager = MagicMock()
-    # Unconfigured, these MagicMock attributes would auto-vivify as truthy
-    # MagicMock instances (not None), breaking the `or sanitize_identity(...)`
-    # fallback in _process_go and the assert_called_once_with(...) checks
-    # below that expect the raw car/track strings back unchanged.
-    setup_manager.car_manager.get_car_name.return_value = None
-    setup_manager.track_manager.get_official_track_name.return_value = None
+    # Matched by default, echoing the raw text straight back as the
+    # "official" name - unconfigured, these MagicMock attributes would
+    # otherwise auto-vivify as truthy-but-wrong MagicMock instances, and
+    # _process/_process_go now skip outright (recording into
+    # manager.unmatched) on an unmatched car/track rather than installing
+    # under a placeholder name. A test that wants the unmatched path sets
+    # one of these to a `lambda _: None` side_effect instead.
+    setup_manager.car_manager.get_car_name.side_effect = lambda car: car
+    setup_manager.track_manager.get_track_folder_name.side_effect = lambda track: track
+    setup_manager.track_manager.get_official_track_name.side_effect = lambda track: track
     database = MagicMock()
     database.fetch_installed_go_setup.return_value = None
     return SlaveManager(dropbox_client=dbx, setup_manager=setup_manager, database=database), dbx, setup_manager, database, tmp_path
@@ -111,11 +115,37 @@ def test_missing_metadata_skips_install(sm):
     setup_manager.install_setup.assert_not_called()
 
 
-def test_run_housekeeps_and_lists(sm):
+def test_process_skips_unmatched_setup_and_records_it(sm):
+    manager, dbx, setup_manager, database, tmp = sm
+    database.is_installed_last_version.return_value = False
+    dbx.download_to.side_effect = _fake_download
+    setup_manager.car_manager.get_car_name.side_effect = lambda car: None
+
+    manager._process(_remote())
+
+    setup_manager.install_setup.assert_not_called()
+    assert manager.unmatched.serialize() == [
+        {"track": "Spa", "car": "Porsche 963", "source": "dropbox", "trackMatched": True, "carMatched": False},
+    ]
+
+
+def test_process_unmatched_setup_never_emits_start(sm):
+    manager, dbx, setup_manager, database, tmp = sm
+    database.is_installed_last_version.return_value = False
+    dbx.download_to.side_effect = _fake_download
+    setup_manager.track_manager.get_track_folder_name.side_effect = lambda track: None
+    events = []
+    manager.on_progress = events.append
+
+    manager._process(_remote())
+
+    assert events == []
+
+
+def test_run_lists_the_dropbox_share(sm):
     manager, dbx, setup_manager, database, tmp = sm
     dbx.list_setups.return_value = []
     manager.run()
-    setup_manager.update_tracks_not_found.assert_called_once()
     dbx.list_setups.assert_called_once()
 
 
@@ -219,7 +249,6 @@ def test_process_go_first_time_mints_uuid_and_installs(sm):
     (local_arg, setup_arg), kwargs = setup_manager.install_setup.call_args
     assert kwargs["extensions"] == GO_SETUP_FILE_EXTENSIONS
     assert kwargs["setup_type"] == "GO"
-    assert kwargs["fallback_suffix"] == "GO"
     assert kwargs["sha256"] == hashlib.sha256(content).hexdigest()
     assert uuid_module.UUID(setup_arg.id)  # plain UUID, no prefix
     assert setup_arg.car == "Oreca 07"
@@ -241,6 +270,19 @@ def test_process_go_unchanged_skips_install_even_with_different_filename(sm):
 
     setup_manager.install_setup.assert_not_called()
     assert [e.kind for e in events] == [ProgressKind.START]
+
+
+def test_process_go_skips_unmatched_and_records_it_without_downloading(sm):
+    manager, dbx, setup_manager, database, tmp = sm
+    setup_manager.track_manager.get_official_track_name.side_effect = lambda track: None
+
+    manager._process_go(_go_remote())
+
+    dbx.download_to.assert_not_called()
+    setup_manager.install_setup.assert_not_called()
+    assert manager.unmatched.serialize() == [
+        {"track": "Imola", "car": "Oreca 07", "source": "dropbox", "trackMatched": False, "carMatched": True},
+    ]
 
 
 def test_process_go_changed_content_reuses_the_existing_setup_id(sm):
@@ -309,3 +351,56 @@ def test_cancel_after_regular_loop_stops_before_go_loop_starts(sm):
 
     setup_manager.install_setup.assert_called_once()
     assert events[-1].kind == ProgressKind.STOPPED
+
+
+# --- unmatched car/track surfaced on the run()-level FINISH/STOPPED events ----
+
+
+def test_finish_event_carries_the_unmatched_list(sm):
+    manager, dbx, setup_manager, database, tmp = sm
+    dbx.list_setups.return_value = []
+    dbx.list_go_setups.return_value = [_go_remote()]
+    setup_manager.track_manager.get_official_track_name.side_effect = lambda track: None
+    events = []
+    manager.on_progress = events.append
+
+    manager.run()
+
+    finish = next(e for e in events if e.kind == ProgressKind.FINISH)
+    assert finish.unmatched == [
+        {"track": "Imola", "car": "Oreca 07", "source": "dropbox", "trackMatched": False, "carMatched": True},
+    ]
+
+
+def test_finish_event_unmatched_is_none_when_everything_matched(sm):
+    manager, dbx, setup_manager, database, tmp = sm
+    dbx.list_setups.return_value = []
+    events = []
+    manager.on_progress = events.append
+
+    manager.run()
+
+    finish = next(e for e in events if e.kind == ProgressKind.FINISH)
+    assert finish.unmatched is None
+
+
+def test_a_shared_unmatched_tracker_can_be_injected(mocker, tmp_path):
+    from orchestration.slave_manager import SlaveManager
+    from domain.unmatched import UnmatchedTracker
+
+    mocker.patch("orchestration.slave_manager.DOWNLOAD_PATH", tmp_path)
+    dbx = MagicMock()
+    dbx.list_setups.return_value = []
+    dbx.list_go_setups.return_value = [_go_remote()]
+    setup_manager = MagicMock()
+    setup_manager.track_manager.get_official_track_name.side_effect = lambda track: None
+    database = MagicMock()
+    tracker = UnmatchedTracker()
+
+    manager = SlaveManager(dropbox_client=dbx, setup_manager=setup_manager, database=database, unmatched=tracker)
+    manager.run()
+
+    assert manager.unmatched is tracker
+    assert tracker.serialize() == [
+        {"track": "Imola", "car": "Oreca 07", "source": "dropbox", "trackMatched": False, "carMatched": True},
+    ]

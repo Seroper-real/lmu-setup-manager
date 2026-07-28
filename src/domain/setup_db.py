@@ -111,8 +111,7 @@ class SetupDb:
         # reaches this path (set once by add_installed_setup via
         # Setup.safe_track/safe_car) - persisted as-is, never re-sanitized:
         # re-running sanitize_identity here would silently mangle an official
-        # name containing a hyphen (e.g. "Cadillac V-Series.R") on every
-        # relocate cycle (see SetupManager._try_relocate_setup).
+        # name containing a hyphen (e.g. "Cadillac V-Series.R").
         with self.conn:
             query = """
                     UPDATE installed_setups SET
@@ -153,31 +152,6 @@ class SetupDb:
         finally:
             cursor.close()
 
-
-    def is_track_found(self, setup_id: str) -> bool:
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("SELECT track_found FROM installed_setups WHERE setup_id = ?", (setup_id,))
-            row = cursor.fetchone()
-            if row is None:
-                return False
-            return bool(row[0])
-        except Exception as e:
-            log.error(f"Error fetching track_found for {setup_id}: {e}")
-            return False
-        finally:
-            cursor.close()
-
-    def fetch_tracks_not_found(self) -> list[InstalledSetup]:
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("SELECT * FROM installed_setups WHERE track_found = 0") #OR track_found IS NULL (for now not consider null values, because are probably pre-migration values)
-            return [InstalledSetup.from_row(row) for row in cursor.fetchall()]
-        except Exception as e:
-            log.error(f"Error fetching unresolved tracks: {e}")
-            return []
-        finally:
-            cursor.close()
 
     def fetch_all_installed_setups(self) -> list[InstalledSetup]:
         cursor = self.conn.cursor()

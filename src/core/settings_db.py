@@ -1,6 +1,8 @@
 import json
 import os
+import re
 import sqlite3
+import uuid
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional
@@ -71,6 +73,33 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
+def _upsert_manual_mapping_row(conn: sqlite3.Connection, mapping_type: str, name: str, pattern: str) -> None:
+    """Append `pattern` (one or more "|"-joined matcher alternatives) to the
+    (type, name) row, deduping exact literal alternatives already present;
+    insert a new row if none exists yet. Operates on an already-open
+    connection/transaction - the caller owns commit/rollback, so this can run
+    both from the public upsert_manual_mapping() below and from the one-time
+    tracks-table migration in the same transaction as the rest of table setup."""
+    row = conn.execute(
+        "SELECT id, matcher FROM manual_mapping WHERE type = ? AND name = ?", (mapping_type, name)
+    ).fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO manual_mapping (id, type, name, matcher) VALUES (?, ?, ?, ?)",
+            (str(uuid.uuid4()), mapping_type, name, pattern),
+        )
+        return
+    mapping_id, existing_matcher = row
+    existing_parts = set(existing_matcher.split("|"))
+    new_parts = [p for p in pattern.split("|") if p not in existing_parts]
+    if not new_parts:
+        return
+    conn.execute(
+        "UPDATE manual_mapping SET matcher = ? WHERE id = ?",
+        (existing_matcher + "|" + "|".join(new_parts), mapping_id),
+    )
+
+
 def _ensure_tables(conn: sqlite3.Connection) -> None:
     with conn:
         conn.execute("""
@@ -79,13 +108,20 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
                 data TEXT NOT NULL
             )
         """)
-        # User-added customizations only (the "Correggi" UI action) - layered on
-        # top of config/mapping.json's file-derived mapping, never seeded with it.
+        # User-added customizations only (the "Correggi" UI action, plus the
+        # end-of-run "unmatched setups" correction dialog) - layered on top of
+        # config/mapping.json's file-derived mapping, never seeded with it.
+        # One row per (type, name): `matcher` holds every raw TrackTitan/Dropbox
+        # alternative the user has taught this official name so far, joined with
+        # "|" (see upsert_manual_mapping) - equivalent to a list of patterns
+        # since re.search treats "|" as alternation.
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS tracks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                lmu_folder_name TEXT NOT NULL,
-                tt_patterns TEXT NOT NULL
+            CREATE TABLE IF NOT EXISTS manual_mapping (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                matcher TEXT NOT NULL,
+                UNIQUE(type, name)
             )
         """)
         conn.execute("""
@@ -98,6 +134,25 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             "INSERT OR IGNORE INTO config (id, data) VALUES (1, ?)",
             (json.dumps(DEFAULT_CONFIG),),
         )
+        _migrate_legacy_tracks_table(conn)
+
+
+def _migrate_legacy_tracks_table(conn: sqlite3.Connection) -> None:
+    """One-time fold of the pre-manual_mapping "tracks" table (the old
+    per-track-only Correggi storage) into manual_mapping(type="track"), then
+    drop it. Guarded by a sqlite_master check so this is a no-op on every call
+    after the first - `tracks` is gone by then."""
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tracks'"
+    ).fetchone()
+    if not exists:
+        return
+    rows = conn.execute("SELECT lmu_folder_name, tt_patterns FROM tracks").fetchall()
+    for lmu_folder_name, patterns_json in rows:
+        patterns = json.loads(patterns_json)
+        if patterns:
+            _upsert_manual_mapping_row(conn, "track", lmu_folder_name, "|".join(patterns))
+    conn.execute("DROP TABLE tracks")
 
 
 def _connect() -> sqlite3.Connection:
@@ -122,13 +177,14 @@ def get_config() -> dict[str, Any]:
 
 
 def reset_to_factory_defaults() -> None:
-    """Wipe config, custom track mappings, and secrets, then reseed config with
-    DEFAULT_CONFIG - the Settings "Restore factory settings" danger-zone action."""
+    """Wipe config, custom track/car mappings, and secrets, then reseed config
+    with DEFAULT_CONFIG - the Settings "Restore factory settings" danger-zone
+    action."""
     conn = _connect()
     try:
         with conn:
             conn.execute("DELETE FROM config")
-            conn.execute("DELETE FROM tracks")
+            conn.execute("DELETE FROM manual_mapping")
             conn.execute("DELETE FROM env_secrets")
             conn.execute("INSERT INTO config (id, data) VALUES (1, ?)", (json.dumps(DEFAULT_CONFIG),))
     finally:
@@ -174,41 +230,28 @@ def save_secrets(values: dict[str, str]) -> None:
         conn.close()
 
 
-def get_custom_tracks() -> list[dict[str, Any]]:
-    """User-added "Correggi" mappings only, in the order they were added."""
+def get_manual_mappings(mapping_type: str) -> list[dict[str, Any]]:
+    """User-added "Correggi"/unmatched-setup corrections for one type
+    ("track" or "car"), in the order they were added. `matcher` is a single
+    "|"-joined regex - pass it as a one-element list to compile_patterns()."""
     conn = _connect()
     try:
-        rows = conn.execute("SELECT lmu_folder_name, tt_patterns FROM tracks ORDER BY id").fetchall()
-        return [{"lmu_folder_name": name, "tt_patterns": json.loads(patterns)} for name, patterns in rows]
+        rows = conn.execute(
+            "SELECT name, matcher FROM manual_mapping WHERE type = ? ORDER BY rowid", (mapping_type,)
+        ).fetchall()
+        return [{"name": name, "matcher": matcher} for name, matcher in rows]
     finally:
         conn.close()
 
 
-def upsert_track_pattern(lmu_folder_name: str, pattern: str) -> None:
+def upsert_manual_mapping(mapping_type: str, name: str, raw_value: str) -> None:
+    """Teach `name` (an official mapping.json value) to also match
+    `raw_value` (raw TrackTitan/Dropbox text). Appends to the existing
+    (type, name) row's matcher if one exists, otherwise creates a new row -
+    never a second row for the same (type, name) pair."""
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT id, tt_patterns FROM tracks WHERE lmu_folder_name = ?", (lmu_folder_name,)
-        ).fetchone()
         with conn:
-            if row is not None:
-                track_id, patterns_json = row
-                patterns = json.loads(patterns_json)
-                patterns.append(pattern)
-                conn.execute("UPDATE tracks SET tt_patterns = ? WHERE id = ?", (json.dumps(patterns), track_id))
-            else:
-                conn.execute(
-                    "INSERT INTO tracks (lmu_folder_name, tt_patterns) VALUES (?, ?)",
-                    (lmu_folder_name, json.dumps([pattern])),
-                )
-    finally:
-        conn.close()
-
-
-def get_custom_folder_names() -> list[str]:
-    conn = _connect()
-    try:
-        rows = conn.execute("SELECT DISTINCT lmu_folder_name FROM tracks ORDER BY lmu_folder_name").fetchall()
-        return [r[0] for r in rows]
+            _upsert_manual_mapping_row(conn, mapping_type, name, re.escape(raw_value))
     finally:
         conn.close()

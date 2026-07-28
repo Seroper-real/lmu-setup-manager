@@ -18,6 +18,10 @@ ZIP_NAME = "GO-ORECA-07-ELMS-IMOLA.zip"
 @pytest.fixture(autouse=True)
 def _tracks(sandbox):
     sandbox.set_tracks([("imola", "Imola")])
+    # Oreca 07 (this module's own CAR) plus Ferrari 499P, used by a couple of
+    # tests below - replaces (not merges with) the harness's default "963"
+    # -> "Porsche 963" seed, re-included since one test uses it too.
+    sandbox.set_cars([("963", "Porsche 963"), ("oreca", "Oreca 07"), ("499p", "Ferrari 499P")])
 
 
 def _row_for_track(db, track):
@@ -177,16 +181,20 @@ def test_go_archive_installs_even_without_any_matching_hymo_setup(sandbox, in_me
     assert go_rows[0].car == "Ferrari 499P"
 
 
-def test_unmapped_go_track_lands_under_go_fallback_suffix_and_creates_the_folder(sandbox, in_memory_db):
+def test_unmapped_go_track_is_ignored_outright_not_installed_under_a_fallback_folder(sandbox, in_memory_db, caplog):
+    """An unmatched GO Setups car/track is skipped entirely (never downloaded,
+    never installed) rather than landing under a "-GO" placeholder folder -
+    see domain.unmatched.UnmatchedTracker, which SlaveManager._process_go
+    records it into for the end-of-run correction dialog."""
     car, track = "Ferrari 499P", "Nonexistent Circuit"
 
     sandbox.add_go_zip(car, track, "GO-Ferrari-Mystery.zip", {"go.svm": "x"})
-    sandbox.run_slave(in_memory_db)
+    with caplog.at_level("WARNING"):
+        sandbox.run_slave(in_memory_db)
 
-    assert "Nonexistent Circuit-GO/go.svm" in sandbox.installed_files()
-    go_rows = [r for r in in_memory_db.fetch_all_installed_setups() if r.setup_type == "GO"]
-    assert len(go_rows) == 1
-    assert go_rows[0].track_found is False
+    assert sandbox.installed_files() == set()
+    assert in_memory_db.fetch_all_installed_setups() == []
+    assert "GO Setup not matched" in caplog.text
 
 
 def test_stray_zip_at_wrong_depth_is_skipped_and_warned(sandbox, in_memory_db, caplog):

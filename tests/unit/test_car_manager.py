@@ -1,4 +1,5 @@
 import json
+import re
 import pytest
 from unittest.mock import MagicMock
 
@@ -189,3 +190,97 @@ def test_refresh_picks_up_new_local_file_content(make_manager, mapping_path):
     mgr.refresh()
 
     assert mgr.get_car_name("Porsche 963") == "Porsche 963"
+
+
+# --- manual_mapping fallback layer / add_or_update_mapping ------------------
+# Mirrors TrackManager's own DB-customization tests - same fallback layer,
+# now shared by cars too (see processing.car_manager.CarManager).
+
+
+def test_db_customization_used_when_file_has_no_match(local_manager):
+    from core import settings_db
+    # "Stuttgart GTP Racer" shares no substring with the file's "963"
+    # pattern, so only the DB customization can resolve it.
+    settings_db.upsert_manual_mapping("car", "Porsche 963", "Stuttgart GTP Racer")
+    local_manager.refresh()
+
+    assert local_manager.get_car_name("Stuttgart GTP Racer") == "Porsche 963"
+
+
+def test_file_pattern_wins_over_conflicting_db_customization(local_manager):
+    from core import settings_db
+    # "Ferrari 499P" already matches the file's "499p" pattern - a DB
+    # customization pointing it elsewhere must lose.
+    settings_db.upsert_manual_mapping("car", "Porsche 963", "Ferrari 499P")
+    local_manager.refresh()
+
+    assert local_manager.get_car_name("Ferrari 499P") == "Ferrari 499P"
+
+
+def test_neither_file_nor_db_match_returns_none(local_manager):
+    from core import settings_db
+    settings_db.upsert_manual_mapping("car", "SomeCar", "totally-unrelated-pattern")
+    local_manager.refresh()
+
+    assert local_manager.get_car_name("Unknown Car") is None
+
+
+def test_add_or_update_mapping_appends_to_existing_entry(local_manager):
+    local_manager.add_or_update_mapping("Porsche 963 GTP", "Porsche 963")
+
+    from core import settings_db
+    custom = settings_db.get_manual_mappings("car")
+    porsche = next(c for c in custom if c["name"] == "Porsche 963")
+    assert re.escape("Porsche 963 GTP") in porsche["matcher"].split("|")
+    assert len([c for c in custom if c["name"] == "Porsche 963"]) == 1
+
+
+def test_add_or_update_mapping_creates_new_entry_with_self_matching_pattern(local_manager):
+    # "Custom GT" isn't a mapping.json car - unlike "Ferrari 499P", it can't
+    # already resolve on its own, so the self-matching safeguard kicks in.
+    local_manager.add_or_update_mapping("New Hypercar X", "Custom GT")
+
+    from core import settings_db
+    custom = settings_db.get_manual_mappings("car")
+    entry = next(c for c in custom if c["name"] == "Custom GT")
+    # Both the raw car's own pattern and a self-matching one for the official
+    # name itself, same safeguard TrackManager.add_or_update_mapping uses.
+    assert entry["matcher"] == "|".join([re.escape("New Hypercar X"), re.escape("Custom GT")])
+
+
+def test_add_or_update_mapping_skips_self_match_when_target_already_resolves(local_manager):
+    # "Ferrari 499P" already resolves via the file's own "499p" pattern - the
+    # self-matching safeguard must not add it as an extra alternative on its
+    # own matcher (that would incorrectly merge unrelated future corrections
+    # onto the same target into one shared entry, e.g. mapping "Nordschleife"
+    # onto an existing "Monza" must leave Monza's matcher as just
+    # "Nordschleife", not "Nordschleife|Monza").
+    local_manager.add_or_update_mapping("New Hypercar X", "Ferrari 499P")
+
+    from core import settings_db
+    custom = settings_db.get_manual_mappings("car")
+    ferrari = next(c for c in custom if c["name"] == "Ferrari 499P")
+    assert ferrari["matcher"] == re.escape("New Hypercar X")
+
+
+def test_add_or_update_mapping_skips_duplicate_pattern_when_car_equals_name(local_manager):
+    local_manager.add_or_update_mapping("Ferrari 499P", "Ferrari 499P")
+
+    from core import settings_db
+    custom = settings_db.get_manual_mappings("car")
+    ferrari = next(c for c in custom if c["name"] == "Ferrari 499P")
+    assert ferrari["matcher"] == re.escape("Ferrari 499P")
+
+
+def test_add_or_update_mapping_needs_refresh_to_take_effect(local_manager):
+    # "Stuttgart GTP Racer" shares no substring with the existing "963"
+    # pattern, so it does not resolve before mapping it.
+    assert local_manager.get_car_name("Stuttgart GTP Racer") is None
+
+    local_manager.add_or_update_mapping("Stuttgart GTP Racer", "Porsche 963")
+    # add_or_update_mapping only persists to the DB; in-memory patterns are
+    # stale until refresh() rebuilds them.
+    assert local_manager.get_car_name("Stuttgart GTP Racer") is None
+
+    local_manager.refresh()
+    assert local_manager.get_car_name("Stuttgart GTP Racer") == "Porsche 963"

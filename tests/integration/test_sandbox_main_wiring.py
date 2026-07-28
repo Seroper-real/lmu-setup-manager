@@ -20,6 +20,12 @@ import pytest
 def wired(sandbox, repo_fixtures, tmp_path, mocker):
     """Point every module-level seam at the sandbox, as config.py would with all MOCK_* on."""
     sandbox.set_tracks([("spa", "Spa"), ("monza", "Monza")])
+    # Three cars so at least three of the shipped fixture catalog's setups
+    # match both track and car (Porsche 963/Spa - WEC, Cadillac V-Series.R/
+    # Monza, Genesis GMR-001/Monza) - an unmatched car is no longer installed
+    # or published at all, so EXPECTED_INSTALL/the share-count assertions
+    # below need real matches, not just a mapped track.
+    sandbox.set_cars([("963", "Porsche 963"), ("cadillac", "Cadillac V-Series.R"), ("genesis", "Genesis GMR-001")])
 
     # The factories read these names, imported into the clients namespace.
     mocker.patch("clients.protocols.MOCK_TRACKTITAN", True)
@@ -51,7 +57,9 @@ def log():
 EXPECTED_INSTALL = {
     "Spa/Spa_Porsche963_Quali.svm",
     "Monza/Monza_Cadillac_Race.svm",
-    "Nordschleife-HYMO/Nordschleife_Ferrari499P.svm",
+    # Nordschleife/Ferrari 499P has no mapped track in this fixture and is
+    # now ignored outright (skipped, never installed) rather than landing
+    # under a "-HYMO" placeholder folder - see domain.unmatched.
 }
 
 

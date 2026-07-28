@@ -14,6 +14,10 @@ def env(tmp_path, in_memory_db, mocker):
     mapping_file = tmp_path / "mapping.json"
     mapping_file.write_text(json.dumps({
         "tracks": [{"name": "Spa", "matcher": ["spa|francorchamps"], "lmu_folder": "Spa"}],
+        "cars": [
+            {"name": "Porsche 963", "matcher": ["963"]},
+            {"name": "Ferrari", "matcher": ["ferrari"]},
+        ],
     }), encoding="utf-8")
 
     mocker.patch("orchestration.download_manager.DOWNLOAD_PATH", dl_path)
@@ -88,7 +92,9 @@ def test_second_download_skipped_when_installed(env, sample_setup_data):
     dm.track_titan_client.download_link.assert_not_called()
 
 
-def test_unknown_track_uses_hymo_fallback(env, mocker):
+def test_unknown_track_is_skipped_and_never_installed(env, mocker):
+    """An unmatched track (car matches fine here - "Ferrari" is mapped) is
+    ignored outright, not installed under a "-HYMO" placeholder folder."""
     dm, sm, dl_path, lmu_path = env
     from domain.setup import Setup
     mystery = Setup({
@@ -108,7 +114,9 @@ def test_unknown_track_uses_hymo_fallback(env, mocker):
         (Path(outdir) / "f.svm").write_bytes(b"x")
 
     mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
-    sm.install_setup(zip_path, mystery)
+    result = sm.install_setup(zip_path, mystery)
 
-    assert (lmu_path / "Mystery Circuit-HYMO").exists()
-    assert dm.database.is_track_found("mystery-1") is False
+    assert result is False
+    assert not (lmu_path / "Mystery Circuit-HYMO").exists()
+    assert not any(lmu_path.iterdir())
+    assert dm.database.fetch_installed_setup("mystery-1") is None

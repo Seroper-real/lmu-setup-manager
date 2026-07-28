@@ -65,7 +65,7 @@ def install_manual_setup_locally(
     shutil.copy2(zip_path, staged_path)
     sha256 = sha256_file(staged_path)
     setup_manager.install_setup(
-        staged_path, setup, extensions=_extensions_for(setup_type), setup_type=setup_type, fallback_suffix=setup_type,
+        staged_path, setup, extensions=_extensions_for(setup_type), setup_type=setup_type,
         sha256=sha256,
     )
     log.info(f"Manually installed setup: {setup.car} - {setup.track} ({setup_type})")
