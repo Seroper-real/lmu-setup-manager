@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/nocturne-454f88e0-36f8-40e0-8c2b-9b4b07f0f051/styles.css">
+  <script src="_ds/nocturne-454f88e0-36f8-40e0-8c2b-9b4b07f0f051/_ds_bundle.js"></script>
+  <style>
+    body { margin: 0; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--color-neutral-800); border-radius: 6px; }
+    a { color: var(--color-accent); }
+    a:hover { color: var(--color-accent-2); }
+    input, textarea, select { color-scheme: dark; }
+    .info-tip { position: relative; }
+    .info-tip .info-tip-text {
+      position: absolute; bottom: calc(100% + 7px); left: 0; z-index: 30;
+      display: block; white-space: normal; width: max-content; max-width: 240px;
+      background: var(--color-neutral-800); color: var(--color-text);
+      font-size:12.5px; font-weight: 400; line-height: 1.3;
+      padding: 6px 9px; border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+      opacity: 0; visibility: hidden; transform: translateY(2px);
+      transition: opacity .12s ease, transform .12s ease;
+      pointer-events: none;
+    }
+    .info-tip:hover .info-tip-text { opacity: 1; visibility: visible; transform: translateY(0); }
+    .tt { position: relative; display: inline-flex; }
+    .tt .tt-text {
+      position: absolute; bottom: calc(100% + 7px); left: 50%; z-index: 30;
+      display: block; white-space: nowrap; background: var(--color-neutral-800); color: var(--color-text);
+      font-size:12.5px; font-weight: 400; line-height: 1.3;
+      padding: 6px 9px; border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+      opacity: 0; visibility: hidden; transform: translate(-50%,2px);
+      transition: opacity .12s ease, transform .12s ease; pointer-events: none;
+    }
+    .tt:hover .tt-text { opacity: 1; visibility: visible; transform: translate(-50%,0); }
+    .seg-opt:first-child { border-top-left-radius: var(--radius-md); border-bottom-left-radius: var(--radius-md); }
+    .seg-opt:last-child { border-top-right-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); }
+    .opt-row { display:block; width:100%; text-align:left; padding:9px 8px; line-height:1.3; border:none; background:transparent; color:var(--color-text); font-size:14px; cursor:pointer; border-radius:var(--radius-sm); font-family:inherit; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none; }
+    .opt-row:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); }
+    @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  </style>
+</helmet>
+
+<div style="display:flex; height:100dvh; background:var(--color-bg); color:var(--color-text); font-family:var(--font-body);">
+
+  <!-- Sidebar -->
+  <div style="width:232px; flex:none; display:flex; flex-direction:column; padding:var(--space-4); gap:var(--space-6); border-right:1px solid var(--color-divider);">
+    <div style="display:flex; align-items:center; gap:8px; padding:0 var(--space-2);">
+      <div style="width:28px; height:28px; border-radius:var(--radius-sm); border:1.5px solid var(--color-accent); display:flex; align-items:center; justify-content:center; flex:none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l4-9 4 6 3-4 5 7"></path></svg>
+      </div>
+      <div>
+        <div style="font-family:var(--font-heading); font-weight:600; font-size:16px; line-height:1.1;">LMU</div>
+        <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-neutral-500);">Setup Manager</div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <div data-view="setups" onClick="{{ onNavClick }}" style="display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--radius-md); cursor:pointer; font-size:15px; color:{{ setupsTabColor }}; background:{{ setupsTabBg }};">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 4.6L3 17.2V21h3.8l6.3-6.3a4 4 0 0 0 4.6-5.4l-2.9 2.9-2.1-2.1 2.9-2.9Z"></path></svg>
+        {{ t.navSetups }}
+      </div>
+      <div data-view="download" onClick="{{ onNavClick }}" style="display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--radius-md); cursor:pointer; font-size:15px; color:{{ downloadTabColor }}; background:{{ downloadTabBg }};">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11M8 11l4 4 4-4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>
+        {{ t.navDownload }}
+      </div>
+      <div data-view="upload" onClick="{{ onNavClick }}" style="display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--radius-md); cursor:pointer; font-size:15px; color:{{ uploadTabColor }}; background:{{ uploadTabBg }};">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5V9.5M8 13l4-4 4 4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>
+        {{ t.navUpload }}
+      </div>
+    </div>
+
+    <div style="margin-top:auto; display:flex; flex-direction:column; gap:2px;">
+      <div class="hr" style="margin:0 0 var(--space-2);"></div>
+      <div data-view="mapping" onClick="{{ onNavClick }}" style="display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--radius-md); cursor:pointer; font-size:15px; color:{{ mappingTabColor }}; background:{{ mappingTabBg }};">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h11M11 5l3 3-3 3"></path><path d="M20 16H9M13 13l-3 3 3 3"></path></svg>
+        {{ t.navMapping }}
+      </div>
+      <div data-view="settings" onClick="{{ onNavClick }}" style="display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--radius-md); cursor:pointer; font-size:15px; color:{{ settingsTabColor }}; background:{{ settingsTabBg }};">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2.4M12 18.1v2.4M4.9 6.3l1.7 1.7M17.4 16l1.7 1.7M3.5 12H6M18 12h2.5M4.9 17.7l1.7-1.7M17.4 8l1.7-1.7"></path></svg>
+        {{ t.navSettings }}
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div class="hr" style="margin:0;"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:0 var(--space-2);">
+        <span style="font-size:12px; color:var(--color-neutral-500);">{{ t.sidebarMode }}</span>
+        <span class="tag tag-accent">{{ modeBadgeLabel }}</span>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:0 var(--space-2);">
+        <span style="font-size:12px; color:var(--color-neutral-500);">{{ t.sidebarInstalled }}</span>
+        <span style="font-size:12px; color:var(--color-neutral-400);">{{ grandTotalLabel }}</span>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:0 var(--space-2);">
+        <span style="font-size:12px; color:var(--color-neutral-500);">{{ t.sidebarVersion }}</span>
+        <span style="font-size:12px; color:var(--color-neutral-400);">{{ appVersion }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div style="flex:1; min-width:0; padding:var(--space-8) 40px; overflow-y:auto; position:relative;">
+
+    <!-- === TAB: Setup installati === -->
+    <sc-if value="{{ isSetupsTab }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="margin-bottom:var(--space-6);">
+          <h2 style="margin:0 0 4px;">{{ t.setupsTitle }}</h2>
+          <p style="margin:0; font-size:14px; color:var(--color-neutral-500);">{{ t.setupsDesc }}</p>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:var(--space-6); flex-wrap:wrap;">
+          <div style="position:relative; flex:1; max-width:360px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M20 20l-4.35-4.35"></path></svg>
+            <input class="input" style="padding-left:32px;" type="text" placeholder="{{ t.searchPlaceholder }}" value="{{ installedSearch }}" onChange="{{ onSearchChange }}">
+          </div>
+          <button type="button" onClick="{{ onToggleUnmappedOnly }}" style="display:flex; align-items:center; gap:7px; padding:8px 14px; border-radius:var(--radius-md); border:1px solid {{ unmappedFilterBorder }}; background:{{ unmappedFilterBg }}; color:{{ unmappedFilterColor }}; font-size:14px; cursor:pointer; flex:none; white-space:nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 8v6l-4 2v-8Z"></path></svg>
+            {{ t.unmappedOnlyFilter }}
+          </button>
+          <span class="tag tag-outline" style="font-size:12px; flex:none; white-space:nowrap;">{{ resultsLabel }}</span>
+          <button type="button" class="btn btn-ghost" onClick="{{ onRequestDeleteAll }}" disabled="{{ deleteAllDisabled }}" style="margin-left:auto; color:oklch(68% 0.17 27); font-size:13.5px; flex:none; white-space:nowrap;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path></svg>
+            {{ t.deleteAllInstalledButton }}
+          </button>
+        </div>
+
+        <sc-if value="{{ hasGroups }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+            <sc-for list="{{ vmGroups }}" as="group" hint-placeholder-count="3">
+              <div class="card elev-sm">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                  <button type="button" onClick="{{ group.onToggle }}" style="display:flex; align-items:center; gap:8px; min-width:0; flex:1 1 auto; background:transparent; border:none; padding:4px 0; margin:0; color:var(--color-text); font:inherit; text-align:left; cursor:pointer;">
+                    <span style="flex:none; display:inline-flex; color:var(--color-neutral-500); transition:transform .12s ease; transform:{{ group.chevronTransform }};">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+                    </span>
+                    <h4 style="margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ group.track }}</h4>
+                  </button>
+                  <div style="display:flex; align-items:center; gap:10px; flex:none;">
+                    <sc-if value="{{ group.unmapped }}" hint-placeholder-val="{{ false }}">
+                      <span class="tag tag-neutral">{{ t.unmappedTag }}</span>
+                      <button type="button" class="btn btn-ghost" onClick="{{ group.onOpenCorreggi }}" style="font-size:13px; padding:4px 9px; gap:5px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="M14.5 5.5l3 3"></path></svg>
+                        {{ t.correctButton }}
+                      </button>
+                      <span style="font-size:12px; color:var(--color-neutral-500);">→ {{ group.arrowLabel }}</span>
+                    </sc-if>
+                    <span class="tt">
+                      <button type="button" class="btn btn-ghost" onClick="{{ group.onDeleteTrack }}" style="color:oklch(68% 0.17 27);">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path></svg>
+                      </button>
+                      <span class="tt-text">{{ t.deleteAllButton }}</span>
+                    </span>
+                    <span class="tag tag-outline">{{ group.countLabel }}</span>
+                  </div>
+                </div>
+
+                <sc-if value="{{ group.expanded }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-3);">
+                    <sc-for list="{{ group.cars }}" as="car" hint-placeholder-count="2">
+                      <div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                          <button type="button" onClick="{{ car.onToggle }}" style="display:flex; align-items:center; gap:8px; min-width:0; flex:1; background:transparent; border:none; padding:0; margin:0; color:var(--color-text); font:inherit; text-align:left; cursor:pointer;">
+                            <span style="flex:none; display:inline-flex; color:var(--color-neutral-500); transition:transform .12s ease; transform:{{ car.chevronTransform }};">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+                            </span>
+                            <sc-if value="{{ car.isHYPERCAR }}" hint-placeholder-val="{{ false }}"><img src="uploads/HYPERCAR.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                            <sc-if value="{{ car.isGT3 }}" hint-placeholder-val="{{ false }}"><img src="uploads/GT3-019c40fd.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                            <sc-if value="{{ car.isGTE }}" hint-placeholder-val="{{ false }}"><img src="uploads/GTE.webp" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                            <sc-if value="{{ car.isP2 }}" hint-placeholder-val="{{ false }}"><img src="uploads/P2.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                            <sc-if value="{{ car.isP3 }}" hint-placeholder-val="{{ false }}"><img src="uploads/P3-bed18951.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                            <span style="font-size:15.5px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ car.car }}</span>
+                          </button>
+                          <span class="tag tag-outline">{{ car.countLabel }}</span>
+                        </div>
+
+                        <sc-if value="{{ car.expanded }}" hint-placeholder-val="{{ false }}">
+                          <div style="padding-left:22px; margin-top:var(--space-2); display:flex; flex-direction:column; gap:var(--space-2);">
+                            <sc-for list="{{ car.entries }}" as="entry" hint-placeholder-count="1">
+                              <div>
+                                <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap;">
+                                  <button type="button" onClick="{{ entry.onToggle }}" style="display:flex; align-items:center; gap:8px; min-width:0; flex:1; background:transparent; border:none; padding:0; margin:0; color:var(--color-text); font:inherit; text-align:left; cursor:pointer;">
+                                    <span style="flex:none; display:inline-flex; color:var(--color-neutral-500); transition:transform .12s ease; transform:{{ entry.chevronTransform }};">
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+                                    </span>
+                                    <span class="tag tag-outline">{{ entry.type }}</span>
+                                    <span style="font-size:13.5px; color:var(--color-neutral-500);">{{ entry.dateLabel }}</span>
+                                  </button>
+                                  <span class="tag tag-outline">{{ entry.fileCountLabel }}</span>
+                                  <span style="display:flex; align-items:center; gap:6px; font-size:13.5px; color:var(--color-neutral-500);">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path></svg>
+                                    {{ entry.installationFolder }}
+                                  </span>
+                                  <sc-if value="{{ entry.hasHotlap }}" hint-placeholder-val="{{ false }}">
+                                    <a class="btn btn-ghost" href="{{ entry.hotlapLink }}" target="_blank" rel="noopener noreferrer" title="{{ t.hotlapTitle }}" style="font-size:13px; padding:5px 10px; gap:6px; color:var(--color-accent-300);">
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.5v-7l6.3 3.5-6.3 3.5Z"></path></svg>
+                                      {{ t.hotlapLabel }}
+                                    </a>
+                                  </sc-if>
+                                  <sc-if value="{{ entry.hasBulkDelete }}" hint-placeholder-val="{{ false }}">
+                                    <span class="tt">
+                                      <button type="button" class="btn btn-ghost" onClick="{{ entry.onBulkDelete }}" style="color:oklch(68% 0.17 27);">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path></svg>
+                                      </button>
+                                      <span class="tt-text">{{ entry.bulkDeleteTooltip }}</span>
+                                    </span>
+                                  </sc-if>
+                                  <span class="tt">
+                                    <button type="button" class="btn btn-ghost" onClick="{{ entry.onDelete }}" style="color:oklch(68% 0.17 27);">
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path></svg>
+                                    </button>
+                                    <span class="tt-text">{{ t.deleteButton }}</span>
+                                  </span>
+                                </div>
+                                <sc-if value="{{ entry.entryExpanded }}" hint-placeholder-val="{{ false }}">
+                                  <div style="padding:4px 4px 4px 21px; display:flex; flex-direction:column; gap:3px;">
+                                    <sc-for list="{{ entry.fileNames }}" as="fname" hint-placeholder-count="2">
+                                      <div style="font-size:13px; color:var(--color-neutral-400);">{{ fname }}</div>
+                                    </sc-for>
+                                  </div>
+                                </sc-if>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasNoGroups }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center; padding:64px 0; color:var(--color-neutral-500);">
+            <p style="margin:0; font-size:15px;">{{ emptyText }}</p>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- === TAB: Download === -->
+    <sc-if value="{{ isDownloadTab }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="margin-bottom:var(--space-6);">
+          <h2 style="margin:0 0 4px;">{{ t.downloadTitle }}</h2>
+          <p style="margin:0; font-size:14px; color:var(--color-neutral-500);">{{ t.downloadDescPre }}<strong style="color:var(--color-text);">{{ modeBadgeLabel }}</strong>{{ t.downloadDescPost }}</p>
+        </div>
+
+        <div style="margin-bottom:var(--space-6);">
+          <h6 style="color:var(--color-neutral-500); margin-bottom:var(--space-2);">{{ t.modeSectionHeading }}</h6>
+          <div class="card elev-sm" style="flex-direction:row; align-items:center; justify-content:space-between; gap:var(--space-3); padding:var(--space-3) var(--space-4);">
+            <div>
+              <div style="font-family:var(--font-heading); font-size:15px;">{{ modeBadgeLabel }}</div>
+              <p style="margin:4px 0 0; font-size:13px; color:var(--color-neutral-500);">{{ activeModeDownloadDesc }}</p>
+            </div>
+            <button type="button" class="btn btn-ghost" onClick="{{ onGoToSettingsMode }}" style="white-space:nowrap; flex:none;">{{ t.changeModeButton }}</button>
+          </div>
+        </div>
+
+        <div class="card elev-md" style="flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:var(--space-6); margin-bottom:var(--space-4); gap:var(--space-4);">
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+            <span style="width:11px; height:11px; border-radius:50%; background:{{ statusDotColor }}; flex:none;"></span>
+            <div>
+              <div style="font-family:var(--font-heading); font-size:18px;">{{ statusLabel }}</div>
+              <div style="font-size:13.5px; color:var(--color-neutral-500); margin-top:2px;">{{ installedSummary }}</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <sc-if value="{{ isRunning }}" hint-placeholder-val="{{ false }}">
+              <button class="btn btn-secondary" onClick="{{ onStopDownload }}" style="padding:12px 24px; font-size:16px; white-space:nowrap;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+                {{ t.stopButton }}
+              </button>
+            </sc-if>
+            <sc-if value="{{ isNotRunning }}" hint-placeholder-val="{{ true }}">
+              <button class="btn btn-primary" onClick="{{ onStartDownload }}" style="padding:12px 24px; font-size:16px; white-space:nowrap;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5v15l13-7.5Z"></path></svg>
+                {{ t.startButton }}
+              </button>
+            </sc-if>
+          </div>
+        </div>
+
+        <h6 style="color:var(--color-neutral-500); margin-bottom:var(--space-2);">{{ t.activityHeading }}</h6>
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div ref="{{ logRef }}" style="max-height:380px; overflow-y:auto;">
+            <sc-for list="{{ activityVm }}" as="item" hint-placeholder-count="3">
+              <div style="display:flex; align-items:flex-start; gap:12px; padding:12px var(--space-4); border-bottom:1px solid var(--color-divider);">
+                <sc-if value="{{ item.showIcon }}" hint-placeholder-val="{{ false }}">
+                  <span style="flex:none; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--color-neutral-800); color:var(--color-neutral-400); margin-top:1px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"></path></svg>
+                  </span>
+                </sc-if>
+                <div style="flex:1; min-width:0; padding-top:1px;">
+                  <div style="font-size:14.5px;">{{ item.title }}</div>
+                  <sc-if value="{{ item.hasMeta }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:13px; color:var(--color-neutral-500); margin-top:2px;">{{ item.meta }}</div>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ hasNoActivity }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:32px var(--space-4); text-align:center; font-size:14px; color:var(--color-neutral-500);">{{ t.emptyLog }}</div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- === TAB: Carica Setup === -->
+    <sc-if value="{{ isUploadTab }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="margin-bottom:var(--space-6);">
+          <h2 style="margin:0 0 4px;">{{ t.uploadPageTitle }}</h2>
+          <p style="margin:0; font-size:14px; color:var(--color-neutral-500);">{{ t.uploadPageDesc }}</p>
+        </div>
+
+        <div style="margin-bottom:var(--space-6);">
+          <h6 style="color:var(--color-neutral-500); margin-bottom:var(--space-2);">{{ t.modeSectionHeading }}</h6>
+          <div class="card elev-sm" style="flex-direction:row; align-items:center; justify-content:space-between; gap:var(--space-3); padding:var(--space-3) var(--space-4);">
+            <div>
+              <div style="font-family:var(--font-heading); font-size:15px;">{{ modeBadgeLabel }}</div>
+              <p style="margin:4px 0 0; font-size:13px; color:var(--color-neutral-500);">{{ activeModeUploadDesc }}</p>
+            </div>
+            <button type="button" class="btn btn-ghost" onClick="{{ onGoToSettingsMode }}" style="white-space:nowrap; flex:none;">{{ t.changeModeButton }}</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ hasNoManualUpload }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ onOpenManualUpload }}" style="width:100%; display:flex; flex-direction:column; align-items:center; gap:10px; padding:56px var(--space-6); border:1.5px dashed var(--color-divider); border-radius:var(--radius-md); background:var(--color-surface); color:var(--color-text); cursor:pointer; font-family:inherit;">
+            <span style="width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:color-mix(in srgb, var(--color-accent) 14%, transparent); color:var(--color-accent-300); flex:none;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5V9.5M8 13l4-4 4 4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>
+            </span>
+            <span style="font-family:var(--font-heading); font-size:16px;">{{ t.uploadDropzoneTitle }}</span>
+            <span style="font-size:13.5px; color:var(--color-neutral-500);">{{ t.uploadDropzoneDesc }}</span>
+          </button>
+          <input ref="{{ manualUploadFileInputRef }}" type="file" accept=".zip" style="display:none;" onChange="{{ onManualUploadFileSelected }}">
+        </sc-if>
+
+        <sc-if value="{{ hasManualUpload }}" hint-placeholder-val="{{ false }}">
+          <div class="card elev-sm" style="display:flex; flex-direction:column; gap:var(--space-4); padding:var(--space-6);">
+            <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--color-neutral-500);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path></svg>
+              {{ manualUploadFileName }}
+            </div>
+
+            <div class="field" style="margin-bottom:0;">
+              <label>{{ t.manualUploadTypeLabel }}</label>
+              <button type="button" onClick="{{ onToggleManualTypeDropdown }}" style="width:100%; display:flex; align-items:center; justify-content:space-between; min-height:36px; padding:6px 10px; background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); color:{{ manualUploadTypeValueColor }}; font-size:14px; cursor:pointer; font-family:inherit;">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ manualUploadTypeValueLabel }}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6 9l6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{ manualUploadTypeOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); box-shadow:var(--shadow-md); padding:6px; display:flex; flex-direction:column;">
+                  <sc-for list="{{ manualUploadTypeOptions }}" as="opt" hint-placeholder-count="3">
+                    <button type="button" class="opt-row" onClick="{{ opt.onSelect }}">{{ opt.label }}</button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+
+            <div class="field" style="margin-bottom:0;">
+              <label>{{ t.manualUploadTrackLabel }}</label>
+              <button type="button" onClick="{{ onToggleManualTrackDropdown }}" style="width:100%; display:flex; align-items:center; justify-content:space-between; min-height:36px; padding:6px 10px; background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); color:{{ manualUploadTrackValueColor }}; font-size:14px; cursor:pointer; font-family:inherit;">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ manualUploadTrackValueLabel }}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6 9l6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{ manualUploadTrackOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); box-shadow:var(--shadow-md); padding:6px;">
+                  <input class="input" style="margin-bottom:6px;" placeholder="{{ t.manualUploadSearchPlaceholder }}" value="{{ manualUploadTrackSearch }}" onChange="{{ onManualTrackSearchChange }}">
+                  <div style="max-height:180px; overflow-y:auto; display:flex; flex-direction:column;">
+                    <sc-for list="{{ manualUploadTrackOptions }}" as="opt" hint-placeholder-count="4">
+                      <button type="button" class="opt-row" onClick="{{ opt.onSelect }}">{{ opt.label }}</button>
+                    </sc-for>
+                    <sc-if value="{{ manualUploadTrackNoResults }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:8px; font-size:13px; color:var(--color-neutral-500);">{{ t.manualUploadNoResults }}</div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+
+            <div class="field" style="margin-bottom:0;">
+              <label>{{ t.manualUploadCarLabel }}</label>
+              <button type="button" onClick="{{ onToggleManualCarDropdown }}" style="width:100%; display:flex; align-items:center; justify-content:space-between; min-height:36px; padding:6px 10px; background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); color:{{ manualUploadCarValueColor }}; font-size:14px; cursor:pointer; font-family:inherit;">
+                <span style="display:flex; align-items:center; gap:7px; min-width:0; overflow:hidden;">
+                  <sc-if value="{{ manualUploadCarValueIsHYPERCAR }}" hint-placeholder-val="{{ false }}"><img src="uploads/HYPERCAR.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                  <sc-if value="{{ manualUploadCarValueIsGT3 }}" hint-placeholder-val="{{ false }}"><img src="uploads/GT3-019c40fd.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                  <sc-if value="{{ manualUploadCarValueIsGTE }}" hint-placeholder-val="{{ false }}"><img src="uploads/GTE.webp" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                  <sc-if value="{{ manualUploadCarValueIsP2 }}" hint-placeholder-val="{{ false }}"><img src="uploads/P2.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                  <sc-if value="{{ manualUploadCarValueIsP3 }}" hint-placeholder-val="{{ false }}"><img src="uploads/P3-bed18951.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ manualUploadCarValueLabel }}</span>
+                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M6 9l6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{ manualUploadCarOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); box-shadow:var(--shadow-md); padding:6px;">
+                  <input class="input" style="margin-bottom:6px;" placeholder="{{ t.manualUploadSearchPlaceholder }}" value="{{ manualUploadCarSearch }}" onChange="{{ onManualCarSearchChange }}">
+                  <div style="max-height:180px; overflow-y:auto; display:flex; flex-direction:column;">
+                    <sc-for list="{{ manualUploadCarOptions }}" as="opt" hint-placeholder-count="4">
+                      <button type="button" class="opt-row" onClick="{{ opt.onSelect }}" style="display:flex; align-items:center; gap:8px;">
+                        <sc-if value="{{ opt.isHYPERCAR }}" hint-placeholder-val="{{ false }}"><img src="uploads/HYPERCAR.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                        <sc-if value="{{ opt.isGT3 }}" hint-placeholder-val="{{ false }}"><img src="uploads/GT3-019c40fd.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                        <sc-if value="{{ opt.isGTE }}" hint-placeholder-val="{{ false }}"><img src="uploads/GTE.webp" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                        <sc-if value="{{ opt.isP2 }}" hint-placeholder-val="{{ false }}"><img src="uploads/P2.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                        <sc-if value="{{ opt.isP3 }}" hint-placeholder-val="{{ false }}"><img src="uploads/P3-bed18951.png" alt="" style="width:18px; height:18px; object-fit:contain; flex:none;"></sc-if>
+                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ opt.label }}</span>
+                      </button>
+                    </sc-for>
+                    <sc-if value="{{ manualUploadCarNoResults }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:8px; font-size:13px; color:var(--color-neutral-500);">{{ t.manualUploadNoResults }}</div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; padding-top:var(--space-2); border-top:1px solid var(--color-divider);">
+              <button type="button" class="btn btn-ghost" onClick="{{ onCancelManualUpload }}" style="white-space:nowrap; flex:none;">{{ t.manualUploadCancel }}</button>
+              <button type="button" class="btn btn-primary" onClick="{{ onConfirmManualUpload }}" disabled="{{ manualUploadConfirmDisabled }}" style="white-space:nowrap; flex:none;">{{ t.manualUploadConfirm }}</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- === TAB: Mappature manuali === -->
+    <sc-if value="{{ isMappingTab }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="margin-bottom:var(--space-6);">
+          <h2 style="margin:0 0 4px;">{{ t.mappingTitle }}</h2>
+          <p style="margin:0; font-size:14px; color:var(--color-neutral-500);">{{ t.mappingDesc }}</p>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:var(--space-4); flex-wrap:wrap;">
+          <div style="position:relative; flex:1; max-width:360px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M20 20l-4.35-4.35"></path></svg>
+            <input class="input" style="padding-left:32px;" type="text" placeholder="{{ t.mappingSearchPlaceholder }}" value="{{ mappingSearch }}" onChange="{{ onMappingSearchChange }}">
+          </div>
+          <span class="tag tag-outline" style="font-size:12px; flex:none; white-space:nowrap;">{{ mappingResultsLabel }}</span>
+          <button type="button" class="btn btn-ghost" onClick="{{ onRequestDeleteAllMappings }}" disabled="{{ mappingDeleteAllDisabled }}" style="margin-left:auto; color:oklch(68% 0.17 27); font-size:13.5px; flex:none; white-space:nowrap;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path></svg>
+            {{ t.mappingDeleteAllButton }}
+          </button>
+        </div>
+
+        <sc-if value="{{ hasMappingRows }}" hint-placeholder-val="{{ true }}">
+          <div class="card elev-sm" style="padding:0; overflow:hidden;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="padding-left:var(--space-4);">{{ t.mappingColType }}</th>
+                  <th>{{ t.mappingColName }}</th>
+                  <th>{{ t.mappingColMatcher }}</th>
+                  <th style="padding-right:var(--space-4); text-align:right;">{{ t.mappingColActions }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ mappingPageRows }}" as="row" hint-placeholder-count="6">
+                  <tr>
+                    <td style="padding-left:var(--space-4);"><span class="{{ row.typeTagClass }}">{{ row.typeLabel }}</span></td>
+                    <td>{{ row.name }}</td>
+                    <td style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:var(--color-neutral-400);">{{ row.matcher }}</td>
+                    <td style="padding-right:var(--space-4); text-align:right;">
+                      <span class="tt">
+                        <button type="button" class="btn btn-ghost" onClick="{{ row.onDelete }}" style="color:oklch(68% 0.17 27);">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path></svg>
+                        </button>
+                        <span class="tt-text">{{ t.deleteButton }}</span>
+                      </span>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:flex-end; gap:var(--space-3); margin-top:var(--space-4);">
+            <span style="font-size:13px; color:var(--color-neutral-500);">{{ mappingPageLabel }}</span>
+            <button type="button" class="btn btn-ghost" onClick="{{ onMappingPrevPage }}" disabled="{{ mappingPrevDisabled }}" style="font-size:13px; padding:6px 12px;">{{ t.mappingPrevPage }}</button>
+            <button type="button" class="btn btn-ghost" onClick="{{ onMappingNextPage }}" disabled="{{ mappingNextDisabled }}" style="font-size:13px; padding:6px 12px;">{{ t.mappingNextPage }}</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasNoMappingRows }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center; padding:64px 0; color:var(--color-neutral-500);">
+            <p style="margin:0; font-size:15px;">{{ t.mappingEmptyText }}</p>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- === TAB: Impostazioni === -->
+    <sc-if value="{{ isSettingsTab }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="margin-bottom:var(--space-6);">
+          <h2 style="margin:0 0 4px;">{{ t.settingsTitle }}</h2>
+          <p style="margin:0; font-size:14px; color:var(--color-neutral-500);">{{ t.settingsDesc }}</p>
+        </div>
+
+        <div style="margin-bottom:var(--space-6);">
+          <h6 style="color:var(--color-neutral-500); margin-bottom:var(--space-2);">{{ t.modeSectionHeading }}</h6>
+          <div class="card elev-sm" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:var(--space-3);">
+            <sc-for list="{{ modeCards }}" as="mode" hint-placeholder-count="3">
+              <button type="button" onClick="{{ mode.onClick }}" style="text-align:left; cursor:pointer; min-width:0; border:1px solid {{ mode.border }}; background:{{ mode.bg }}; border-radius:var(--radius-md); padding:var(--space-3); color:var(--color-text); display:flex; flex-direction:column; gap:4px; font-family:inherit;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <span style="font-family:var(--font-heading); font-size:15px;">{{ mode.title }}</span>
+                  <sc-if value="{{ mode.selected }}" hint-placeholder-val="{{ false }}"><span class="tag tag-accent">{{ t.activeTag }}</span></sc-if>
+                </div>
+                <p style="margin:0; font-size:13px; color:var(--color-neutral-500);">{{ mode.desc }}</p>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="margin-bottom:var(--space-6);">
+          <h6 style="color:var(--color-neutral-500); margin-bottom:var(--space-2);">{{ t.langHeading }}</h6>
+          <div class="card elev-sm">
+            <div class="field" style="margin-bottom:0;">
+              <label>{{ t.langFieldLabel }}</label>
+              <div class="seg" style="max-width:260px;">
+                <button type="button" class="seg-opt {{ langItActiveClass }}" onClick="{{ onSetLanguageIt }}">Italiano</button>
+                <button type="button" class="seg-opt {{ langEnActiveClass }}" onClick="{{ onSetLanguageEn }}">English</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:var(--space-6);">
+          <h6 style="color:var(--color-neutral-500); margin-bottom:var(--space-2);">{{ t.lmuHeading }}</h6>
+          <div class="card elev-sm">
+            <div class="field" style="margin-bottom:4px;">
+              <label>{{ t.lmuFieldLabel }}</label>
+              <div style="display:flex; gap:8px;">
+                <input class="input" style="font-family:ui-monospace,monospace; font-size:14px; flex:1;" type="text" value="{{ lmuPath }}" onChange="{{ onLmuPathChange }}">
+                <button type="button" class="btn btn-secondary" onClick="{{ onCopyLmuPath }}" title="{{ t.copyButton }}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+                </button>
+                <button type="button" class="btn btn-secondary" onClick="{{ onBrowseLmuPath }}" style="flex:none; font-size:14px; gap:6px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path></svg>
+                  {{ t.browseButton }}
+                </button>
+                <input ref="{{ lmuFileInputRef }}" type="file" webkitdirectory="" directory="" multiple="" style="display:none;" onChange="{{ onLmuFilesSelected }}">
+              </div>
+              <sc-if value="{{ lmuPathInvalid }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--color-accent-300); margin-top:6px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-accent-300)"></circle></svg>
+                  {{ t.lmuPathInvalidWarning }}
+                </div>
+              </sc-if>
+            </div>
+            <p style="margin:0; font-size:13px; color:var(--color-neutral-500); white-space:pre-line;">{{ t.lmuHelp }}</p>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <div style="margin-bottom:var(--space-6);">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+            <button type="button" class="btn btn-ghost" onClick="{{ onToggleTokenSecrets }}" title="{{ tokenRevealTitle }}">
+              <sc-if value="{{ showTokenSecrets }}" hint-placeholder-val="{{ false }}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7Z"></path><circle cx="12" cy="12" r="2.6"></circle></svg>
+              </sc-if>
+              <sc-if value="{{ hideTokenSecrets }}" hint-placeholder-val="{{ true }}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 10.7a2.6 2.6 0 0 0 3.6 3.6M6.6 6.7C4.5 8 3 12 3 12s3.5 7 9 7c1.6 0 3-.5 4.2-1.2M9.9 5.2A9.8 9.8 0 0 1 12 5c5.5 0 9 7 9 7a13.7 13.7 0 0 1-2.4 3.3"></path></svg>
+              </sc-if>
+            </button>
+            <h6 style="color:var(--color-neutral-500); margin:0;">{{ t.tokenHeading }}</h6>
+          </div>
+          <p style="margin:0 0 var(--space-3); font-size:13px; color:var(--color-neutral-500);">{{ t.tokenHelp }}</p>
+
+          <div class="field">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px;">
+              <label style="margin:0;">ACCESS_TOKEN_LIST</label>
+              <a href="#" onClick="{{ onStartTracktitanFetch }}" style="font-size:12px; color:var(--color-accent-300); text-decoration:none; display:inline-flex; align-items:center; gap:4px; white-space:nowrap;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"></path><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path></svg>
+                {{ t.tracktitanFetchButton }}
+              </a>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <input class="input" style="font-family:ui-monospace,monospace; font-size:14px; flex:1;" type="{{ tokenSecretType }}" value="{{ accessTokenList }}" onChange="{{ onAccessTokenListChange }}">
+              <button type="button" class="btn btn-secondary" onClick="{{ onCopyAccessTokenList }}" title="{{ t.copyButton }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label>ACCESS_TOKEN_DOWNLOAD</label>
+            <div style="display:flex; gap:8px;">
+              <input class="input" style="font-family:ui-monospace,monospace; font-size:14px; flex:1;" type="{{ tokenSecretType }}" value="{{ accessTokenDownload }}" onChange="{{ onAccessTokenDownloadChange }}">
+              <button type="button" class="btn btn-secondary" onClick="{{ onCopyAccessTokenDownload }}" title="{{ t.copyButton }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label>USER_ID</label>
+            <div style="display:flex; gap:8px;">
+              <input class="input" style="font-family:ui-monospace,monospace; font-size:14px; flex:1;" type="text" value="{{ userId }}" onChange="{{ onUserIdChange }}">
+              <button type="button" class="btn btn-secondary" onClick="{{ onCopyUserId }}" title="{{ t.copyButton }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+              </button>
+            </div>
+          </div>
+          <a href="{{ readmeUrl }}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; width:fit-content; font-size:13px; color:var(--color-accent-300); text-decoration:none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"></path><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path></svg>
+            {{ t.tokenLinkText }}
+          </a>
+        </div>
+
+        <div class="hr"></div>
+        <div style="margin-bottom:var(--space-6);">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+            <button type="button" class="btn btn-ghost" onClick="{{ onToggleDropboxSecrets }}" title="{{ dropboxRevealTitle }}">
+              <sc-if value="{{ showDropboxSecrets }}" hint-placeholder-val="{{ false }}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7Z"></path><circle cx="12" cy="12" r="2.6"></circle></svg>
+              </sc-if>
+              <sc-if value="{{ hideDropboxSecrets }}" hint-placeholder-val="{{ true }}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 10.7a2.6 2.6 0 0 0 3.6 3.6M6.6 6.7C4.5 8 3 12 3 12s3.5 7 9 7c1.6 0 3-.5 4.2-1.2M9.9 5.2A9.8 9.8 0 0 1 12 5c5.5 0 9 7 9 7a13.7 13.7 0 0 1-2.4 3.3"></path></svg>
+              </sc-if>
+            </button>
+            <h6 style="color:var(--color-neutral-500); margin:0;">{{ t.dropboxHeading }}</h6>
+          </div>
+          <p style="margin:0 0 var(--space-3); font-size:13px; color:var(--color-neutral-500);">{{ t.dropboxHelp }}</p>
+
+          <div class="field">
+            <label>DROPBOX_APP_KEY</label>
+            <div style="display:flex; gap:8px;">
+              <input class="input" style="font-family:ui-monospace,monospace; font-size:14px; flex:1;" type="text" value="{{ dropboxAppKey }}" onChange="{{ onDropboxAppKeyChange }}">
+              <button type="button" class="btn btn-secondary" onClick="{{ onCopyDropboxAppKey }}" title="{{ t.copyButton }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label>DROPBOX_APP_SECRET</label>
+            <div style="display:flex; gap:8px;">
+              <input class="input" style="font-family:ui-monospace,monospace; font-size:14px; flex:1;" type="{{ dropboxSecretType }}" value="{{ dropboxAppSecret }}" onChange="{{ onDropboxAppSecretChange }}">
+              <button type="button" class="btn btn-secondary" onClick="{{ onCopyDropboxAppSecret }}" title="{{ t.copyButton }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px;">
+              <label style="margin:0;">DROPBOX_REFRESH_TOKEN</label>
+              <a href="#" onClick="{{ onStartDropboxOauth }}" style="font-size:12px; color:var(--color-accent-300); text-decoration:none; display:inline-flex; align-items:center; gap:4px; white-space:nowrap;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"></path><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path></svg>
+                {{ t.dropboxOauthButton }}
+              </a>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <input class="input" style="font-family:ui-monospace,monospace; font-size:14px; flex:1;" type="{{ dropboxSecretType }}" value="{{ dropboxRefreshToken }}" onChange="{{ onDropboxRefreshTokenChange }}">
+              <button type="button" class="btn btn-secondary" onClick="{{ onCopyDropboxRefreshToken }}" title="{{ t.copyButton }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label>{{ t.dropboxFolderLabel }}</label>
+            <input class="input" style="font-family:ui-monospace,monospace; font-size:14px;" type="text" value="{{ dropboxFolder }}" onChange="{{ onDropboxFolderChange }}">
+          </div>
+          <a href="{{ readmeUrl }}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; width:fit-content; font-size:13px; color:var(--color-accent-300); text-decoration:none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"></path><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path></svg>
+            {{ t.dropboxLinkText }}
+          </a>
+        </div>
+
+        <div class="hr"></div>
+        <div style="margin-bottom:var(--space-6);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-2); cursor:pointer;" onClick="{{ onToggleAdvanced }}">
+            <h6 style="color:var(--color-neutral-500); margin:0;">{{ t.advancedHeading }}</h6>
+            <button type="button" class="btn btn-ghost" style="font-size:13.5px; padding:5px 10px;">{{ advancedToggleLabel }}</button>
+          </div>
+          <sc-if value="{{ advancedOpen }}" hint-placeholder-val="{{ false }}">
+            <div class="card elev-sm" style="display:flex; flex-direction:column; gap:var(--space-5);">
+              <div style="display:flex; flex-direction:column; gap:var(--space-3);">
+                <span style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500);">{{ t.logSection }}</span>
+                <div class="field" style="margin-bottom:0; max-width:220px;">
+                  <label style="display:flex; align-items:center; gap:5px;">{{ t.logLevelLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.logLevelTip }}</span></span></label>
+                  <select class="input" onChange="{{ onLogLevelChange }}">
+                    <sc-for list="{{ logLevelOptions }}" as="opt" hint-placeholder-count="5">
+                      <option value="{{ opt.value }}" selected="{{ opt.selected }}">{{ opt.value }}</option>
+                    </sc-for>
+                  </select>
+                </div>
+              </div>
+
+              <div class="hr" style="margin:0;"></div>
+
+              <div style="display:flex; flex-direction:column; gap:var(--space-3);">
+                <span style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500);">{{ t.networkSection }}</span>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3);">
+                  <div class="field" style="margin-bottom:0;">
+                    <label style="display:flex; align-items:center; gap:5px;">{{ t.pageSizeLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.pageSizeTip }}</span></span></label>
+                    <input class="input" type="number" value="{{ networkPageSize }}" onChange="{{ onNetworkPageSizeChange }}">
+                  </div>
+                  <div class="field" style="margin-bottom:0;">
+                    <label style="display:flex; align-items:center; gap:5px;">{{ t.timeoutLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.networkTimeoutTip }}</span></span></label>
+                    <input class="input" type="number" value="{{ networkTimeout }}" onChange="{{ onNetworkTimeoutChange }}">
+                  </div>
+                  <div class="field" style="margin-bottom:0;">
+                    <label style="display:flex; align-items:center; gap:5px;">{{ t.minDelayLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.minDelayTip }}</span></span></label>
+                    <input class="input" type="number" value="{{ networkMinDelay }}" onChange="{{ onNetworkMinDelayChange }}">
+                  </div>
+                  <div class="field" style="margin-bottom:0;">
+                    <label style="display:flex; align-items:center; gap:5px;">{{ t.maxDelayLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.maxDelayTip }}</span></span></label>
+                    <input class="input" type="number" value="{{ networkMaxDelay }}" onChange="{{ onNetworkMaxDelayChange }}">
+                  </div>
+                </div>
+              </div>
+
+              <div class="hr" style="margin:0;"></div>
+
+              <div style="display:flex; flex-direction:column; gap:var(--space-3);">
+                <span style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500);">{{ t.downloadSetupSection }}</span>
+                <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer;">
+                  <input type="checkbox" checked="{{ cleanDownloadAfterCopy }}" onChange="{{ onCleanDownloadChange }}">
+                  {{ t.cleanDownloadLabel }}
+                  <span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.cleanDownloadTip }}</span></span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer;">
+                  <input type="checkbox" checked="{{ setupOverwrite }}" onChange="{{ onSetupOverwriteChange }}">
+                  {{ t.overwriteLabel }}
+                  <span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.overwriteTip }}</span></span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer;">
+                  <input type="checkbox" checked="{{ setupDeletePreviousVersion }}" onChange="{{ onSetupDeletePreviousVersionChange }}">
+                  {{ t.deletePrevLabel }}
+                  <span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.deletePrevTip }}</span></span>
+                </label>
+              </div>
+
+              <div class="hr" style="margin:0;"></div>
+
+              <div style="display:flex; flex-direction:column; gap:var(--space-3);">
+                <span style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500);">{{ t.remoteTracksSection }}</span>
+                <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer;">
+                  <input type="checkbox" checked="{{ remoteTracksEnabled }}" onChange="{{ onRemoteTracksEnabledChange }}">
+                  {{ t.remoteEnabledLabel }}
+                  <span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.remoteEnabledTip }}</span></span>
+                </label>
+                <div class="field" style="margin-bottom:0;">
+                  <label style="display:flex; align-items:center; gap:5px;">{{ t.remoteUrlLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.remoteUrlTip }}</span></span></label>
+                  <input class="input" style="font-family:ui-monospace,monospace; font-size:14px;" type="text" value="{{ remoteTracksUrl }}" onChange="{{ onRemoteTracksUrlChange }}">
+                </div>
+                <div class="field" style="margin-bottom:0; max-width:160px;">
+                  <label style="display:flex; align-items:center; gap:5px;">{{ t.timeoutLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.remoteTimeoutTip }}</span></span></label>
+                  <input class="input" type="number" value="{{ remoteTracksTimeout }}" onChange="{{ onRemoteTracksTimeoutChange }}">
+                </div>
+              </div>
+
+              <div class="hr" style="margin:0;"></div>
+
+              <div style="display:flex; flex-direction:column; gap:var(--space-3);">
+                <span style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500);">{{ t.dropboxAdvSection }}</span>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3);">
+                  <div class="field" style="margin-bottom:0;">
+                    <label style="display:flex; align-items:center; gap:5px;">{{ t.timeoutLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.dropboxTimeoutTip }}</span></span></label>
+                    <input class="input" type="number" value="{{ dropboxTimeout }}" onChange="{{ onDropboxTimeoutChange }}">
+                  </div>
+                  <div class="field" style="margin-bottom:0;">
+                    <label style="display:flex; align-items:center; gap:5px;">{{ t.uploadWorkersLabel }}<span class="info-tip" style="display:inline-flex; cursor:help; color:var(--color-neutral-500);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><circle cx="12" cy="7.6" r="0.4" fill="currentColor"></circle></svg><span class="info-tip-text">{{ t.uploadWorkersTip }}</span></span></label>
+                    <input class="input" type="number" value="{{ dropboxUploadWorkers }}" onChange="{{ onDropboxUploadWorkersChange }}">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div class="hr"></div>
+        <div style="margin-bottom:var(--space-6);">
+          <h6 style="color:oklch(68% 0.17 27); margin:0 0 var(--space-2);">{{ t.dangerZoneHeading }}</h6>
+          <div class="card elev-sm" style="border-color:oklch(68% 0.17 27 / 0.35); display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); padding:var(--space-2) 0;">
+              <div style="display:flex; flex-direction:column; gap:2px;">
+                <span style="font-size:14px; color:var(--color-text);">{{ t.dangerCleanSetupsTitle }}</span>
+                <span style="font-size:12.5px; color:var(--color-neutral-500);">{{ t.dangerCleanSetupsDesc }}</span>
+              </div>
+              <button type="button" class="btn btn-secondary" style="color:oklch(68% 0.17 27); border-color:oklch(68% 0.17 27); white-space:nowrap; flex:none;" onClick="{{ onRequestDangerSetups }}">{{ t.dangerCleanSetupsButton }}</button>
+            </div>
+            <div class="hr" style="margin:0;"></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); padding:var(--space-2) 0;">
+              <div style="display:flex; flex-direction:column; gap:2px;">
+                <span style="font-size:14px; color:var(--color-text);">{{ t.dangerCleanAllTitle }}</span>
+                <span style="font-size:12.5px; color:var(--color-neutral-500);">{{ t.dangerCleanAllDesc }}</span>
+              </div>
+              <button type="button" class="btn btn-secondary" style="color:oklch(68% 0.17 27); border-color:oklch(68% 0.17 27); white-space:nowrap; flex:none;" onClick="{{ onRequestDangerAll }}">{{ t.dangerCleanAllButton }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</div>
+
+<!-- ===== Global modals ===== -->
+
+<sc-if value="{{ showWarning }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-accent-300)"></circle></svg>
+        <div class="dialog-title" style="margin:0;">{{ t.warningTitle }}</div>
+      </div>
+      <div class="dialog-body">{{ t.warningBody }}</div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-primary" onClick="{{ onDismissWarning }}" style="white-space:nowrap; flex:none;">{{ t.warningButton }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showCorreggi }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div class="dialog-title">{{ t.mapDialogTitle }}</div>
+      <div class="dialog-body">
+        {{ t.mapDialogBodyPrefix }}"{{ correggiTrack }}"{{ t.mapDialogBodySuffix }}
+        <select class="input" style="margin-top:12px;" value="{{ correggiSelectedFolder }}" onChange="{{ onCorreggiSelectChange }}">
+          <option value="" disabled="">{{ t.mapFolderPlaceholder }}</option>
+          <sc-for list="{{ trackFolderOptions }}" as="opt" hint-placeholder-count="3">
+            <option value="{{ opt }}">{{ opt }}</option>
+          </sc-for>
+        </select>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCancelCorreggi }}" style="white-space:nowrap; flex:none;">{{ t.mapFolderCancel }}</button>
+        <button type="button" class="btn btn-primary" onClick="{{ onConfirmCorreggi }}" style="white-space:nowrap; flex:none;">{{ t.mapConfirm }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showMappingDeleteConfirm }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(68% 0.17 27)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="oklch(68% 0.17 27)"></circle></svg>
+        <div class="dialog-title" style="margin:0;">{{ mappingDeleteModalTitle }}</div>
+      </div>
+      <div class="dialog-body">{{ mappingDeleteModalBody }}</div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCancelMappingDelete }}" style="white-space:nowrap; flex:none;">{{ t.deleteConfirmCancel }}</button>
+        <button type="button" class="btn btn-secondary" onClick="{{ onConfirmMappingDelete }}" style="color:oklch(68% 0.17 27); border-color:oklch(68% 0.17 27); white-space:nowrap; flex:none;">{{ t.deleteConfirmConfirm }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showDeleteConfirm }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-accent-300)"></circle></svg>
+        <div class="dialog-title" style="margin:0;">{{ deleteModalTitle }}</div>
+      </div>
+      <div class="dialog-body">{{ deleteModalBody }}</div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCancelDelete }}" style="white-space:nowrap; flex:none;">{{ t.deleteConfirmCancel }}</button>
+        <button type="button" class="btn btn-secondary" onClick="{{ onConfirmDelete }}" style="color:oklch(68% 0.17 27); border-color:oklch(68% 0.17 27); white-space:nowrap; flex:none;">{{ t.deleteConfirmConfirm }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showDangerConfirm }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(68% 0.17 27)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="oklch(68% 0.17 27)"></circle></svg>
+        <div class="dialog-title" style="margin:0; color:oklch(68% 0.17 27);">{{ dangerModalTitle }}</div>
+      </div>
+      <div class="dialog-body">{{ dangerModalBody }}</div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCancelDanger }}" style="white-space:nowrap; flex:none;">{{ t.deleteConfirmCancel }}</button>
+        <button type="button" class="btn btn-secondary" disabled="{{ dangerConfirmDisabled }}" onClick="{{ onConfirmDanger }}" style="color:oklch(68% 0.17 27); border-color:oklch(68% 0.17 27); white-space:nowrap; flex:none;">{{ dangerConfirmLabel }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showDeleteAllProgress }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div class="dialog-title">{{ t.deleteAllProgressTitle }}</div>
+      <div class="dialog-body">
+        <p style="margin:0 0 var(--space-3); color:var(--color-neutral-400); font-size:13.5px;">{{ t.deleteAllProgressBody }}</p>
+        <div style="width:100%; height:6px; border-radius:999px; background:var(--color-neutral-700); overflow:hidden;">
+          <div style="height:100%; border-radius:999px; background:var(--color-accent); width:{{ deleteAllProgressWidth }}; transition:width .15s ease;"></div>
+        </div>
+        <div style="margin-top:6px; text-align:right; font-size:12px; color:var(--color-neutral-500);">{{ deleteAllProgressPct }}%</div>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showValidationError }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1001;">
+    <div class="dialog elev-lg">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6"></path><circle cx="12" cy="16.7" r="0.6" fill="var(--color-accent-300)"></circle></svg>
+        <div class="dialog-title" style="margin:0;">{{ t.validationTitle }}</div>
+      </div>
+      <div class="dialog-body">
+        <sc-for list="{{ validationSentences }}" as="sentence" hint-placeholder-count="1">
+          <p style="margin:0 0 8px;">{{ sentence }}</p>
+        </sc-for>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCloseValidation }}" style="white-space:nowrap; flex:none;">{{ t.validationClose }}</button>
+        <button type="button" class="btn btn-primary" onClick="{{ onGoToSettingsFromValidation }}" style="white-space:nowrap; flex:none;">{{ t.validationGoSettings }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showDropboxOauthChoice }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div class="dialog-title">{{ t.dropboxOauthChoiceTitle }}</div>
+      <div class="dialog-body">
+        <p style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--color-accent-300); margin:0 0 var(--space-3);">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none; margin-top:1px;"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-accent-300)"></circle></svg>
+          {{ t.dropboxOauthChoiceWarning }}
+        </p>
+        <div style="display:flex; flex-direction:column; gap:var(--space-2);">
+          <button type="button" class="mode-card" onClick="{{ onChooseDropboxReadWrite }}" style="width:100%; text-align:left; cursor:pointer; border:1px solid var(--color-divider); background:transparent; border-radius:var(--radius-md); padding:var(--space-3); color:var(--color-text); display:flex; flex-direction:column; gap:4px; font-family:inherit;">
+            <span style="font-family:var(--font-heading); font-size:15px;">{{ t.dropboxOauthReadWriteTitle }}</span>
+            <span style="font-size:13px; color:var(--color-neutral-500);">{{ t.dropboxOauthReadWriteDesc }}</span>
+          </button>
+          <button type="button" onClick="{{ onChooseDropboxReadOnly }}" style="width:100%; text-align:left; cursor:pointer; border:1px solid var(--color-divider); background:transparent; border-radius:var(--radius-md); padding:var(--space-3); color:var(--color-text); display:flex; flex-direction:column; gap:4px; font-family:inherit;">
+            <span style="font-family:var(--font-heading); font-size:15px;">{{ t.dropboxOauthReadOnlyTitle }}</span>
+            <span style="font-size:13px; color:var(--color-neutral-500);">{{ t.dropboxOauthReadOnlyDesc }}</span>
+          </button>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCancelDropboxOauth }}" style="white-space:nowrap; flex:none;">{{ t.mapFolderCancel }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showDropboxOauthCode }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div class="dialog-title">{{ t.dropboxOauthDialogTitle }}</div>
+      <div class="dialog-body">
+        {{ t.dropboxOauthDialogBody }}
+        <input class="input" style="margin-top:12px;" placeholder="{{ t.dropboxOauthCodePlaceholder }}" value="{{ dropboxOauthCode }}" onChange="{{ onDropboxOauthCodeChange }}">
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCancelDropboxOauth }}" style="white-space:nowrap; flex:none;">{{ t.mapFolderCancel }}</button>
+        <button type="button" class="btn btn-primary" onClick="{{ onConfirmDropboxOauth }}" style="white-space:nowrap; flex:none;">{{ t.mapConfirm }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ tracktitanFetching }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div class="dialog-title">{{ t.tracktitanFetchDialogTitle }}</div>
+      <div class="dialog-body">{{ t.tracktitanFetchDialogBody }}</div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onCancelTracktitanFetch }}" style="white-space:nowrap; flex:none;">{{ t.mapFolderCancel }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showUnsavedPrompt }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:fixed; inset:0; z-index:1000;">
+    <div class="dialog elev-lg">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-300)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20.5H2Z"></path><path d="M12 10v4.5"></path><circle cx="12" cy="17.5" r="0.6" fill="var(--color-accent-300)"></circle></svg>
+        <div class="dialog-title" style="margin:0;">{{ t.unsavedChangesTitle }}</div>
+      </div>
+      <div class="dialog-body">{{ t.unsavedChangesBody }}</div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" onClick="{{ onUnsavedCancel }}" style="margin-right:auto; white-space:nowrap; flex:none;">{{ t.mapFolderCancel }}</button>
+        <button type="button" class="btn btn-secondary" onClick="{{ onUnsavedDiscard }}" style="white-space:nowrap; flex:none;">{{ t.unsavedChangesDiscard }}</button>
+        <button type="button" class="btn btn-primary" onClick="{{ onUnsavedSave }}" style="white-space:nowrap; flex:none;">{{ t.unsavedChangesSave }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; bottom:var(--space-6); right:var(--space-6); z-index:1200; background:var(--color-surface); border:1px solid var(--color-divider); border-radius:var(--radius-md); box-shadow:var(--shadow-md); padding:var(--space-3) var(--space-4); font-size:13px; color:var(--color-text); animation:toast-in .15s ease;">
+    {{ toastMessage }}
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TRACK_FOLDER_OPTIONS = [
+  "Qatar", "Imola", "Circuit Of The Americas", "Spa", "Bahrain", "Lemans",
+  "Interlagos", "Paulricard", "Fuji", "Portimao", "Monza", "Sebring",
+  "Silverstone", "Circuit De Barcelona",
+];
+
+const LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
+
+const CAR_OPTIONS = [
+  "Ferrari 499P", "Porsche 963 LMDh", "Toyota GR010 Hybrid", "Cadillac V-Series.R",
+  "BMW M Hybrid V8", "Peugeot 9X8", "Lamborghini SC63", "Alpine A424", "Acura ARX-06",
+  "Ferrari 296 GT3", "Porsche 911 GT3 R", "BMW M4 GT3", "McLaren 720S GT3 Evo",
+  "Lamborghini Huracán GT3 Evo2", "Mercedes-AMG GT3", "Aston Martin Vantage GT3",
+  "Audi R8 LMS Evo II", "Chevrolet Corvette Z06 GT3.R", "Ford Mustang GT3", "Ligier JS P320",
+  "Oreca 07 Gibson", "Duqueine D08", "Aston Martin Vantage GTE", "Corvette C8.R GTE",
+];
+
+const MODE_TITLE_KEYS = { full: "modeFullTitle", master: "modeMasterTitle", slave: "modeSlaveTitle" };
+
+const MOCK_MANUAL_MAPPINGS = [
+  { id: "a3f1c9e2", type: "track", name: "Spa", matcher: "spa[-_ ]?francorchamps" },
+  { id: "b7d24a10", type: "track", name: "Circuit De Barcelona", matcher: "barcelona(?!.*catalunya)" },
+  { id: "c1e88f45", type: "car", name: "Ferrari 296 GT3", matcher: "ferrari[-_ ]296[-_ ]gt3" },
+  { id: "d90a3b6c", type: "car", name: "BMW M4 GT3", matcher: "bmw[-_ ]m4[-_ ]gt3(?!.*evo)" },
+  { id: "e45c7d21", type: "track", name: "Sebring", matcher: "sebring[-_ ]international" },
+  { id: "f2b19e88", type: "track", name: "Qatar", matcher: "losail(?!.*wec)" },
+  { id: "0a6d4c93", type: "car", name: "Porsche 911 GT3 R", matcher: "porsche[-_ ]911[-_ ]gt3[-_ ]r" },
+  { id: "17e5b2f0", type: "car", name: "Alpine A424", matcher: "alpine[-_ ]a424[-_ ]gt" },
+  { id: "2c8f0d17", type: "track", name: "Monza", matcher: "autodromo[-_ ]nazionale[-_ ]monza" },
+  { id: "39a1e764", type: "track", name: "Imola", matcher: "imola|enzo[-_ ]e[-_ ]dino[-_ ]ferrari" },
+  { id: "4d0b2f8a", type: "car", name: "McLaren 720S GT3 Evo", matcher: "mclaren[-_ ]720s[-_ ]gt3[-_ ]evo" },
+  { id: "5e9c3a16", type: "track", name: "Silverstone", matcher: "silverstone[-_ ]circuit" },
+  { id: "6f1d4b29", type: "car", name: "Toyota GR010 Hybrid", matcher: "toyota[-_ ]gr010" },
+  { id: "70a2e5c3", type: "track", name: "Portimao", matcher: "algarve|portimao" },
+];
+
+const CLASS_LOGOS = {
+  HYPERCAR: "uploads/HYPERCAR.png",
+  GT3: "uploads/GT3-019c40fd.png",
+  GTE: "uploads/GTE.webp",
+  P2: "uploads/P2.png",
+  P3: "uploads/P3-bed18951.png",
+};
+
+const CAR_CLASS_MAP = {
+  "Ferrari 499P": "HYPERCAR", "Porsche 963 LMDh": "HYPERCAR", "Toyota GR010 Hybrid": "HYPERCAR",
+  "Cadillac V-Series.R": "HYPERCAR", "BMW M Hybrid V8": "HYPERCAR", "Peugeot 9X8": "HYPERCAR",
+  "Lamborghini SC63": "HYPERCAR", "Alpine A424": "HYPERCAR", "Acura ARX-06": "HYPERCAR",
+  "Ferrari 296 GT3": "GT3", "Porsche 911 GT3 R": "GT3", "BMW M4 GT3": "GT3",
+  "McLaren 720S GT3 Evo": "GT3", "Lamborghini Huracán GT3 Evo2": "GT3", "Mercedes-AMG GT3": "GT3",
+  "Aston Martin Vantage GT3": "GT3", "Audi R8 LMS Evo II": "GT3", "Chevrolet Corvette Z06 GT3.R": "GT3",
+  "Ford Mustang GT3": "GT3", "Ligier JS P320": "P3",
+  "Oreca 07 Gibson": "P2", "Duqueine D08": "P2",
+  "Aston Martin Vantage GTE": "GTE", "Corvette C8.R GTE": "GTE",
+};
+
+function classLogoFor(carName) {
+  const cls = CAR_CLASS_MAP[carName];
+  return cls ? CLASS_LOGOS[cls] : null;
+}
+function classFlagsFor(carName) {
+  const cls = CAR_CLASS_MAP[carName];
+  return {
+    hasClassLogo: !!cls,
+    isHYPERCAR: cls === "HYPERCAR",
+    isGT3: cls === "GT3",
+    isGTE: cls === "GTE",
+    isP2: cls === "P2",
+    isP3: cls === "P3",
+  };
+}
+
+function cloneMockGroups() {
+  return JSON.parse(JSON.stringify([
+    { track: "Spa-Francorchamps", trackFound: true, folder: "Spa", cars: [
+      { car: "Ferrari 499P", types: [ { type: "HYMO", setups: [
+        { setupId: "s1", installDate: "12 gen 2026", fileCount: 3, fileNames: ["setup_dry.svm", "setup_wet.svm", "setup_qualy.svm"], installationFolder: "Spa", hotlapLink: "https://youtu.be/dQw4w9WgXcQ" },
+      ] } ] },
+      { car: "Porsche 963 LMDh", types: [ { type: "HYMO", setups: [
+        { setupId: "s2", installDate: "10 gen 2026", fileCount: 2, fileNames: ["setup_dry.svm", "setup_qualy.svm"], installationFolder: "Spa" },
+      ] } ] },
+    ] },
+    { track: "Losail - WEC", trackFound: true, folder: "Qatar", cars: [
+      { car: "Toyota GR010 Hybrid", types: [
+        { type: "HYMO", setups: [
+          { setupId: "s3", installDate: "05 gen 2026", fileCount: 4, fileNames: ["dry.svm", "wet.svm", "qualy.svm", "race.svm"], installationFolder: "Qatar", hotlapLink: "https://youtu.be/dQw4w9WgXcQ" },
+          { setupId: "s3b", installDate: "20 dic 2025", fileCount: 3, fileNames: ["dry.svm", "wet.svm", "qualy.svm"], installationFolder: "Qatar" },
+        ] },
+        { type: "GO", setups: [
+          { setupId: "s3g", installDate: "02 gen 2026", fileCount: 2, fileNames: ["go_dry.svm", "go_qualy.svm"], installationFolder: "Qatar" },
+        ] },
+      ] },
+      { car: "BMW M Hybrid V8", types: [ { type: "HYMO", setups: [
+        { setupId: "s4", installDate: "05 gen 2026", fileCount: 2, fileNames: ["dry.svm", "qualy.svm"], installationFolder: "Qatar" },
+      ] } ] },
+    ] },
+    { track: "Sebring International", trackFound: false, folder: "Sebring - HYMO", cars: [
+      { car: "Peugeot 9X8", types: [ { type: "HYMO", setups: [
+        { setupId: "s5", installDate: "28 dic 2025", fileCount: 3, fileNames: ["dry.svm", "wet.svm", "qualy.svm"], installationFolder: "Sebring - HYMO", hotlapLink: "https://youtu.be/dQw4w9WgXcQ" },
+      ] } ] },
+      { car: "Alpine A424", types: [ { type: "HYMO", setups: [
+        { setupId: "s6", installDate: "27 dic 2025", fileCount: 3, fileNames: ["dry.svm", "wet.svm", "qualy.svm"], installationFolder: "Sebring - HYMO" },
+      ] } ] },
+    ] },
+    { track: "Monza", trackFound: true, folder: "Monza", cars: [
+      { car: "Cadillac V-Series.R", types: [ { type: "GO", setups: [
+        { setupId: "s7", installDate: "02 gen 2026", fileCount: 2, fileNames: ["go_dry.svm", "go_qualy.svm"], installationFolder: "Monza" },
+      ] } ] },
+    ] },
+    { track: "Fuji Speedway", trackFound: true, folder: "Fuji", cars: [
+      { car: "Lamborghini SC63", types: [ { type: "HYMO", setups: [
+        { setupId: "s8", installDate: "20 dic 2025", fileCount: 2, fileNames: ["dry.svm", "qualy.svm"], installationFolder: "Fuji" },
+      ] } ] },
+    ] },
+    { track: "Circuit de Barcelona", trackFound: true, folder: "Circuit De Barcelona", cars: [
+      { car: "Ligier JS P320", types: [ { type: "HYMO", setups: [
+        { setupId: "s9", installDate: "18 dic 2025", fileCount: 2, fileNames: ["dry.svm", "qualy.svm"], installationFolder: "Circuit De Barcelona" },
+      ] } ] },
+      { car: "Oreca 07 Gibson", types: [ { type: "HYMO", setups: [
+        { setupId: "s10", installDate: "17 dic 2025", fileCount: 2, fileNames: ["dry.svm", "qualy.svm"], installationFolder: "Circuit De Barcelona" },
+      ] } ] },
+      { car: "Aston Martin Vantage GTE", types: [ { type: "GO", setups: [
+        { setupId: "s11", installDate: "16 dic 2025", fileCount: 2, fileNames: ["go_dry.svm", "go_qualy.svm"], installationFolder: "Circuit De Barcelona" },
+      ] } ] },
+      { car: "Ferrari 296 GT3", types: [ { type: "HYMO", setups: [
+        { setupId: "s12", installDate: "15 dic 2025", fileCount: 3, fileNames: ["dry.svm", "wet.svm", "qualy.svm"], installationFolder: "Circuit De Barcelona" },
+      ] } ] },
+      { car: "BMW M4 GT3", types: [ { type: "CUSTOM", setups: [
+        { setupId: "s13", installDate: "14 dic 2025", fileCount: 1, fileNames: ["custom_setup.svm"], installationFolder: "Circuit De Barcelona" },
+      ] } ] },
+    ] },
+  ]));
+}
+
+const DOWNLOAD_SCRIPT_BY_LANG = {
+  it: [
+    { kind: "start", title: "Download avviato", meta: "Connessione a Hymo in corso" },
+    { kind: "install", title: "Alpine A424 GT — Sebring International", meta: "→ Sebring - HYMO" },
+    { kind: "install", title: "BMW M Hybrid V8 — Losail - WEC", meta: "→ Qatar" },
+    { kind: "install", title: "Toyota GR010 Hybrid — Losail - WEC", meta: "→ Qatar" },
+    { kind: "finish", title: "Download completato", meta: "3 nuovi setup installati" },
+  ],
+  en: [
+    { kind: "start", title: "Download started", meta: "Connecting to Hymo" },
+    { kind: "install", title: "Alpine A424 GT — Sebring International", meta: "→ Sebring - HYMO" },
+    { kind: "install", title: "BMW M Hybrid V8 — Losail - WEC", meta: "→ Qatar" },
+    { kind: "install", title: "Toyota GR010 Hybrid — Losail - WEC", meta: "→ Qatar" },
+    { kind: "finish", title: "Download completed", meta: "3 new setups installed" },
+  ],
+};
+
+const TRANSLATIONS = {
+  it: {
+    navSetups: "Setup installati", navDownload: "Download", navUpload: "Carica Setup", navMapping: "Associazioni manuali", navSettings: "Impostazioni",
+    uploadPageTitle: "Carica Setup", uploadPageDesc: "Carica manualmente un file di setup e assegnalo a pista, tipologia e auto.",
+    mappingTitle: "Associazioni manuali",
+    mappingDesc: "Corrispondenze pista/auto aggiunte manualmente, servono quando non vengono riconosciute dall'associazione automatica.",
+    mappingColType: "Tipo", mappingColName: "Nome", mappingColMatcher: "Matcher", mappingColActions: "Azioni",
+    mappingTypeTrack: "Pista", mappingTypeCar: "Auto",
+    mappingResultsWord: "associazioni",
+    mappingSearchPlaceholder: "Cerca per nome o matcher…",
+    mappingEmptyText: "Nessuna associazione manuale presente.",
+    mappingDeleteAllButton: "Elimina tutte le associazioni",
+    mappingDeleteConfirmTitle: "Elimina associazione",
+    mappingDeleteConfirmBody: (name) => `Eliminare l'associazione per "${name}"? L'operazione non può essere annullata.`,
+    mappingDeleteAllConfirmTitle: "Elimina tutte le associazioni",
+    mappingDeleteAllConfirmBody: (count) => `Eliminare tutte le ${count} associazioni manuali? L'operazione non può essere annullata.`,
+    mappingDeletedToast: "✓ Associazione eliminata",
+    mappingDeletedAllToast: "✓ Associazioni eliminate",
+    mappingPrevPage: "Precedente", mappingNextPage: "Successiva",
+    mappingPageLabel: (page, count) => `Pagina ${page} di ${count}`,
+    uploadDropzoneTitle: "Seleziona un file .zip", uploadDropzoneDesc: "Clicca per scegliere il file di setup dal tuo computer.",
+    sidebarMode: "Modalità", sidebarInstalled: "Setup installati", sidebarVersion: "Versione",
+    setupsTitle: "Setup installati",
+    setupsDesc: "Setup installati da questa app",
+    searchPlaceholder: "Cerca per pista o auto…",
+    resultsWord: "risultati",
+    unmappedOnlyFilter: "Da mappare",
+    unmappedTag: "da mappare",
+    filesUnit: "file",
+    hotlapTitle: "Guarda l'hotlap su YouTube",
+    hotlapLabel: "Hotlap",
+    noResultsPrefix: 'Nessun setup corrisponde a "', noResultsSuffix: '".',
+    deleteAllInstalledButton: "Elimina tutti i setup installati",
+    deleteAllProgressTitle: "Eliminazione in corso",
+    deleteAllProgressBody: "Rimozione di tutti i setup installati…",
+    deleteButton: "Elimina",
+    deleteConfirmTitle: "Elimina setup",
+    deleteConfirmBody: (car, track) => `Eliminare il setup di "${car}" per "${track}"? L'operazione non può essere annullata.`,
+    deleteConfirmCancel: "Annulla", deleteConfirmConfirm: "Elimina",
+    deletedToast: "✓ Setup eliminato",
+    deleteAllButton: "Elimina tutti i setup della pista",
+    deleteAllConfirmTitle: "Elimina tutti i setup",
+    deleteAllConfirmBody: (track, count) => `Eliminare tutti i ${count} setup installati per "${track}"? L'operazione non può essere annullata.`,
+    deletedAllToast: "✓ Setup eliminati",
+    deleteGroupButtonTooltip: (type) => `Elimina tutti i setup ${type}`,
+    deleteGroupConfirmBody: (type, car, count) => `Eliminare tutti i ${count} setup ${type} di "${car}"? L'operazione non può essere annullata.`,
+    deleteAllInstalledConfirmTitle: "Elimina tutti i setup installati",
+    deleteAllInstalledConfirmBody: (count) => `Eliminare tutti i ${count} setup installati da questa app, su tutte le piste? L'operazione non può essere annullata.`,
+    deletedAllInstalledToast: "✓ Tutti i setup installati sono stati eliminati",
+    correctButton: "Correggi", mapFolderPlaceholder: "Scegli la cartella LMU…", mapFolderCancel: "Annulla", mapConfirm: "Conferma",
+    mapDialogTitle: "Correggi la cartella",
+    mapDialogBodyPrefix: "Il track Hymo ", mapDialogBodySuffix: " corrisponde a:",
+    mapSavedMessage: (track, folder) => `"${track}" mappata su "${folder}".`,
+    copyButton: "Copia", copiedToast: "✓ Copiato negli appunti",
+    settingsTitle: "Impostazioni",
+    settingsDesc: "I token di accesso sono dati sensibili, non condividerli.",
+    langHeading: "Lingua", langFieldLabel: "Lingua dell'interfaccia",
+    lmuHeading: "CARTELLA SETUP Le Mans Ultimate", lmuFieldLabel: "Dove installare i setup in Le Mans Ultimate",
+    lmuHelp: "Il percorso di installazione dei setup su LMU è normalmente in:\n\"C:\\Program Files (x86)\\Steam\\steamapps\\common\\Le Mans Ultimate\\UserData\\player\\Settings\"\nper una installazione standard da Steam. Obbligatorio per le modalità Diretta e Solo installazione.",
+    lmuPathInvalidWarning: "Il percorso selezionato non è valido",
+    browseButton: "Sfoglia…",
+    tokenHeading: "Token Hymo", tokenHelp: "Obbligatori per le modalità Diretta e Solo Upload.",
+    tokenLinkText: "Guida alla compilazione", tracktitanFetchButton: "Ottieni automaticamente",
+    dropboxHeading: "Credenziali Dropbox", dropboxHelp: "Obbligatorie per le modalità Solo Upload e Solo installazione.",
+    dropboxFolderLabel: "Cartella Dropbox condivisa",
+    dropboxLinkText: "Guida alla compilazione", dropboxOauthButton: "Ottieni automaticamente",
+    advancedHeading: "Impostazioni avanzate", advancedShow: "Mostra", advancedHide: "Nascondi",
+    dangerZoneHeading: "Zona pericolosa",
+    dangerCleanSetupsTitle: "Pulisci tutti i setup su Dropbox",
+    dangerCleanSetupsDesc: "Elimina tutti i setup presenti sul tuo Dropbox.",
+    dangerCleanSetupsButton: "Pulisci setup Dropbox",
+    dangerCleanAllTitle: "Ripristina le impostazioni di fabbrica",
+    dangerCleanAllDesc: "Elimina tutti i setup installati e tutti i dati dell'applicazione, riportando il programma alle impostazioni di fabbrica. Non elimina i setup su Dropbox.",
+    dangerCleanAllButton: "Ripristina impostazioni di fabbrica",
+    dangerConfirmSetupsTitle: "Confermi la pulizia dei setup su Dropbox?",
+    dangerConfirmSetupsBody: "Questa azione elimina definitivamente tutti i setup presenti nella cartella Dropbox condivisa. L'operazione non può essere annullata.",
+    dangerConfirmAllTitle: "Confermi il ripristino alle impostazioni di fabbrica?",
+    dangerConfirmAllBody: "Questa azione elimina definitivamente tutti i setup installati e tutti i dati dell'applicazione, comprese configurazioni e cache, riportando il programma alle impostazioni di fabbrica. L'operazione non può essere annullata.",
+    dangerConfirmWaitLabel: (n) => `Attendi ${n}s…`,
+    dangerConfirmButton: "Conferma",
+    dangerCleanedSetupsToast: "✓ Tutti i setup sono stati eliminati",
+    dangerCleanedAllToast: "✓ Impostazioni di fabbrica ripristinate",
+    logSection: "Logging",
+    logLevelLabel: "Livello log", logLevelTip: "Livello minimo dei messaggi registrati nel file di log (e in console, se avviata da terminale): DEBUG, INFO, WARNING, ERROR, CRITICAL.",
+    networkSection: "Rete",
+    pageSizeLabel: "Dimensione pagina", pageSizeTip: "Numero di setup richiesti a Hymo per ogni singola chiamata.",
+    timeoutLabel: "Timeout (s)", networkTimeoutTip: "Secondi di attesa massima per una risposta dal server prima di considerarla fallita.",
+    minDelayLabel: "Ritardo minimo (s)", minDelayTip: "Attesa minima, in secondi, tra una richiesta e l'altra a Hymo.",
+    maxDelayLabel: "Ritardo massimo (s)", maxDelayTip: "Attesa massima, in secondi, tra una richiesta e l'altra a Hymo.",
+    downloadSetupSection: "Download e setup",
+    cleanDownloadLabel: "Elimina i file scaricati dopo la copia", cleanDownloadTip: "Cancella i file dalla cartella temporanea di download una volta copiati a destinazione.",
+    overwriteLabel: "Sovrascrivi i setup già installati", overwriteTip: "Se un setup con lo stesso nome esiste già in LMU, lo sostituisce invece di saltarlo.",
+    deletePrevLabel: "Elimina la versione precedente del setup", deletePrevTip: "Rimuove la versione precedente del setup prima di installare quella nuova.",
+    remoteTracksSection: "Tracciati remoti",
+    remoteEnabledLabel: "Abilita aggiornamento automatico dei tracciati", remoteEnabledTip: "Scarica automaticamente l'elenco aggiornato dei tracciati all'avvio dell'app.",
+    remoteUrlLabel: "URL elenco tracciati", remoteUrlTip: "Indirizzo da cui viene scaricato l'elenco aggiornato dei tracciati.",
+    remoteTimeoutTip: "Secondi di attesa massima per scaricare l'elenco dei tracciati.",
+    dropboxAdvSection: "Dropbox (avanzate)", dropboxTimeoutTip: "Secondi di attesa massima per le operazioni con l'API di Dropbox.",
+    uploadWorkersLabel: "Upload workers", uploadWorkersTip: "Numero di file caricati in parallelo su Dropbox.",
+    savedToast: "✓ Impostazioni salvate",
+    downloadTitle: "Download",
+    downloadDescPre: "Scarica e installa i nuovi setup Hymo in modalità ", downloadDescPost: ".",
+    modeSectionHeading: "Modalità di funzionamento", activeTag: "attiva", changeModeButton: "Cambia",
+    modeFullTitle: "Diretta", modeMasterTitle: "Solo Upload", modeSlaveTitle: "Solo installazione",
+    fullDesc: "Scarica da Hymo e installa direttamente in LMU su questo PC.",
+    masterDesc: "Scarica da Hymo e carica sul tuo Dropbox (nessuna installazione locale).",
+    slaveDesc: "Scarica i setup dal tuo Dropbox e installa in LMU su questo PC.",
+    modeGeneralFullDesc: "Installa i setup direttamente in LMU su questo PC, sia scaricandoli da Hymo che caricandoli manualmente.",
+    modeGeneralMasterDesc: "Carica i setup sul tuo Dropbox, senza installarli su questo PC.",
+    modeGeneralSlaveDesc: "Installa in LMU su questo PC i setup presenti sul tuo Dropbox.",
+    uploadFullDesc: "Installa il setup caricato direttamente in LMU su questo PC.",
+    uploadMasterDesc: "Carica il setup sul tuo Dropbox (nessuna installazione locale).",
+    uploadSlaveDesc: "Installa il setup caricato in LMU su questo PC.",
+    statusRunning: "In esecuzione…", statusCompleted: "Completato", statusIdle: "In attesa", statusStopped: "Interrotto",
+    summaryRunning: (n) => `${n} setup installati finora`,
+    summaryCompleted: (n) => `${n} setup installati in quest'ultima esecuzione`,
+    summaryIdle: "Nessuna esecuzione ancora avviata",
+    stopButton: "Interrompi", startButton: "Avvia download",
+    activityHeading: "Attività",
+    emptyLog: "Nessuna attività ancora — avvia un download per vedere i setup installati qui.",
+    stoppedTitle: "Download interrotto", stoppedMeta: "Interruzione richiesta dall'utente",
+    warningTitle: "Attenzione",
+    warningBody: "I setup HYMO installati precedentemente non sono visibili da questa applicazione. Per la prima esecuzione si consiglia di eliminare tutti i setup HYMO già presenti e ri-scaricarli da questa app.",
+    warningButton: "Ho capito",
+    validationTitle: "Impossibile avviare il download",
+    validationMissingHymo: (mode) => `La modalità ${mode} richiede i token Hymo. Vai su Impostazioni e compila ACCESS_TOKEN_LIST, ACCESS_TOKEN_DOWNLOAD e USER_ID, poi riprova.`,
+    validationMissingDropbox: (mode) => `La modalità ${mode} richiede le credenziali Dropbox. Vai su Impostazioni e compila DROPBOX_APP_KEY, DROPBOX_APP_SECRET e DROPBOX_REFRESH_TOKEN, poi riprova.`,
+    validationInvalidLmuPath: (mode) => `La modalità ${mode} richiede un percorso LMU valido. Vai su Impostazioni e correggi il percorso, poi riprova.`,
+    validationGoSettings: "Vai alle Impostazioni", validationClose: "Chiudi",
+    unsavedChangesTitle: "Modifiche non salvate",
+    unsavedChangesBody: "Hai modifiche non salvate nelle Impostazioni. Vuoi salvarle prima di continuare?",
+    unsavedChangesDiscard: "Scarta modifiche", unsavedChangesSave: "Salva",
+    dropboxOauthNeedKeysToast: "Inserisci prima DROPBOX_APP_KEY e DROPBOX_APP_SECRET.",
+    dropboxOauthChoiceTitle: "Ottieni token Dropbox",
+    dropboxOauthChoiceWarning: "È necessario l'accesso all'account Dropbox per poter ottenere i token.",
+    dropboxOauthReadWriteTitle: "Token Lettura/Scrittura",
+    dropboxOauthReadWriteDesc: "Accesso completo: funziona sia per \"Solo Upload\" sia per \"Solo installazione\", su una sola macchina o su più.",
+    dropboxOauthReadOnlyTitle: "Token Sola Lettura",
+    dropboxOauthReadOnlyDesc: "Per la modalità \"Solo installazione\": permette solo di scaricare i setup da Dropbox.",
+    dropboxOauthDialogTitle: "Autorizzazione Dropbox",
+    dropboxOauthDialogBody: "Approva l'app nella pagina Dropbox appena aperta, poi incolla qui sotto il codice mostrato.",
+    dropboxOauthCodePlaceholder: "Codice di autorizzazione",
+    dropboxOauthSuccessToast: "✓ Refresh token generato e impostazioni salvate",
+    tracktitanFetchDialogTitle: "Login Hymo",
+    tracktitanFetchDialogBody: "Completa il login nella finestra che si è appena aperta. Una volta effettuato l'accesso, i token verranno recuperati automaticamente.",
+    tracktitanFetchSuccessToast: "✓ Token recuperati e impostazioni salvate",
+    manualUploadButton: "Upload manuale",
+    manualUploadDialogTitle: "Carica setup manualmente",
+    manualUploadTypeLabel: "Tipologia",
+    manualUploadTrackLabel: "Pista",
+    manualUploadCarLabel: "Auto",
+    manualUploadTypePlaceholder: "Scegli la tipologia…",
+    manualUploadTrackPlaceholder: "Scegli la pista…",
+    manualUploadCarPlaceholder: "Scegli l'auto…",
+    manualUploadSearchPlaceholder: "Cerca…",
+    manualUploadNoResults: "Nessun risultato",
+    manualUploadCancel: "Annulla",
+    manualUploadConfirm: "Carica",
+    manualUploadSuccessToast: "✓ Setup caricato correttamente",
+  },
+  en: {
+    navSetups: "Installed setups", navDownload: "Download", navUpload: "Upload Setup", navMapping: "Manual associations", navSettings: "Settings",
+    uploadPageTitle: "Upload Setup", uploadPageDesc: "Manually upload a setup file and assign it to a track, type and car.",
+    mappingTitle: "Manual mapping",
+    mappingDesc: "Manually added track/car matches, used as a fallback when a setup doesn't match mapping.json.",
+    mappingColType: "Type", mappingColName: "Name", mappingColMatcher: "Matcher", mappingColActions: "Actions",
+    mappingTypeTrack: "Track", mappingTypeCar: "Car",
+    mappingResultsWord: "mappings",
+    mappingSearchPlaceholder: "Search by name or matcher…",
+    mappingEmptyText: "No manual mappings yet.",
+    mappingDeleteAllButton: "Delete all mappings",
+    mappingDeleteConfirmTitle: "Delete mapping",
+    mappingDeleteConfirmBody: (name) => `Delete the mapping for "${name}"? This cannot be undone.`,
+    mappingDeleteAllConfirmTitle: "Delete all mappings",
+    mappingDeleteAllConfirmBody: (count) => `Delete all ${count} manual mappings? This cannot be undone.`,
+    mappingDeletedToast: "✓ Mapping deleted",
+    mappingDeletedAllToast: "✓ Mappings deleted",
+    mappingPrevPage: "Previous", mappingNextPage: "Next",
+    mappingPageLabel: (page, count) => `Page ${page} of ${count}`,
+    uploadDropzoneTitle: "Select a .zip file", uploadDropzoneDesc: "Click to choose the setup file from your computer.",
+    sidebarMode: "Mode", sidebarInstalled: "Installed setups", sidebarVersion: "Version",
+    setupsTitle: "Installed setups",
+    setupsDesc: "Hymo setups installed by this app, present in LMU, grouped by track.",
+    searchPlaceholder: "Search by track or car…",
+    resultsWord: "results",
+    unmappedOnlyFilter: "To map",
+    unmappedTag: "to map",
+    filesUnit: "files",
+    hotlapTitle: "Watch the hotlap on YouTube",
+    hotlapLabel: "Hotlap",
+    noResultsPrefix: 'No setup matches "', noResultsSuffix: '".',
+    deleteAllInstalledButton: "Delete all installed setups",
+    deleteAllProgressTitle: "Deleting",
+    deleteAllProgressBody: "Removing all installed setups…",
+    deleteButton: "Delete",
+    deleteConfirmTitle: "Delete setup",
+    deleteConfirmBody: (car, track) => `Delete the setup for "${car}" on "${track}"? This cannot be undone.`,
+    deleteConfirmCancel: "Cancel", deleteConfirmConfirm: "Delete",
+    deletedToast: "✓ Setup deleted",
+    deleteAllButton: "Delete all setups for this track",
+    deleteAllConfirmTitle: "Delete all setups",
+    deleteAllConfirmBody: (track, count) => `Delete all ${count} installed setup(s) for "${track}"? This cannot be undone.`,
+    deletedAllToast: "✓ Setups deleted",
+    deleteGroupButtonTooltip: (type) => `Delete all ${type} setups`,
+    deleteGroupConfirmBody: (type, car, count) => `Delete all ${count} ${type} setup(s) for "${car}"? This cannot be undone.`,
+    deleteAllInstalledConfirmTitle: "Delete all installed setups",
+    deleteAllInstalledConfirmBody: (count) => `Delete all ${count} setup(s) installed by this app, across every track? This cannot be undone.`,
+    deletedAllInstalledToast: "✓ All installed setups were deleted",
+    correctButton: "Fix", mapFolderPlaceholder: "Choose the LMU folder…", mapFolderCancel: "Cancel", mapConfirm: "Confirm",
+    mapDialogTitle: "Fix the folder",
+    mapDialogBodyPrefix: "The Hymo track ", mapDialogBodySuffix: " corresponds to:",
+    mapSavedMessage: (track, folder) => `"${track}" mapped to "${folder}".`,
+    copyButton: "Copy", copiedToast: "✓ Copied to clipboard",
+    settingsTitle: "Settings",
+    settingsDesc: "Access tokens are sensitive data — don't share them.",
+    langHeading: "Language", langFieldLabel: "Interface language",
+    lmuHeading: "LE MANS ULTIMATE SETUP FOLDER", lmuFieldLabel: "Where to install setups in Le Mans Ultimate",
+    lmuHelp: "The setup install path in LMU is normally at:\n\"C:\\Program Files (x86)\\Steam\\steamapps\\common\\Le Mans Ultimate\\UserData\\player\\Settings\"\nfor a standard Steam installation. Required for Direct and Install only modes.",
+    lmuPathInvalidWarning: "The selected path is not valid",
+    browseButton: "Browse…",
+    tokenHeading: "Hymo tokens", tokenHelp: "Required for Direct and Upload only modes.",
+    tokenLinkText: "Setup guide", tracktitanFetchButton: "Get automatically",
+    dropboxHeading: "Dropbox credentials", dropboxHelp: "Required for Upload only and Install only modes.",
+    dropboxFolderLabel: "Shared Dropbox folder",
+    dropboxLinkText: "Setup guide", dropboxOauthButton: "Get automatically",
+    advancedHeading: "Advanced settings", advancedShow: "Show", advancedHide: "Hide",
+    dangerZoneHeading: "Danger zone",
+    dangerCleanSetupsTitle: "Clean all Dropbox setups",
+    dangerCleanSetupsDesc: "Deletes all setups on your Dropbox.",
+    dangerCleanSetupsButton: "Clean Dropbox setups",
+    dangerCleanAllTitle: "Restore factory settings",
+    dangerCleanAllDesc: "Deletes all installed setups and all app data, resetting the program to its factory settings.",
+    dangerCleanAllButton: "Restore factory settings",
+    dangerConfirmSetupsTitle: "Delete all Dropbox setups?",
+    dangerConfirmSetupsBody: "This permanently deletes all setups in the shared Dropbox folder. This action cannot be undone.",
+    dangerConfirmAllTitle: "Restore factory settings?",
+    dangerConfirmAllBody: "This permanently deletes all installed setups and all app data, including settings and cache, resetting the program to its factory settings. This action cannot be undone.",
+    dangerConfirmWaitLabel: (n) => `Wait ${n}s…`,
+    dangerConfirmButton: "Confirm",
+    dangerCleanedSetupsToast: "✓ All Dropbox setups deleted",
+    dangerCleanedAllToast: "✓ Factory settings restored",
+    logSection: "Logging",
+    logLevelLabel: "Log level", logLevelTip: "Minimum level of messages written to the log file (and to the console, when run from a terminal): DEBUG, INFO, WARNING, ERROR, CRITICAL.",
+    networkSection: "Network",
+    pageSizeLabel: "Page size", pageSizeTip: "Number of setups requested from Hymo per single call.",
+    timeoutLabel: "Timeout (s)", networkTimeoutTip: "Maximum seconds to wait for a server response before treating it as failed.",
+    minDelayLabel: "Minimum delay (s)", minDelayTip: "Minimum wait, in seconds, between one request and the next to Hymo.",
+    maxDelayLabel: "Maximum delay (s)", maxDelayTip: "Maximum wait, in seconds, between one request and the next to Hymo.",
+    downloadSetupSection: "Download and setup",
+    cleanDownloadLabel: "Delete downloaded files after copying", cleanDownloadTip: "Deletes files from the temporary download folder once copied to their destination.",
+    overwriteLabel: "Overwrite already installed setups", overwriteTip: "If a setup with the same name already exists in LMU, replaces it instead of skipping it.",
+    deletePrevLabel: "Delete the previous version of the setup", deletePrevTip: "Removes the previous version of the setup before installing the new one.",
+    remoteTracksSection: "Remote tracks",
+    remoteEnabledLabel: "Enable automatic track list updates", remoteEnabledTip: "Automatically downloads the updated track list from GitHub on startup.",
+    remoteUrlLabel: "Track list URL", remoteUrlTip: "Address the updated track list is downloaded from.",
+    remoteTimeoutTip: "Maximum seconds to wait to download the track list.",
+    dropboxAdvSection: "Dropbox (advanced)", dropboxTimeoutTip: "Maximum seconds to wait for Dropbox API operations.",
+    uploadWorkersLabel: "Upload workers", uploadWorkersTip: "Number of files uploaded to Dropbox in parallel.",
+    savedToast: "✓ Settings saved",
+    downloadTitle: "Download",
+    downloadDescPre: "Download and install new Hymo setups in ", downloadDescPost: " mode.",
+    modeSectionHeading: "Operating mode", activeTag: "active", changeModeButton: "Change",
+    modeFullTitle: "Direct", modeMasterTitle: "Upload only", modeSlaveTitle: "Install only",
+    fullDesc: "Downloads from Hymo and installs directly in LMU on this PC.",
+    masterDesc: "Downloads from Hymo and uploads to your Dropbox (no local install).",
+    slaveDesc: "Downloads setups from your Dropbox and installs them in LMU on this PC.",
+    modeGeneralFullDesc: "Installs setups directly in LMU on this PC, whether downloaded from Hymo or uploaded manually.",
+    modeGeneralMasterDesc: "Uploads setups to your Dropbox, without installing them on this PC.",
+    modeGeneralSlaveDesc: "Installs setups from your Dropbox into LMU on this PC.",
+    uploadFullDesc: "Installs the uploaded setup directly in LMU on this PC.",
+    uploadMasterDesc: "Uploads the setup to your Dropbox (no local install).",
+    uploadSlaveDesc: "Installs the uploaded setup in LMU on this PC.",
+    statusRunning: "Running…", statusCompleted: "Completed", statusIdle: "Waiting", statusStopped: "Stopped",
+    summaryRunning: (n) => `${n} setups installed so far`,
+    summaryCompleted: (n) => `${n} setups installed in this last run`,
+    summaryIdle: "No run started yet",
+    stopButton: "Stop", startButton: "Start download",
+    activityHeading: "Activity",
+    emptyLog: "No activity yet — start a download to see installed setups here.",
+    stoppedTitle: "Download stopped", stoppedMeta: "Stop requested by the user",
+    warningTitle: "Warning",
+    warningBody: "HYMO setups installed previously are not visible from this application. For the first run, it's recommended to delete all existing HYMO setups and re-download them from this app.",
+    warningButton: "Got it",
+    validationTitle: "Can't start the download",
+    validationMissingHymo: (mode) => `${mode} mode requires Hymo tokens. Go to Settings and fill in ACCESS_TOKEN_LIST, ACCESS_TOKEN_DOWNLOAD and USER_ID, then try again.`,
+    validationMissingDropbox: (mode) => `${mode} mode requires Dropbox credentials. Go to Settings and fill in DROPBOX_APP_KEY, DROPBOX_APP_SECRET and DROPBOX_REFRESH_TOKEN, then try again.`,
+    validationInvalidLmuPath: (mode) => `${mode} mode requires a valid LMU path. Go to Settings and fix the path, then try again.`,
+    validationGoSettings: "Go to Settings", validationClose: "Close",
+    unsavedChangesTitle: "Unsaved changes",
+    unsavedChangesBody: "You have unsaved changes in Settings. Do you want to save them before continuing?",
+    unsavedChangesDiscard: "Discard changes", unsavedChangesSave: "Save",
+    dropboxOauthNeedKeysToast: "Fill in DROPBOX_APP_KEY and DROPBOX_APP_SECRET first.",
+    dropboxOauthChoiceTitle: "Get Dropbox token",
+    dropboxOauthChoiceWarning: "Access to your Dropbox account is required to obtain the tokens.",
+    dropboxOauthReadWriteTitle: "Read/Write Token",
+    dropboxOauthReadWriteDesc: "Full access: works for both \"Upload only\" and \"Install only\", on one machine or several.",
+    dropboxOauthReadOnlyTitle: "Read Only Token",
+    dropboxOauthReadOnlyDesc: "For \"Install only\" mode: only allows downloading setups from Dropbox.",
+    dropboxOauthDialogTitle: "Dropbox authorization",
+    dropboxOauthDialogBody: "Approve the app on the Dropbox page that just opened, then paste the code shown back here.",
+    dropboxOauthCodePlaceholder: "Authorization code",
+    dropboxOauthSuccessToast: "✓ Refresh token generated and settings saved",
+    tracktitanFetchDialogTitle: "Hymo login",
+    tracktitanFetchDialogBody: "Complete the login in the window that just opened. Once you're signed in, the tokens are fetched automatically.",
+    tracktitanFetchSuccessToast: "✓ Tokens fetched and settings saved",
+    manualUploadButton: "Manual upload",
+    manualUploadDialogTitle: "Upload a setup manually",
+    manualUploadTypeLabel: "Type",
+    manualUploadTrackLabel: "Track",
+    manualUploadCarLabel: "Car",
+    manualUploadTypePlaceholder: "Choose the type…",
+    manualUploadTrackPlaceholder: "Choose the track…",
+    manualUploadCarPlaceholder: "Choose the car…",
+    manualUploadSearchPlaceholder: "Search…",
+    manualUploadNoResults: "No results",
+    manualUploadCancel: "Cancel",
+    manualUploadConfirm: "Upload",
+    manualUploadSuccessToast: "✓ Setup uploaded successfully",
+  },
+};
+
+const SETTINGS_FIELDS = [
+  "lmuPath", "lmuPathValid", "accessTokenList", "accessTokenDownload", "userId",
+  "dropboxAppKey", "dropboxAppSecret", "dropboxRefreshToken", "dropboxFolder",
+  "logLevel", "networkPageSize", "networkMinDelay", "networkMaxDelay", "networkTimeout",
+  "cleanDownloadAfterCopy", "setupOverwrite", "setupDeletePreviousVersion",
+  "remoteTracksEnabled", "remoteTracksUrl", "remoteTracksTimeout",
+  "dropboxTimeout", "dropboxUploadWorkers",
+];
+
+class Component extends DCLogic {
+  state = {
+    view: "setups",
+    language: "it",
+    selectedMode: "full",
+    showTokenSecrets: false,
+    showDropboxSecrets: false,
+    advancedOpen: false,
+    running: false,
+    runStatus: "idle",
+    activity: [],
+    downloadStep: 0,
+    installedSearch: "",
+    installedUnmappedOnly: false,
+    setupGroups: cloneMockGroups(),
+    expandedTracks: [],
+    expandedCarGroups: [],
+    expandedCars: [],
+    trackOverrides: {},
+    correggiTrack: null,
+    correggiSelectedFolder: "",
+    deleteTarget: null,
+    deleteAllProgress: null,
+    dangerTarget: null,
+    dangerCountdown: 0,
+    dropboxOAuth: null,
+    dropboxOauthCode: "",
+    tracktitanFetching: false,
+    manualUpload: null,
+    manualUploadTypeOpen: false,
+    manualUploadTrackOpen: false,
+    manualUploadCarOpen: false,
+    manualUploadTrackSearch: "",
+    manualUploadCarSearch: "",
+    manualMappings: JSON.parse(JSON.stringify(MOCK_MANUAL_MAPPINGS)),
+    mappingSearch: "",
+    mappingPage: 0,
+    mappingDeleteTarget: null,
+    validationErrors: null,
+    showWarning: typeof localStorage !== "undefined" && localStorage.getItem("hymo-hide-download-warning") !== "1",
+    toast: null,
+    settingsSnapshot: null,
+    unsavedPrompt: null,
+
+    lmuPath: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Le Mans Ultimate\\UserData\\player\\Settings",
+    lmuPathValid: true,
+    accessTokenList: "eyJraWQiOiIzNDd2Q3lpWllCRWdJSkw3...",
+    accessTokenDownload: "eyJraWQiOiI3MEoyS3lmVHZQXC9ocUJ0...",
+    userId: "3f9a21d4-88b2-4e11-9c4a-6d0a12ab34cd",
+    dropboxAppKey: "",
+    dropboxAppSecret: "",
+    dropboxRefreshToken: "",
+    dropboxFolder: "/lmu-setups",
+    logLevel: "INFO",
+    networkPageSize: 64,
+    networkMinDelay: 0.5,
+    networkMaxDelay: 1.5,
+    networkTimeout: 30,
+    cleanDownloadAfterCopy: true,
+    setupOverwrite: false,
+    setupDeletePreviousVersion: true,
+    remoteTracksEnabled: true,
+    remoteTracksUrl: "https://raw.githubusercontent.com/Seroper-real/lmu-setup-manager/refs/heads/main/config/tracks.json",
+    remoteTracksTimeout: 5,
+    dropboxTimeout: 30,
+    dropboxUploadWorkers: 4,
+  };
+
+  appVersion = "1.4.0";
+  lmuFileInputRef = React.createRef();
+  logRef = React.createRef();
+  manualUploadFileInputRef = React.createRef();
+
+  componentDidMount() {
+    this.setState({ settingsSnapshot: this.captureSettingsSnapshot() });
+  }
+
+  componentWillUnmount() {
+    if (this._runTimer) clearInterval(this._runTimer);
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    if (this._fetchTimer) clearTimeout(this._fetchTimer);
+  }
+
+  t() { return TRANSLATIONS[this.state.language] || TRANSLATIONS.it; }
+
+  showToast = (message) => {
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this.setState({ toast: message });
+    this._toastTimer = setTimeout(() => this.setState({ toast: null }), 3200);
+  };
+
+  toggleInArray = (arr, val) => (arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
+
+  // ----- navigation / unsaved-changes guard -----
+  captureSettingsSnapshot = () => {
+    const snap = {};
+    SETTINGS_FIELDS.forEach((k) => (snap[k] = this.state[k]));
+    return snap;
+  };
+  isSettingsDirty = () => {
+    const snap = this.state.settingsSnapshot;
+    if (!snap) return false;
+    return SETTINGS_FIELDS.some((k) => JSON.stringify(this.state[k]) !== JSON.stringify(snap[k]));
+  };
+  goToView = (target) => {
+    if (this.state.view === "settings" && target !== "settings" && this.isSettingsDirty()) {
+      this.setState({ unsavedPrompt: { target } });
+      return;
+    }
+    this.setState({ view: target });
+  };
+  onNavClick = (e) => this.goToView(e.currentTarget.getAttribute("data-view"));
+  onGoToSettingsMode = () => this.goToView("settings");
+
+  persistSettings = () => this.setState({ settingsSnapshot: this.captureSettingsSnapshot() });
+  discardSettings = () => {
+    const snap = this.state.settingsSnapshot;
+    if (snap) this.setState({ ...snap });
+  };
+  onUnsavedCancel = () => this.setState({ unsavedPrompt: null });
+  onUnsavedDiscard = () => {
+    const target = this.state.unsavedPrompt && this.state.unsavedPrompt.target;
+    this.discardSettings();
+    this.setState({ unsavedPrompt: null, view: target || this.state.view });
+  };
+  onUnsavedSave = () => {
+    const target = this.state.unsavedPrompt && this.state.unsavedPrompt.target;
+    this.persistSettings();
+    this.setState({ unsavedPrompt: null, view: target || this.state.view });
+    this.showToast(this.t().savedToast);
+  };
+
+  // ----- setups tab -----
+  onSearchChange = (e) => this.setState({ installedSearch: e.target.value });
+  onToggleUnmappedOnly = () => this.setState((s) => ({ installedUnmappedOnly: !s.installedUnmappedOnly }));
+  onToggleTrack = (track) => this.setState((s) => ({ expandedTracks: this.toggleInArray(s.expandedTracks, track) }));
+  onToggleCarGroup = (key) => this.setState((s) => ({ expandedCarGroups: this.toggleInArray(s.expandedCarGroups, key) }));
+  onToggleCar = (id) => this.setState((s) => ({ expandedCars: this.toggleInArray(s.expandedCars, id) }));
+
+  onOpenCorreggi = (track) => this.setState({ correggiTrack: track, correggiSelectedFolder: "" });
+  onCancelCorreggi = () => this.setState({ correggiTrack: null, correggiSelectedFolder: "" });
+  onCorreggiSelectChange = (e) => this.setState({ correggiSelectedFolder: e.target.value });
+  onConfirmCorreggi = () => {
+    const { correggiTrack, correggiSelectedFolder } = this.state;
+    if (!correggiTrack || !correggiSelectedFolder) return;
+    const t = this.t();
+    this.setState((s) => ({
+      trackOverrides: { ...s.trackOverrides, [correggiTrack]: correggiSelectedFolder },
+      correggiTrack: null,
+      correggiSelectedFolder: "",
+    }));
+    this.showToast(t.mapSavedMessage(correggiTrack, correggiSelectedFolder));
+  };
+
+  onRequestDeleteAll = () => this.setState({ deleteTarget: { kind: "all" } });
+  onCancelDelete = () => this.setState({ deleteTarget: null });
+
+  startDangerCountdown = (target) => {
+    clearInterval(this._dangerTimer);
+    this.setState({ dangerTarget: target, dangerCountdown: 5 });
+    this._dangerTimer = setInterval(() => {
+      this.setState((s) => {
+        if (s.dangerCountdown <= 1) { clearInterval(this._dangerTimer); return { dangerCountdown: 0 }; }
+        return { dangerCountdown: s.dangerCountdown - 1 };
+      });
+    }, 1000);
+  };
+  onRequestDangerSetups = () => this.startDangerCountdown({ kind: "setups" });
+  onRequestDangerAll = () => this.startDangerCountdown({ kind: "all" });
+  onCancelDanger = () => { clearInterval(this._dangerTimer); this.setState({ dangerTarget: null, dangerCountdown: 0 }); };
+  onConfirmDanger = () => {
+    const target = this.state.dangerTarget;
+    if (!target || this.state.dangerCountdown > 0) return;
+    clearInterval(this._dangerTimer);
+    const t = this.t();
+    this.setState({ setupGroups: [], dangerTarget: null, dangerCountdown: 0 });
+    this.showToast(target.kind === "setups" ? t.dangerCleanedSetupsToast : t.dangerCleanedAllToast);
+  };
+  runDeleteAllProgress = () => {
+    clearInterval(this._deleteAllTimer);
+    this.setState({ deleteAllProgress: 0 });
+    this._deleteAllTimer = setInterval(() => {
+      const next = Math.min(100, (this.state.deleteAllProgress ?? 0) + 9 + Math.random() * 12);
+      if (next >= 100) {
+        clearInterval(this._deleteAllTimer);
+        this.setState({ deleteAllProgress: 100 });
+        setTimeout(() => {
+          this.setState({ setupGroups: [], deleteAllProgress: null });
+          this.showToast(this.t().deletedAllInstalledToast);
+        }, 300);
+        return;
+      }
+      this.setState({ deleteAllProgress: next });
+    }, 140);
+  };
+  componentWillUnmount() {
+    clearInterval(this._deleteAllTimer);
+    clearInterval(this._dangerTimer);
+  }
+  onConfirmDelete = () => {
+    const target = this.state.deleteTarget;
+    if (!target) return;
+    const t = this.t();
+    if (target.kind === "all") {
+      this.setState({ deleteTarget: null });
+      this.runDeleteAllProgress();
+      return;
+    }
+    const idSet = new Set(target.ids || [target.setupId]);
+    const groups = this.state.setupGroups
+      .map((g) => ({
+        ...g,
+        cars: g.cars
+          .map((c) => ({
+            ...c,
+            types: c.types
+              .map((ty) => ({ ...ty, setups: ty.setups.filter((s) => !idSet.has(s.setupId)) }))
+              .filter((ty) => ty.setups.length > 0),
+          }))
+          .filter((c) => c.types.length > 0),
+      }))
+      .filter((g) => g.cars.length > 0);
+    this.setState({ setupGroups: groups, deleteTarget: null });
+    this.showToast(target.kind === "single" ? t.deletedToast : t.deletedAllToast);
+  };
+
+  // ----- mapping tab -----
+  MAPPING_PAGE_SIZE = 8;
+  onMappingSearchChange = (e) => this.setState({ mappingSearch: e.target.value, mappingPage: 0 });
+  onRequestDeleteMappingRow = (row) => this.setState({ mappingDeleteTarget: { kind: "row", id: row.id, name: row.name } });
+  onRequestDeleteAllMappings = () => this.setState({ mappingDeleteTarget: { kind: "all" } });
+  onCancelMappingDelete = () => this.setState({ mappingDeleteTarget: null });
+  onConfirmMappingDelete = () => {
+    const target = this.state.mappingDeleteTarget;
+    if (!target) return;
+    const t = this.t();
+    if (target.kind === "all") {
+      this.setState({ manualMappings: [], mappingDeleteTarget: null, mappingPage: 0 });
+      this.showToast(t.mappingDeletedAllToast);
+      return;
+    }
+    const rows = this.state.manualMappings.filter((r) => r.id !== target.id);
+    const pageCount = Math.max(1, Math.ceil(rows.length / this.MAPPING_PAGE_SIZE));
+    this.setState({ manualMappings: rows, mappingDeleteTarget: null, mappingPage: Math.min(this.state.mappingPage, pageCount - 1) });
+    this.showToast(t.mappingDeletedToast);
+  };
+  onMappingPrevPage = () => this.setState((s) => ({ mappingPage: Math.max(0, s.mappingPage - 1) }));
+  onMappingNextPage = () => this.setState((s) => {
+    const pageCount = Math.max(1, Math.ceil(s.manualMappings.length / this.MAPPING_PAGE_SIZE));
+    return { mappingPage: Math.min(pageCount - 1, s.mappingPage + 1) };
+  });
+
+  // ----- download tab -----
+  onSetMode = (mode) => this.setState({ selectedMode: mode });
+  validateStart = () => {
+    const s = this.state;
+    const needsHymo = s.selectedMode === "full" || s.selectedMode === "master";
+    const needsDropbox = s.selectedMode === "master" || s.selectedMode === "slave";
+    const needsLmu = s.selectedMode === "full" || s.selectedMode === "slave";
+    const errors = [];
+    if (needsHymo && (!s.accessTokenList.trim() || !s.accessTokenDownload.trim() || !s.userId.trim())) errors.push("tracktitan");
+    if (needsDropbox && (!s.dropboxAppKey.trim() || !s.dropboxAppSecret.trim() || !s.dropboxRefreshToken.trim())) errors.push("dropbox");
+    if (needsLmu && !s.lmuPathValid) errors.push("lmu");
+    return errors;
+  };
+  onStartDownload = () => {
+    if (this.state.running) return;
+    const errors = this.validateStart();
+    if (errors.length) {
+      this.setState({ validationErrors: errors });
+      return;
+    }
+    this.setState({ running: true, runStatus: "running", activity: [], downloadStep: 0 });
+    const script = DOWNLOAD_SCRIPT_BY_LANG[this.state.language] || DOWNLOAD_SCRIPT_BY_LANG.it;
+    this._runTimer = setInterval(() => {
+      this.setState(
+        (s) => {
+          if (s.downloadStep >= script.length) {
+            clearInterval(this._runTimer);
+            return { running: false, runStatus: "completed" };
+          }
+          return { activity: [...s.activity, script[s.downloadStep]], downloadStep: s.downloadStep + 1 };
+        },
+        () => {
+          if (this.logRef.current) this.logRef.current.scrollTop = this.logRef.current.scrollHeight;
+        }
+      );
+    }, 600);
+  };
+  onStopDownload = () => {
+    if (this._runTimer) clearInterval(this._runTimer);
+    const t = this.t();
+    this.setState((s) => ({
+      running: false,
+      runStatus: "stopped",
+      activity: [...s.activity, { kind: "stopped", title: t.stoppedTitle, meta: t.stoppedMeta }],
+    }));
+  };
+  onOpenManualUpload = () => { if (this.manualUploadFileInputRef.current) this.manualUploadFileInputRef.current.click(); };
+  onManualUploadFileSelected = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    this.setState({
+      manualUpload: { fileName: file.name, type: "", track: "", car: "" },
+      manualUploadTrackOpen: false,
+      manualUploadCarOpen: false,
+      manualUploadTrackSearch: "",
+      manualUploadCarSearch: "",
+    });
+  };
+  onCancelManualUpload = () => this.setState({ manualUpload: null, manualUploadTypeOpen: false, manualUploadTrackOpen: false, manualUploadCarOpen: false });
+  onToggleManualTypeDropdown = () => this.setState((s) => ({ manualUploadTypeOpen: !s.manualUploadTypeOpen, manualUploadTrackOpen: false, manualUploadCarOpen: false }));
+  onToggleManualTrackDropdown = () => this.setState((s) => ({ manualUploadTrackOpen: !s.manualUploadTrackOpen, manualUploadTypeOpen: false, manualUploadCarOpen: false }));
+  onToggleManualCarDropdown = () => this.setState((s) => ({ manualUploadCarOpen: !s.manualUploadCarOpen, manualUploadTypeOpen: false, manualUploadTrackOpen: false }));
+  onSelectManualType = (type) => this.setState((s) => ({ manualUpload: { ...s.manualUpload, type }, manualUploadTypeOpen: false }));
+  onManualTrackSearchChange = (e) => this.setState({ manualUploadTrackSearch: e.target.value });
+  onManualCarSearchChange = (e) => this.setState({ manualUploadCarSearch: e.target.value });
+  onSelectManualTrack = (track) => this.setState((s) => ({ manualUpload: { ...s.manualUpload, track }, manualUploadTrackOpen: false, manualUploadTrackSearch: "" }));
+  onSelectManualCar = (car) => this.setState((s) => ({ manualUpload: { ...s.manualUpload, car }, manualUploadCarOpen: false, manualUploadCarSearch: "" }));
+  onConfirmManualUpload = () => {
+    const mu = this.state.manualUpload;
+    if (!mu || !mu.type || !mu.track || !mu.car) return;
+    this.setState({ manualUpload: null, manualUploadTypeOpen: false, manualUploadTrackOpen: false, manualUploadCarOpen: false });
+    this.showToast(this.t().manualUploadSuccessToast);
+  };
+
+  onCloseValidation = () => this.setState({ validationErrors: null });
+  onGoToSettingsFromValidation = () => this.setState({ validationErrors: null, view: "settings" });
+  onDismissWarning = () => {
+    if (typeof localStorage !== "undefined") localStorage.setItem("hymo-hide-download-warning", "1");
+    this.setState({ showWarning: false });
+  };
+
+  // ----- settings tab -----
+  onSetLanguageIt = () => this.setState({ language: "it" });
+  onSetLanguageEn = () => this.setState({ language: "en" });
+  onToggleTokenSecrets = () => this.setState((s) => ({ showTokenSecrets: !s.showTokenSecrets }));
+  onToggleDropboxSecrets = () => this.setState((s) => ({ showDropboxSecrets: !s.showDropboxSecrets }));
+  onToggleAdvanced = () => this.setState((s) => ({ advancedOpen: !s.advancedOpen }));
+
+  onLmuPathChange = (e) => {
+    const v = e.target.value;
+    this.setState({ lmuPath: v, lmuPathValid: v.trim().length > 0 });
+  };
+  onBrowseLmuPath = () => { if (this.lmuFileInputRef.current) this.lmuFileInputRef.current.click(); };
+  onLmuFilesSelected = (e) => {
+    const files = e.target.files;
+    if (!files || !files.length) return;
+    const rel = files[0].webkitRelativePath || files[0].name;
+    const parts = rel.split("/");
+    parts.pop();
+    if (parts.length) this.setState({ lmuPath: parts.join("\\"), lmuPathValid: true });
+  };
+  copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {}
+    this.showToast(this.t().copiedToast);
+  };
+  onCopyLmuPath = () => this.copyToClipboard(this.state.lmuPath);
+  onCopyAccessTokenList = () => this.copyToClipboard(this.state.accessTokenList);
+  onCopyAccessTokenDownload = () => this.copyToClipboard(this.state.accessTokenDownload);
+  onCopyUserId = () => this.copyToClipboard(this.state.userId);
+  onCopyDropboxAppKey = () => this.copyToClipboard(this.state.dropboxAppKey);
+  onCopyDropboxAppSecret = () => this.copyToClipboard(this.state.dropboxAppSecret);
+  onCopyDropboxRefreshToken = () => this.copyToClipboard(this.state.dropboxRefreshToken);
+
+  onAccessTokenListChange = (e) => this.setState({ accessTokenList: e.target.value });
+  onAccessTokenDownloadChange = (e) => this.setState({ accessTokenDownload: e.target.value });
+  onUserIdChange = (e) => this.setState({ userId: e.target.value });
+  onDropboxAppKeyChange = (e) => this.setState({ dropboxAppKey: e.target.value });
+  onDropboxAppSecretChange = (e) => this.setState({ dropboxAppSecret: e.target.value });
+  onDropboxRefreshTokenChange = (e) => this.setState({ dropboxRefreshToken: e.target.value });
+  onDropboxFolderChange = (e) => this.setState({ dropboxFolder: e.target.value });
+
+  onLogLevelChange = (e) => this.setState({ logLevel: e.target.value });
+  onNetworkPageSizeChange = (e) => this.setState({ networkPageSize: e.target.value });
+  onNetworkTimeoutChange = (e) => this.setState({ networkTimeout: e.target.value });
+  onNetworkMinDelayChange = (e) => this.setState({ networkMinDelay: e.target.value });
+  onNetworkMaxDelayChange = (e) => this.setState({ networkMaxDelay: e.target.value });
+  onCleanDownloadChange = (e) => this.setState({ cleanDownloadAfterCopy: e.target.checked });
+  onSetupOverwriteChange = (e) => this.setState({ setupOverwrite: e.target.checked });
+  onSetupDeletePreviousVersionChange = (e) => this.setState({ setupDeletePreviousVersion: e.target.checked });
+  onRemoteTracksEnabledChange = (e) => this.setState({ remoteTracksEnabled: e.target.checked });
+  onRemoteTracksUrlChange = (e) => this.setState({ remoteTracksUrl: e.target.value });
+  onRemoteTracksTimeoutChange = (e) => this.setState({ remoteTracksTimeout: e.target.value });
+  onDropboxTimeoutChange = (e) => this.setState({ dropboxTimeout: e.target.value });
+  onDropboxUploadWorkersChange = (e) => this.setState({ dropboxUploadWorkers: e.target.value });
+
+  onStartTracktitanFetch = (e) => {
+    e.preventDefault();
+    this.setState({ tracktitanFetching: true });
+    this._fetchTimer = setTimeout(() => {
+      this.setState({
+        tracktitanFetching: false,
+        accessTokenList: "eyJraWQiOiJhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5eg",
+        accessTokenDownload: "eyJraWQiOiJ6eXh3dnV0c3JxcG9ubWxramloZ2ZlZGNiYQ",
+        userId: "3f9a21d4-88b2-4e11-9c4a-6d0a12ab34cd",
+      });
+      this.persistSettings();
+      this.showToast(this.t().tracktitanFetchSuccessToast);
+    }, 1800);
+  };
+  onCancelTracktitanFetch = () => {
+    if (this._fetchTimer) clearTimeout(this._fetchTimer);
+    this.setState({ tracktitanFetching: false });
+  };
+
+  onStartDropboxOauth = (e) => {
+    e.preventDefault();
+    if (!this.state.dropboxAppKey.trim() || !this.state.dropboxAppSecret.trim()) {
+      this.showToast(this.t().dropboxOauthNeedKeysToast);
+      return;
+    }
+    this.setState({ dropboxOAuth: { step: "choice" } });
+  };
+  onChooseDropboxReadWrite = () => this.setState({ dropboxOAuth: { step: "code", tokenType: "read_write" } });
+  onChooseDropboxReadOnly = () => this.setState({ dropboxOAuth: { step: "code", tokenType: "read_only" } });
+  onCancelDropboxOauth = () => this.setState({ dropboxOAuth: null, dropboxOauthCode: "" });
+  onDropboxOauthCodeChange = (e) => this.setState({ dropboxOauthCode: e.target.value });
+  onConfirmDropboxOauth = () => {
+    if (!this.state.dropboxOauthCode.trim()) return;
+    this.setState({
+      dropboxOAuth: null,
+      dropboxOauthCode: "",
+      dropboxRefreshToken: "sl.B" + Math.random().toString(36).slice(2, 18),
+    });
+    this.persistSettings();
+    this.showToast(this.t().dropboxOauthSuccessToast);
+  };
+
+  // ----- view-model builders -----
+  buildGroupsVm(t) {
+    const s = this.state;
+    const search = s.installedSearch.trim().toLowerCase();
+    const isSearching = !!search;
+
+    let groups = s.setupGroups.map((g) => {
+      const override = s.trackOverrides[g.track];
+      return { ...g, folder: override || g.folder, trackFound: g.trackFound || !!override };
+    });
+
+    if (search) {
+      groups = groups
+        .map((g) => {
+          const trackMatches = g.track.toLowerCase().includes(search);
+          const cars = trackMatches ? g.cars : g.cars.filter((c) => c.car.toLowerCase().includes(search));
+          return { ...g, cars };
+        })
+        .filter((g) => g.cars.length > 0);
+    }
+    if (s.installedUnmappedOnly) groups = groups.filter((g) => !g.trackFound);
+
+    const totalCount = groups.reduce((n, g) => n + g.cars.reduce((m, c) => m + c.types.reduce((k, ty) => k + ty.setups.length, 0), 0), 0);
+
+    const vmGroups = groups.map((g) => {
+      const expanded = isSearching || s.expandedTracks.includes(g.track);
+      const allSetups = g.cars.flatMap((c) => c.types.flatMap((ty) => ty.setups));
+      const carsVm = g.cars.map((c) => {
+        const key = `${g.track}::${c.car}`;
+        const carExpanded = isSearching || s.expandedCarGroups.includes(key);
+        const entriesVm = c.types.flatMap((ty) =>
+          ty.setups.map((setup, i) => {
+            const entryExpanded = s.expandedCars.includes(setup.setupId);
+            return {
+              setupId: setup.setupId,
+              chevronTransform: entryExpanded ? "rotate(90deg)" : "rotate(0deg)",
+              entryExpanded,
+              type: ty.type,
+              dateLabel: setup.installDate,
+              fileCountLabel: `${setup.fileCount} ${t.filesUnit}`,
+              installationFolder: setup.installationFolder,
+              hasHotlap: !!setup.hotlapLink,
+              hotlapLink: setup.hotlapLink || "",
+              hasBulkDelete: i === 0 && ty.setups.length > 1,
+              bulkDeleteTooltip: t.deleteGroupButtonTooltip(ty.type),
+              onBulkDelete: () =>
+                this.setState({ deleteTarget: { kind: "type", ids: ty.setups.map((x) => x.setupId), type: ty.type, car: c.car, track: g.track } }),
+              onDelete: () => this.setState({ deleteTarget: { kind: "single", setupId: setup.setupId, car: c.car, track: g.track } }),
+              onToggle: () => this.onToggleCar(setup.setupId),
+              fileNames: setup.fileNames || [],
+            };
+          })
+        );
+        const carCount = c.types.reduce((n, ty) => n + ty.setups.length, 0);
+        return {
+          key,
+          car: c.car,
+          ...classFlagsFor(c.car),
+          expanded: carExpanded,
+          chevronTransform: carExpanded ? "rotate(90deg)" : "rotate(0deg)",
+          countLabel: String(carCount),
+          onToggle: () => this.onToggleCarGroup(key),
+          entries: entriesVm,
+        };
+      });
+      return {
+        track: g.track,
+        expanded,
+        chevronTransform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+        unmapped: !g.trackFound,
+        arrowLabel: !g.trackFound ? (allSetups[0] ? allSetups[0].installationFolder : "") : "",
+        countLabel: String(allSetups.length),
+        onToggle: () => this.onToggleTrack(g.track),
+        onOpenCorreggi: () => this.onOpenCorreggi(g.track),
+        onDeleteTrack: () => this.setState({ deleteTarget: { kind: "track", ids: allSetups.map((x) => x.setupId), track: g.track } }),
+        cars: carsVm,
+      };
+    });
+
+    return { vmGroups, totalCount };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const t = this.t();
+
+    const { vmGroups, totalCount } = this.buildGroupsVm(t);
+    const grandTotal = s.setupGroups.reduce((n, g) => n + g.cars.reduce((m, c) => m + c.types.reduce((k, ty) => k + ty.setups.length, 0), 0), 0);
+    const search = s.installedSearch.trim();
+    const emptyText = search
+      ? `${t.noResultsPrefix}${search}${t.noResultsSuffix}`
+      : s.installedUnmappedOnly
+      ? t.noMatchingSetups || (s.language === "en" ? "No setups found." : "Nessun setup trovato.")
+      : s.language === "en"
+      ? "No setups installed yet."
+      : "Nessun setup installato.";
+
+    const modeLabel = t[MODE_TITLE_KEYS[s.selectedMode]];
+    const modeCards = ["full", "master", "slave"].map((key) => ({
+      key,
+      title: t[MODE_TITLE_KEYS[key]],
+      desc: key === "full" ? t.modeGeneralFullDesc : key === "master" ? t.modeGeneralMasterDesc : t.modeGeneralSlaveDesc,
+      selected: s.selectedMode === key,
+      border: s.selectedMode === key ? "var(--color-accent)" : "var(--color-divider)",
+      bg: s.selectedMode === key ? "color-mix(in srgb, var(--color-accent) 10%, transparent)" : "transparent",
+      onClick: () => this.onSetMode(key),
+    }));
+    const uploadModeCards = ["full", "master", "slave"].map((key) => ({
+      key,
+      title: t[MODE_TITLE_KEYS[key]],
+      desc: key === "full" ? t.uploadFullDesc : key === "master" ? t.uploadMasterDesc : t.uploadSlaveDesc,
+      selected: s.selectedMode === key,
+      border: s.selectedMode === key ? "var(--color-accent)" : "var(--color-divider)",
+      bg: s.selectedMode === key ? "color-mix(in srgb, var(--color-accent) 10%, transparent)" : "transparent",
+      onClick: () => this.onSetMode(key),
+    }));
+
+    const statusLabelMap = { idle: t.statusIdle, running: t.statusRunning, completed: t.statusCompleted, stopped: t.statusStopped };
+    const statusDotColorMap = { idle: "var(--color-neutral-700)", running: "var(--color-accent)", completed: "var(--color-accent-300)", stopped: "var(--color-accent-300)" };
+    const installedThisRun = s.activity.filter((a) => a.kind === "install").length;
+    const installedSummary =
+      s.runStatus === "running" ? t.summaryRunning(installedThisRun) : s.activity.length ? t.summaryCompleted(installedThisRun) : t.summaryIdle;
+
+    const activityVm = s.activity.map((item) => ({
+      title: item.title,
+      meta: item.meta || "",
+      hasMeta: !!item.meta,
+      showIcon: item.kind === "stopped",
+    }));
+
+    const validationSentences = (s.validationErrors || []).map((key) => {
+      if (key === "tracktitan") return t.validationMissingHymo(modeLabel);
+      if (key === "dropbox") return t.validationMissingDropbox(modeLabel);
+      return t.validationInvalidLmuPath(modeLabel);
+    });
+
+    let deleteModalTitle = "", deleteModalBody = "";
+    if (s.deleteTarget) {
+      const dt = s.deleteTarget;
+      if (dt.kind === "all") { deleteModalTitle = t.deleteAllInstalledConfirmTitle; deleteModalBody = t.deleteAllInstalledConfirmBody(grandTotal); }
+      else if (dt.kind === "type") { deleteModalTitle = t.deleteAllConfirmTitle; deleteModalBody = t.deleteGroupConfirmBody(dt.type, dt.car, dt.ids.length); }
+      else if (dt.kind === "track") { deleteModalTitle = t.deleteAllConfirmTitle; deleteModalBody = t.deleteAllConfirmBody(dt.track, dt.ids.length); }
+      else { deleteModalTitle = t.deleteConfirmTitle; deleteModalBody = t.deleteConfirmBody(dt.car, dt.track); }
+    }
+
+    let dangerModalTitle = "", dangerModalBody = "";
+    if (s.dangerTarget) {
+      if (s.dangerTarget.kind === "setups") { dangerModalTitle = t.dangerConfirmSetupsTitle; dangerModalBody = t.dangerConfirmSetupsBody; }
+      else { dangerModalTitle = t.dangerConfirmAllTitle; dangerModalBody = t.dangerConfirmAllBody; }
+    }
+    const dangerConfirmLabel = s.dangerCountdown > 0 ? t.dangerConfirmWaitLabel(s.dangerCountdown) : t.dangerConfirmButton;
+
+    const mappingSearchLower = s.mappingSearch.trim().toLowerCase();
+    const mappingFiltered = s.manualMappings
+      .filter((row) => !mappingSearchLower || row.name.toLowerCase().includes(mappingSearchLower) || row.matcher.toLowerCase().includes(mappingSearchLower))
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === "track" ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+    const mappingPageSize = this.MAPPING_PAGE_SIZE;
+    const mappingPageCount = Math.max(1, Math.ceil(mappingFiltered.length / mappingPageSize));
+    const mappingPage = Math.min(s.mappingPage, mappingPageCount - 1);
+    const mappingPageRows = mappingFiltered.slice(mappingPage * mappingPageSize, mappingPage * mappingPageSize + mappingPageSize).map((row) => ({
+      id: row.id,
+      name: row.name,
+      matcher: row.matcher,
+      typeLabel: row.type === "track" ? t.mappingTypeTrack : t.mappingTypeCar,
+      typeTagClass: row.type === "track" ? "tag tag-accent" : "tag tag-accent-2",
+      onDelete: () => this.onRequestDeleteMappingRow(row),
+    }));
+
+    let mappingDeleteModalTitle = "", mappingDeleteModalBody = "";
+    if (s.mappingDeleteTarget) {
+      const dt = s.mappingDeleteTarget;
+      if (dt.kind === "all") { mappingDeleteModalTitle = t.mappingDeleteAllConfirmTitle; mappingDeleteModalBody = t.mappingDeleteAllConfirmBody(s.manualMappings.length); }
+      else { mappingDeleteModalTitle = t.mappingDeleteConfirmTitle; mappingDeleteModalBody = t.mappingDeleteConfirmBody(dt.name); }
+    }
+
+    const logLevelOptions = LOG_LEVELS.map((lvl) => ({ value: lvl, selected: lvl === s.logLevel }));
+
+    const mu = s.manualUpload;
+    const manualUploadTypeOptions = [
+      { label: "HYMO", onSelect: () => this.onSelectManualType("HYMO") },
+      { label: "GO Setups", onSelect: () => this.onSelectManualType("GO") },
+      { label: "CUSTOM", onSelect: () => this.onSelectManualType("CUSTOM") },
+    ];
+    const trackSearch = s.manualUploadTrackSearch.trim().toLowerCase();
+    const carSearch = s.manualUploadCarSearch.trim().toLowerCase();
+    const manualUploadTrackOptions = TRACK_FOLDER_OPTIONS.filter((o) => !trackSearch || o.toLowerCase().includes(trackSearch)).map((o) => ({
+      label: o,
+      onSelect: () => this.onSelectManualTrack(o),
+    }));
+    const manualUploadCarOptions = CAR_OPTIONS.filter((o) => !carSearch || o.toLowerCase().includes(carSearch)).map((o) => ({
+      label: o,
+      ...classFlagsFor(o),
+      onSelect: () => this.onSelectManualCar(o),
+    }));
+
+    return {
+      t,
+      isSetupsTab: s.view === "setups",
+      isDownloadTab: s.view === "download",
+      isUploadTab: s.view === "upload",
+      isMappingTab: s.view === "mapping",
+      isSettingsTab: s.view === "settings",
+      onNavClick: this.onNavClick,
+      setupsTabColor: s.view === "setups" ? "var(--color-accent-300)" : "var(--color-text)",
+      setupsTabBg: s.view === "setups" ? "color-mix(in srgb, var(--color-accent) 14%, transparent)" : "transparent",
+      downloadTabColor: s.view === "download" ? "var(--color-accent-300)" : "var(--color-text)",
+      downloadTabBg: s.view === "download" ? "color-mix(in srgb, var(--color-accent) 14%, transparent)" : "transparent",
+      uploadTabColor: s.view === "upload" ? "var(--color-accent-300)" : "var(--color-text)",
+      uploadTabBg: s.view === "upload" ? "color-mix(in srgb, var(--color-accent) 14%, transparent)" : "transparent",
+      mappingTabColor: s.view === "mapping" ? "var(--color-accent-300)" : "var(--color-text)",
+      mappingTabBg: s.view === "mapping" ? "color-mix(in srgb, var(--color-accent) 14%, transparent)" : "transparent",
+      settingsTabColor: s.view === "settings" ? "var(--color-accent-300)" : "var(--color-text)",
+      settingsTabBg: s.view === "settings" ? "color-mix(in srgb, var(--color-accent) 14%, transparent)" : "transparent",
+
+      modeBadgeLabel: modeLabel,
+      grandTotalLabel: String(grandTotal),
+      appVersion: this.appVersion,
+
+      installedSearch: s.installedSearch,
+      onSearchChange: this.onSearchChange,
+      onToggleUnmappedOnly: this.onToggleUnmappedOnly,
+      unmappedFilterBorder: s.installedUnmappedOnly ? "var(--color-accent)" : "var(--color-divider)",
+      unmappedFilterBg: s.installedUnmappedOnly ? "color-mix(in srgb, var(--color-accent) 14%, transparent)" : "transparent",
+      unmappedFilterColor: s.installedUnmappedOnly ? "var(--color-accent-300)" : "var(--color-neutral-400)",
+      resultsLabel: `${totalCount} ${t.resultsWord}`,
+      deleteAllDisabled: grandTotal === 0,
+      onRequestDeleteAll: this.onRequestDeleteAll,
+      hasGroups: vmGroups.length > 0,
+      hasNoGroups: vmGroups.length === 0,
+      vmGroups,
+      emptyText,
+      trackFolderOptions: TRACK_FOLDER_OPTIONS,
+
+      showCorreggi: !!s.correggiTrack,
+      correggiTrack: s.correggiTrack || "",
+      correggiSelectedFolder: s.correggiSelectedFolder,
+      onCorreggiSelectChange: this.onCorreggiSelectChange,
+      onCancelCorreggi: this.onCancelCorreggi,
+      onConfirmCorreggi: this.onConfirmCorreggi,
+
+      showDeleteConfirm: !!s.deleteTarget,
+      deleteModalTitle,
+      deleteModalBody,
+      onCancelDelete: this.onCancelDelete,
+      onConfirmDelete: this.onConfirmDelete,
+
+      onRequestDangerSetups: this.onRequestDangerSetups,
+      onRequestDangerAll: this.onRequestDangerAll,
+      showDangerConfirm: !!s.dangerTarget,
+      dangerModalTitle,
+      dangerModalBody,
+      dangerConfirmLabel,
+      dangerConfirmDisabled: s.dangerCountdown > 0,
+      onCancelDanger: this.onCancelDanger,
+      onConfirmDanger: this.onConfirmDanger,
+
+      showDeleteAllProgress: s.deleteAllProgress != null,
+      deleteAllProgressPct: Math.round(s.deleteAllProgress ?? 0),
+      deleteAllProgressWidth: `${Math.round(s.deleteAllProgress ?? 0)}%`,
+
+      modeCards,
+      uploadModeCards,
+      onGoToSettingsMode: this.onGoToSettingsMode,
+      activeModeDownloadDesc: s.selectedMode === "full" ? t.fullDesc : s.selectedMode === "master" ? t.masterDesc : t.slaveDesc,
+      activeModeUploadDesc: s.selectedMode === "full" ? t.uploadFullDesc : s.selectedMode === "master" ? t.uploadMasterDesc : t.uploadSlaveDesc,
+      statusDotColor: statusDotColorMap[s.runStatus] || statusDotColorMap.idle,
+      statusLabel: statusLabelMap[s.runStatus] || t.statusIdle,
+      installedSummary,
+      isRunning: s.running,
+      isNotRunning: !s.running,
+      onStartDownload: this.onStartDownload,
+      onStopDownload: this.onStopDownload,
+      activityVm,
+      hasNoActivity: s.activity.length === 0,
+      logRef: this.logRef,
+
+      showValidationError: !!s.validationErrors,
+      validationSentences,
+      onCloseValidation: this.onCloseValidation,
+      onGoToSettingsFromValidation: this.onGoToSettingsFromValidation,
+
+      showWarning: s.showWarning,
+      onDismissWarning: this.onDismissWarning,
+
+      langItActiveClass: s.language === "it" ? "active" : "",
+      langEnActiveClass: s.language === "en" ? "active" : "",
+      onSetLanguageIt: this.onSetLanguageIt,
+      onSetLanguageEn: this.onSetLanguageEn,
+      readmeUrl:
+        s.language === "en"
+          ? "https://github.com/Seroper-real/lmu-setup-manager/blob/main/readme.md"
+          : "https://github.com/Seroper-real/lmu-setup-manager/blob/main/readme.it.md",
+
+      lmuPath: s.lmuPath,
+      onLmuPathChange: this.onLmuPathChange,
+      onCopyLmuPath: this.onCopyLmuPath,
+      onBrowseLmuPath: this.onBrowseLmuPath,
+      onLmuFilesSelected: this.onLmuFilesSelected,
+      lmuFileInputRef: this.lmuFileInputRef,
+      lmuPathInvalid: !s.lmuPathValid,
+
+      showTokenSecrets: s.showTokenSecrets,
+      hideTokenSecrets: !s.showTokenSecrets,
+      onToggleTokenSecrets: this.onToggleTokenSecrets,
+      tokenRevealTitle: s.showTokenSecrets ? "" : "",
+      tokenSecretType: s.showTokenSecrets ? "text" : "password",
+      accessTokenList: s.accessTokenList,
+      onAccessTokenListChange: this.onAccessTokenListChange,
+      onCopyAccessTokenList: this.onCopyAccessTokenList,
+      accessTokenDownload: s.accessTokenDownload,
+      onAccessTokenDownloadChange: this.onAccessTokenDownloadChange,
+      onCopyAccessTokenDownload: this.onCopyAccessTokenDownload,
+      userId: s.userId,
+      onUserIdChange: this.onUserIdChange,
+      onCopyUserId: this.onCopyUserId,
+      onStartTracktitanFetch: this.onStartTracktitanFetch,
+
+      showDropboxSecrets: s.showDropboxSecrets,
+      hideDropboxSecrets: !s.showDropboxSecrets,
+      onToggleDropboxSecrets: this.onToggleDropboxSecrets,
+      dropboxRevealTitle: "",
+      dropboxSecretType: s.showDropboxSecrets ? "text" : "password",
+      dropboxAppKey: s.dropboxAppKey,
+      onDropboxAppKeyChange: this.onDropboxAppKeyChange,
+      onCopyDropboxAppKey: this.onCopyDropboxAppKey,
+      dropboxAppSecret: s.dropboxAppSecret,
+      onDropboxAppSecretChange: this.onDropboxAppSecretChange,
+      onCopyDropboxAppSecret: this.onCopyDropboxAppSecret,
+      dropboxRefreshToken: s.dropboxRefreshToken,
+      onDropboxRefreshTokenChange: this.onDropboxRefreshTokenChange,
+      onCopyDropboxRefreshToken: this.onCopyDropboxRefreshToken,
+      onStartDropboxOauth: this.onStartDropboxOauth,
+      dropboxFolder: s.dropboxFolder,
+      onDropboxFolderChange: this.onDropboxFolderChange,
+
+      showDropboxOauthChoice: !!s.dropboxOAuth && s.dropboxOAuth.step === "choice",
+      showDropboxOauthCode: !!s.dropboxOAuth && s.dropboxOAuth.step === "code",
+      onChooseDropboxReadWrite: this.onChooseDropboxReadWrite,
+      onChooseDropboxReadOnly: this.onChooseDropboxReadOnly,
+      onCancelDropboxOauth: this.onCancelDropboxOauth,
+      dropboxOauthCode: s.dropboxOauthCode,
+      onDropboxOauthCodeChange: this.onDropboxOauthCodeChange,
+      onConfirmDropboxOauth: this.onConfirmDropboxOauth,
+
+      tracktitanFetching: s.tracktitanFetching,
+      onCancelTracktitanFetch: this.onCancelTracktitanFetch,
+
+      advancedOpen: s.advancedOpen,
+      advancedToggleLabel: s.advancedOpen ? t.advancedHide : t.advancedShow,
+      onToggleAdvanced: this.onToggleAdvanced,
+      logLevelOptions,
+      onLogLevelChange: this.onLogLevelChange,
+      networkPageSize: s.networkPageSize,
+      onNetworkPageSizeChange: this.onNetworkPageSizeChange,
+      networkTimeout: s.networkTimeout,
+      onNetworkTimeoutChange: this.onNetworkTimeoutChange,
+      networkMinDelay: s.networkMinDelay,
+      onNetworkMinDelayChange: this.onNetworkMinDelayChange,
+      networkMaxDelay: s.networkMaxDelay,
+      onNetworkMaxDelayChange: this.onNetworkMaxDelayChange,
+      cleanDownloadAfterCopy: s.cleanDownloadAfterCopy,
+      onCleanDownloadChange: this.onCleanDownloadChange,
+      setupOverwrite: s.setupOverwrite,
+      onSetupOverwriteChange: this.onSetupOverwriteChange,
+      setupDeletePreviousVersion: s.setupDeletePreviousVersion,
+      onSetupDeletePreviousVersionChange: this.onSetupDeletePreviousVersionChange,
+      remoteTracksEnabled: s.remoteTracksEnabled,
+      onRemoteTracksEnabledChange: this.onRemoteTracksEnabledChange,
+      remoteTracksUrl: s.remoteTracksUrl,
+      onRemoteTracksUrlChange: this.onRemoteTracksUrlChange,
+      remoteTracksTimeout: s.remoteTracksTimeout,
+      onRemoteTracksTimeoutChange: this.onRemoteTracksTimeoutChange,
+      dropboxTimeout: s.dropboxTimeout,
+      onDropboxTimeoutChange: this.onDropboxTimeoutChange,
+      dropboxUploadWorkers: s.dropboxUploadWorkers,
+      onDropboxUploadWorkersChange: this.onDropboxUploadWorkersChange,
+
+      onOpenManualUpload: this.onOpenManualUpload,
+      onManualUploadFileSelected: this.onManualUploadFileSelected,
+      manualUploadFileInputRef: this.manualUploadFileInputRef,
+      hasManualUpload: !!mu,
+      hasNoManualUpload: !mu,
+      manualUploadFileName: mu ? mu.fileName : "",
+      manualUploadTypeOpen: s.manualUploadTypeOpen,
+      onToggleManualTypeDropdown: this.onToggleManualTypeDropdown,
+      manualUploadTypeOptions,
+      manualUploadTypeValueLabel: mu && mu.type ? (mu.type === "HYMO" ? "HYMO" : mu.type === "GO" ? "GO Setups" : "CUSTOM") : t.manualUploadTypePlaceholder,
+      manualUploadTypeValueColor: mu && mu.type ? "var(--color-text)" : "var(--color-neutral-500)",
+      manualUploadTrackOpen: s.manualUploadTrackOpen,
+      manualUploadCarOpen: s.manualUploadCarOpen,
+      onToggleManualTrackDropdown: this.onToggleManualTrackDropdown,
+      onToggleManualCarDropdown: this.onToggleManualCarDropdown,
+      manualUploadTrackSearch: s.manualUploadTrackSearch,
+      manualUploadCarSearch: s.manualUploadCarSearch,
+      onManualTrackSearchChange: this.onManualTrackSearchChange,
+      onManualCarSearchChange: this.onManualCarSearchChange,
+      manualUploadTrackOptions,
+      manualUploadCarOptions,
+      manualUploadTrackNoResults: manualUploadTrackOptions.length === 0,
+      manualUploadCarNoResults: manualUploadCarOptions.length === 0,
+      manualUploadTrackValueLabel: mu && mu.track ? mu.track : t.manualUploadTrackPlaceholder,
+      manualUploadCarValueLabel: mu && mu.car ? mu.car : t.manualUploadCarPlaceholder,
+      ...(() => {
+        const f = classFlagsFor(mu && mu.car ? mu.car : "");
+        return {
+          manualUploadCarHasValueLogo: f.hasClassLogo,
+          manualUploadCarValueIsHYPERCAR: f.isHYPERCAR,
+          manualUploadCarValueIsGT3: f.isGT3,
+          manualUploadCarValueIsGTE: f.isGTE,
+          manualUploadCarValueIsP2: f.isP2,
+          manualUploadCarValueIsP3: f.isP3,
+        };
+      })(),
+      manualUploadTrackValueColor: mu && mu.track ? "var(--color-text)" : "var(--color-neutral-500)",
+      manualUploadCarValueColor: mu && mu.car ? "var(--color-text)" : "var(--color-neutral-500)",
+      onCancelManualUpload: this.onCancelManualUpload,
+      onConfirmManualUpload: this.onConfirmManualUpload,
+      manualUploadConfirmDisabled: !!(!mu || !mu.type || !mu.track || !mu.car),
+
+      mappingSearch: s.mappingSearch,
+      onMappingSearchChange: this.onMappingSearchChange,
+      mappingResultsLabel: `${mappingFiltered.length} ${t.mappingResultsWord}`,
+      mappingDeleteAllDisabled: s.manualMappings.length === 0,
+      onRequestDeleteAllMappings: this.onRequestDeleteAllMappings,
+      hasMappingRows: mappingFiltered.length > 0,
+      hasNoMappingRows: mappingFiltered.length === 0,
+      mappingPageRows,
+      mappingPageLabel: t.mappingPageLabel(mappingPage + 1, mappingPageCount),
+      onMappingPrevPage: this.onMappingPrevPage,
+      onMappingNextPage: this.onMappingNextPage,
+      mappingPrevDisabled: mappingPage === 0,
+      mappingNextDisabled: mappingPage >= mappingPageCount - 1,
+      showMappingDeleteConfirm: !!s.mappingDeleteTarget,
+      mappingDeleteModalTitle,
+      mappingDeleteModalBody,
+      onCancelMappingDelete: this.onCancelMappingDelete,
+      onConfirmMappingDelete: this.onConfirmMappingDelete,
+
+      showUnsavedPrompt: !!s.unsavedPrompt,
+      onUnsavedCancel: this.onUnsavedCancel,
+      onUnsavedDiscard: this.onUnsavedDiscard,
+      onUnsavedSave: this.onUnsavedSave,
+
+      hasToast: !!s.toast,
+      toastMessage: s.toast || "",
+    };
+  }
+}
+
+</script>
+</body>
+</html>
