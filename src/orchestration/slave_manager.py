@@ -63,7 +63,6 @@ class SlaveManager:
         log.info("#################")
         log.info(f"  ID: {remote.setup_id}")
         log.info(f"  File: {remote.name}")
-        self._emit(ProgressEvent(ProgressKind.START, remote.name))
 
         if self.database.is_installed_last_version(remote.setup_id, remote.ts):
             log.info("Already installed (latest version). Skipping.")
@@ -80,26 +79,33 @@ class SlaveManager:
             return
 
         setup = Setup(metadata)
+        # "<Track> - <Car> Setup" reads far better in the activity log than the
+        # archive filename (e.g. Spa_Porsche_963_id1_1000.zip) it replaces.
+        label = f"{setup.track} - {setup.car} Setup"
+        self._emit(ProgressEvent(ProgressKind.START, label))
         # install_setup re-unzips, copies .svm into the LMU track folder, and
         # records the setup in the DB. The .metadata.json member is ignored by
         # the .svm-only file filter.
         self.setup_manager.install_setup(local_zip, setup, sha256=sha256)
-        self._emit(ProgressEvent(ProgressKind.INSTALL, remote.name))
+        self._emit(ProgressEvent(ProgressKind.INSTALL, label))
 
     def _process_go(self, remote: RemoteGoSetup) -> None:
-        log.info("#################")
-        log.info(f"  GO Setup: {remote.car} - {remote.track}")
-        log.info(f"  File: {remote.name}")
-        self._emit(ProgressEvent(ProgressKind.START, remote.name))
-
         # installed_setups.car/.track now hold the officialized catalog name
         # (see CarManager/TrackManager), not the raw Dropbox folder segments -
         # resolve remote.car/remote.track the same way install_setup() will
         # below, so these two lookups agree with what a HYMO row actually has
         # stored even when the raw folder text differs from the official name
-        # but still matches its `matcher` regex.
+        # but still matches its `matcher` regex. Resolved up front (rather than
+        # after the download, as before) so the activity log can show
+        # "<Track> - <Car> Setup" instead of the raw archive filename.
         car = self.setup_manager.car_manager.get_car_name(remote.car) or sanitize_identity(remote.car)
         track = self.setup_manager.track_manager.get_official_track_name(remote.track) or sanitize_identity(remote.track)
+        label = f"{track} - {car} Setup"
+
+        log.info("#################")
+        log.info(f"  GO Setup: {remote.car} - {remote.track}")
+        log.info(f"  File: {remote.name}")
+        self._emit(ProgressEvent(ProgressKind.START, label))
 
         local_zip = Path(DOWNLOAD_PATH) / "go" / remote.car / remote.track / remote.name
         self.dropbox_client.download_to(remote.path_lower, local_zip)
@@ -129,4 +135,4 @@ class SlaveManager:
             extensions=GO_SETUP_FILE_EXTENSIONS, setup_type="GO", fallback_suffix="GO",
             sha256=sha256,
         )
-        self._emit(ProgressEvent(ProgressKind.INSTALL, remote.name))
+        self._emit(ProgressEvent(ProgressKind.INSTALL, label))
