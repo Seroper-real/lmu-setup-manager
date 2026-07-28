@@ -73,3 +73,52 @@ def test_manually_uploaded_and_tracktitan_hymo_setups_coexist_in_one_slave_run(
     assert sandbox.installed_files() == {"Spa/tt_quali.svm", "Spa/manual_quali.svm"}
     assert in_memory_db.fetch_installed_setup(tt_id).setup_type == "HYMO"
     assert in_memory_db.fetch_installed_setup(manual.id).setup_type == "HYMO"
+
+
+# ----- full master-upload / slave-install update sequence --------------------
+
+
+def test_manual_upload_update_sequence_across_master_and_slave_runs(sandbox, in_memory_db, mocker):
+    """The full lifecycle a manual re-upload must go through:
+
+    1) master: manual upload of a setup
+    2) slave: download and install it
+    3) slave: download again - must be skipped, already latest
+    4) master: manual re-upload of the same car/track - must be an update
+       (same id, previous share zip deleted)
+    5) slave: download again - must be reinstalled/updated
+    """
+    from processing.setup_manager import SetupManager
+
+    mock_time = mocker.patch("processing.manual_upload.time")
+    mock_time.time.return_value = 1700000000.0
+
+    # 1) master: manual upload
+    first = sandbox.add_manual_hymo_zip(CAR, TRACK, {"quali_v1.svm": "v1"})
+    assert sandbox.share_names() == {first.remote_filename}
+
+    # 2) slave: download and install
+    sandbox.run_slave(in_memory_db)
+    assert sandbox.installed_files() == {"Spa/quali_v1.svm"}
+    row = in_memory_db.fetch_installed_setup(first.id)
+    assert row is not None
+    assert row.setup_type == "HYMO"
+
+    # 3) slave: re-run, must be skipped (already the latest version)
+    install_spy = mocker.spy(SetupManager, "install_setup")
+    sandbox.run_slave(in_memory_db)
+    install_spy.assert_not_called()
+    assert sandbox.installed_files() == {"Spa/quali_v1.svm"}
+
+    # 4) master: manual re-upload of the same car/track - must be an update
+    mock_time.time.return_value = 1700009999.0
+    second = sandbox.add_manual_hymo_zip(CAR, TRACK, {"quali_v2.svm": "v2"})
+    assert second.id == first.id, "a re-upload for the same car/track/type must reuse the previous id"
+    assert sandbox.share_names() == {second.remote_filename}, \
+        "the previous share version must be deleted after the new upload succeeds"
+
+    # 5) slave: re-run, must reinstall/update
+    sandbox.run_slave(in_memory_db)
+    assert sandbox.installed_files() == {"Spa/quali_v2.svm"}, \
+        "the superseded .svm must be replaced, not left alongside the new one"
+    assert in_memory_db.is_installed_last_version(first.id, second.last_updated) is True

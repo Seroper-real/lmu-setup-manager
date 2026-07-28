@@ -309,7 +309,11 @@ class Api:
         try:
             client = build_dropbox_client()
             remotes = list(client.list_setups()) + list(client.list_go_setups())
-            deleted_count = sum(1 for remote in remotes if client.delete_if_exists(remote.path_lower))
+            deleted_count = 0
+            for remote in remotes:
+                if client.delete_if_exists(remote.path_lower):
+                    deleted_count += 1
+                    self._push_danger_progress(deleted_count)
             # Run only after every delete above: a Track folder shared by
             # several zips isn't actually empty until the last one is gone.
             for remote in remotes:
@@ -501,6 +505,17 @@ class Api:
             self._window.evaluate_js(f"window.onProgress && window.onProgress({payload})")
         except Exception as e:
             log.debug(f"Failed to push progress to the window: {e}")
+
+    def _push_danger_progress(self, deleted_count: int) -> None:
+        """Live deleted-count for the Danger Zone's "cleaning Dropbox setups"
+        busy dialog (see clean_dropbox_setups) - pushed the same way
+        _push_progress feeds the Download tab's activity log."""
+        if self._window is None:
+            return
+        try:
+            self._window.evaluate_js(f"window.onDangerProgress && window.onDangerProgress({deleted_count})")
+        except Exception as e:
+            log.debug(f"Failed to push danger-zone progress to the window: {e}")
 
     # ----- settings tab -------------------------------------------------------
 

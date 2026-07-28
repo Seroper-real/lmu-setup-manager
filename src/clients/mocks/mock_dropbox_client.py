@@ -55,6 +55,19 @@ class MockDropboxClient:
             result.append(parsed)
         return result
 
+    def find_existing_setup(self, car: str, track: str, setup_type: str) -> Optional[RemoteSetup]:
+        folder = self.folder / car / track
+        if not folder.is_dir():
+            return None
+        brand = "GO-" if setup_type == "GO" else "HYMO-"
+        for entry in sorted(folder.glob("*.zip")):
+            if not entry.name.upper().startswith(brand):
+                continue
+            parsed = None if setup_type == "GO" else parse_remote_zip_name(entry.name)
+            setup_id, ts = parsed if parsed else ("", 0)
+            return RemoteSetup(name=entry.name, path_lower=str(entry.resolve()), setup_id=setup_id, ts=ts)
+        return None
+
     def download_to(self, path_lower: str, local_path: str | Path) -> Path:
         local_path = Path(local_path)
         local_path.parent.mkdir(parents=True, exist_ok=True)

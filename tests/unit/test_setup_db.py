@@ -384,6 +384,40 @@ def test_fetch_installed_go_setup_ignores_a_hymo_row_with_the_same_car_and_track
     assert row.setup_id == "go-uuid"
 
 
+# --- fetch_installed_setup_by_identity ----------------------------------------
+
+
+def test_fetch_installed_setup_by_identity_returns_the_matching_row(in_memory_db, tmp_path):
+    in_memory_db.add_installed_setup(
+        _setup(id="hymo1", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="HYMO", sha256="hash1",
+    )
+    row = in_memory_db.fetch_installed_setup_by_identity("Ferrari", "Spa", "HYMO")
+    assert row is not None
+    assert row.setup_id == "hymo1"
+    assert row.sha256 == "hash1"
+
+
+def test_fetch_installed_setup_by_identity_returns_none_when_absent(in_memory_db):
+    assert in_memory_db.fetch_installed_setup_by_identity("Ferrari", "Spa", "HYMO") is None
+
+
+def test_fetch_installed_setup_by_identity_scopes_by_type(in_memory_db, tmp_path):
+    """A HYMO and a GO row can legitimately share the same car+track - the
+    lookup must never cross the streams."""
+    in_memory_db.add_installed_setup(
+        _setup(id="hymo-uuid", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="HYMO", sha256="hymo-hash",
+    )
+    in_memory_db.add_installed_setup(
+        _setup(id="go-uuid", car="Ferrari", track="Spa"), [], True, tmp_path / "Spa",
+        setup_type="GO", sha256="go-hash",
+    )
+    hymo_row = in_memory_db.fetch_installed_setup_by_identity("Ferrari", "Spa", "HYMO")
+    go_row = in_memory_db.fetch_installed_setup_by_identity("Ferrari", "Spa", "GO")
+    assert hymo_row.setup_id == "hymo-uuid"
+    assert go_row.setup_id == "go-uuid"
+
 
 # --- car/track sanitization on write -------------------------------------------
 

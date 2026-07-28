@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 from clients.protocols import DropboxClientProtocol
-from core.archive import METADATA_FILENAME, find_files_recursive, unzip_recursive
+from core.archive import METADATA_FILENAME, find_files_recursive, sha256_file, unzip_recursive
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, GO_SETUP_FILE_EXTENSIONS, SETUP_FILE_EXTENSIONS
 from domain.setup import Setup
 from processing.setup_manager import SetupManager
@@ -52,10 +52,21 @@ def install_manual_setup_locally(
     takes ownership of its downloaded_path argument (and may delete it, per
     CLEAN_DOWNLOAD) - handing it the user's own original file directly would
     risk deleting something they still have elsewhere on disk."""
+    # A second manual upload for the same car/track/type is an update, not a
+    # new setup: reuse the previous row's id so install_setup()'s upsert (and
+    # its DELETE_PREVIOUS_VERSION cleanup) replace it in place instead of
+    # installing a duplicate alongside it - same identity model SlaveManager
+    # already applies to GO Setups (car+track+type, no stable external id).
+    existing = setup_manager.database.fetch_installed_setup_by_identity(setup.safe_car, setup.safe_track, setup_type)
+    if existing:
+        setup.data["id"] = existing.setup_id
+
     staged_path = Path(DOWNLOAD_PATH) / f"manual-{setup.id}{Path(zip_path).suffix}"
     shutil.copy2(zip_path, staged_path)
+    sha256 = sha256_file(staged_path)
     setup_manager.install_setup(
         staged_path, setup, extensions=_extensions_for(setup_type), setup_type=setup_type, fallback_suffix=setup_type,
+        sha256=sha256,
     )
     log.info(f"Manually installed setup: {setup.car} - {setup.track} ({setup_type})")
 
@@ -87,8 +98,15 @@ def _upload_go_setup(dropbox_client: DropboxClientProtocol, zip_path: str | Path
     info a HYMO archive's remote_filename does (only GO- branded instead of
     HYMO-) - only car/track are borrowed from Setup.safe_car/safe_track, same
     as MasterManager's own folder layout.
+
+    A second manual upload for the same car/track is an update: GO identity
+    is the car/track folder itself (there is no stable id to key off, see
+    domain/go_setup.py's RemoteGoSetup), so the previous archive there is
+    deleted right after the new one lands - same "upload new, then delete
+    old" ordering MasterManager._publish uses for HYMO.
     """
     zip_path = Path(zip_path)
+    existing = dropbox_client.find_existing_setup(setup.safe_car, setup.safe_track, "GO")
     filename = setup.go_filename
     staged_path = Path(DOWNLOAD_PATH) / f"manual-go-{setup.id}{zip_path.suffix}"
     try:
@@ -99,6 +117,9 @@ def _upload_go_setup(dropbox_client: DropboxClientProtocol, zip_path: str | Path
 
         remote_relative_path = f"{setup.safe_car}/{setup.safe_track}/{filename}"
         dropbox_client.upload(staged_path, remote_relative_path)
+        if existing and existing.name != filename:
+            dropbox_client.delete(existing.path_lower)
+            log.info(f"Deleted previous manual GO Setup version: {existing.name}")
         log.info(f"Manually published GO Setup to Dropbox: {remote_relative_path}")
     finally:
         if CLEAN_DOWNLOAD and staged_path.exists():
@@ -109,7 +130,20 @@ def _upload_hymo_setup(dropbox_client: DropboxClientProtocol, zip_path: str | Pa
     """Repackage and publish, mirroring MasterManager._publish/_build_package:
     a fresh zip holding only the recognized setup files plus an embedded
     .metadata.json, uploaded under the HYMO- branded car/track layout -
-    exactly what SlaveManager._process expects to read back."""
+    exactly what SlaveManager._process expects to read back.
+
+    A second manual upload for the same car/track is an update: reuse the
+    previously-published archive's id (there being no stable TrackTitan id to
+    key off for a manual upload otherwise) so the new package keeps the same
+    id with only its date changing, exactly as SlaveManager._process expects
+    to recognize a newer version of the same setup. The stale package is
+    deleted only after the new one lands, same ordering MasterManager._publish
+    uses.
+    """
+    existing = dropbox_client.find_existing_setup(setup.safe_car, setup.safe_track, "HYMO")
+    if existing and existing.setup_id:
+        setup.data["id"] = existing.setup_id
+
     extraction_path = Path(DOWNLOAD_PATH) / f"manual-{setup.id}-extract"
     package_path = Path(DOWNLOAD_PATH) / setup.remote_filename
     try:
@@ -133,6 +167,9 @@ def _upload_hymo_setup(dropbox_client: DropboxClientProtocol, zip_path: str | Pa
             zf.writestr(METADATA_FILENAME, json.dumps(setup.data))
 
         dropbox_client.upload(package_path, setup.remote_relative_path)
+        if existing and existing.name != setup.remote_filename:
+            dropbox_client.delete(existing.path_lower)
+            log.info(f"Deleted previous manual HYMO Setup version: {existing.name}")
         log.info(f"Manually published HYMO setup to Dropbox: {setup.remote_relative_path}")
     finally:
         if extraction_path.exists():

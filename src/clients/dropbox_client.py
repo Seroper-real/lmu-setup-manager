@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import Callable, Optional, TypeVar
 
 import dropbox
 from stone.backends.python_rsrc.stone_validators import ValidationError as StoneValidationError
@@ -131,6 +131,38 @@ class DropboxClient:
                 continue
             result.append(parsed)
         return result
+
+    def find_existing_setup(self, car: str, track: str, setup_type: str) -> Optional[RemoteSetup]:
+        """Look up the previously-published HYMO or GO Setups archive already
+        sitting in this car/track share folder, if any - the manual-upload
+        "is this an update" check (identity is car+track+type, there being no
+        stable TrackTitan id for a manually-uploaded setup). Only that one
+        folder is listed (not the whole share), same targeted scope as
+        delete_folder_if_empty."""
+        folder_path = self.remote_path(f"{car}/{track}")
+        try:
+            res = self._call(self.dbx.files_list_folder, folder_path)
+        except dropbox.exceptions.ApiError as e:
+            if self._is_not_found(e):
+                return None
+            raise
+        entries = list(res.entries)
+        while res.has_more:
+            res = self._call(self.dbx.files_list_folder_continue, res.cursor)
+            entries.extend(res.entries)
+
+        brand = "GO-" if setup_type == "GO" else "HYMO-"
+        for entry in entries:
+            name = getattr(entry, "name", None)
+            path_lower = getattr(entry, "path_lower", None)
+            if not name or not path_lower or not name.lower().endswith(".zip"):
+                continue
+            if not name.upper().startswith(brand):
+                continue
+            parsed = None if setup_type == "GO" else parse_remote_zip_name(name)
+            setup_id, ts = parsed if parsed else ("", 0)
+            return RemoteSetup(name=name, path_lower=path_lower, setup_id=setup_id, ts=ts)
+        return None
 
     def _list_all_entries(self) -> list:
         try:

@@ -381,6 +381,79 @@ def test_prune_empty_ancestor_folders_stops_as_soon_as_a_folder_is_not_empty(cli
     dbx.files_delete_v2.assert_not_called()
 
 
+# ----- find_existing_setup ----------------------------------------------------
+
+
+def test_find_existing_setup_returns_the_matching_hymo_zip(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(
+        has_more=False,
+        entries=[_entry("HYMO-Spa_Porsche_uuid-1_1000.zip", "/lmu-setups/porsche/spa/hymo-spa_porsche_uuid-1_1000.zip")],
+    )
+
+    found = c.find_existing_setup("Porsche", "Spa", "HYMO")
+
+    assert found is not None
+    assert found.setup_id == "uuid-1"
+    assert found.ts == 1000
+    dbx.files_list_folder.assert_called_once_with("/lmu-setups/Porsche/Spa")
+
+
+def test_find_existing_setup_returns_the_matching_go_zip(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(
+        has_more=False,
+        entries=[_entry("GO-Spa_Porsche_uuid-1_1000.zip", "/lmu-setups/porsche/spa/go-spa_porsche_uuid-1_1000.zip")],
+    )
+
+    found = c.find_existing_setup("Porsche", "Spa", "GO")
+
+    assert found is not None
+    assert found.name == "GO-Spa_Porsche_uuid-1_1000.zip"
+
+
+def test_find_existing_setup_ignores_the_other_types_zip(client):
+    c, dbx = client
+    dbx.files_list_folder.return_value = MagicMock(
+        has_more=False,
+        entries=[_entry("GO-Spa_Porsche_uuid-1_1000.zip", "/lmu-setups/porsche/spa/go-spa_porsche_uuid-1_1000.zip")],
+    )
+
+    assert c.find_existing_setup("Porsche", "Spa", "HYMO") is None
+
+
+def test_find_existing_setup_returns_none_when_folder_missing(client):
+    c, dbx = client
+    path_error = dropbox.files.ListFolderError.path(dropbox.files.LookupError.not_found)
+    dbx.files_list_folder.side_effect = dropbox.exceptions.ApiError("req-id", path_error, "msg", None)
+
+    assert c.find_existing_setup("Porsche", "Spa", "HYMO") is None
+
+
+def test_find_existing_setup_paginates(client):
+    c, dbx = client
+    page1 = MagicMock(has_more=True, cursor="c1", entries=[_entry("readme.txt", "/lmu-setups/porsche/spa/readme.txt")])
+    page2 = MagicMock(
+        has_more=False,
+        entries=[_entry("HYMO-Spa_Porsche_uuid-1_1000.zip", "/lmu-setups/porsche/spa/hymo-spa_porsche_uuid-1_1000.zip")],
+    )
+    dbx.files_list_folder.return_value = page1
+    dbx.files_list_folder_continue.return_value = page2
+
+    found = c.find_existing_setup("Porsche", "Spa", "HYMO")
+
+    assert found is not None
+    assert found.setup_id == "uuid-1"
+    dbx.files_list_folder_continue.assert_called_once_with("c1")
+
+
+def test_find_existing_setup_raises_auth_error_on_expired_token(client):
+    c, dbx = client
+    dbx.files_list_folder.side_effect = dropbox.exceptions.AuthError("req-id", "expired")
+    with pytest.raises(AuthError):
+        c.find_existing_setup("Porsche", "Spa", "HYMO")
+
+
 # ----- OAuth "no redirect" flow helpers -----------------------------------------
 
 @pytest.mark.parametrize("scope", [None, "READ_ONLY_SCOPES"])

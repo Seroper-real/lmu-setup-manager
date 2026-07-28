@@ -289,6 +289,7 @@ const EXTRA = {
     changeModeButton: "Cambia modalità",
     manualUploadGenericErrorToast: "Impossibile caricare il setup. Riprova.",
     manualUploadInvalidFileToast: "È supportato solo il formato .zip.",
+    dangerCleanupProgress: (n) => `Eliminazione in corso: eliminati ${n} setups`,
   },
   en: {
     sidebarVersion: "Version",
@@ -349,5 +350,6 @@ const EXTRA = {
     changeModeButton: "Change mode",
     manualUploadGenericErrorToast: "Couldn't upload the setup. Please try again.",
     manualUploadInvalidFileToast: "Only the .zip format is supported.",
+    dangerCleanupProgress: (n) => `Deletion in progress: ${n} setups deleted`,
   },
 };

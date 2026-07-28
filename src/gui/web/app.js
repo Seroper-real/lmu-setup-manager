@@ -56,6 +56,10 @@ const state = {
   dangerTarget: null,
   dangerCountdown: 0,
   dangerBusy: false,
+  // Live count of Dropbox setups deleted so far during the "dropbox" danger
+  // action, pushed from Python via window.onDangerProgress - reset to 0
+  // whenever that action starts.
+  dangerDeletedCount: 0,
   dropboxOAuth: null,
   tracktitanFetch: null,
   validationErrors: null,
@@ -302,6 +306,14 @@ window.onProgress = function onProgress(event) {
       if (state.view === "setups") renderSetupsView();
     });
   }
+};
+
+// Live progress push channel for the Danger Zone's "clean Dropbox setups"
+// action (see confirmDangerAction/api.py's clean_dropbox_setups) - fires
+// repeatedly while that one blocking API call is still in flight.
+window.onDangerProgress = function onDangerProgress(deletedCount) {
+  state.dangerDeletedCount = deletedCount;
+  if (state.dangerTarget && state.dangerBusy) renderModals();
 };
 
 // Result push channel for the TrackTitan automatic token-fetch flow (the
@@ -1580,6 +1592,7 @@ async function confirmDangerAction() {
   renderModals();
 
   if (kind === "dropbox") {
+    state.dangerDeletedCount = 0;
     const result = await api().clean_dropbox_setups();
     state.dangerTarget = null;
     state.dangerBusy = false;
@@ -1857,12 +1870,15 @@ function renderModals() {
 
   if (state.dangerTarget) {
     if (state.dangerBusy) {
+      const busyTitle = state.dangerTarget.kind === "dropbox"
+        ? tFn("dangerCleanupProgress", state.dangerDeletedCount)
+        : t("dangerBusyTitle");
       html += `
         <div class="dialog-backdrop" data-modal="danger-busy">
           <div class="dialog elev-lg">
             <div style="display:flex; align-items:center; gap:10px;">
               <div class="spinner"></div>
-              <div class="dialog-title" style="margin:0;">${escapeHtml(t("dangerBusyTitle"))}</div>
+              <div class="dialog-title" style="margin:0;">${escapeHtml(busyTitle)}</div>
             </div>
           </div>
         </div>

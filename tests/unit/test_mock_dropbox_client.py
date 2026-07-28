@@ -201,6 +201,35 @@ def test_list_go_setups_ignores_non_go_zips_regardless_of_depth(client, package,
     assert caplog.text == ""
 
 
+def test_find_existing_setup_returns_the_matching_hymo_zip(client, package):
+    client.upload(package, "Porsche 963/Spa/HYMO-Spa_Porsche963_uuid-1_1700000000.zip")
+
+    found = client.find_existing_setup("Porsche 963", "Spa", "HYMO")
+
+    assert found is not None
+    assert found.setup_id == "uuid-1"
+    assert found.ts == 1700000000
+
+
+def test_find_existing_setup_returns_the_matching_go_zip(client, package):
+    client.upload(package, "Oreca 07/Imola/GO-ORECA.zip")
+
+    found = client.find_existing_setup("Oreca 07", "Imola", "GO")
+
+    assert found is not None
+    assert found.name == "GO-ORECA.zip"
+
+
+def test_find_existing_setup_ignores_the_other_types_zip(client, package):
+    client.upload(package, "Oreca 07/Imola/GO-ORECA.zip")
+
+    assert client.find_existing_setup("Oreca 07", "Imola", "HYMO") is None
+
+
+def test_find_existing_setup_returns_none_when_folder_missing(client):
+    assert client.find_existing_setup("Nobody", "Nowhere", "HYMO") is None
+
+
 def test_remote_path_round_trips_via_temp_dir(client, share):
     assert client.remote_path("a/b/x.zip") == str((share / "a" / "b" / "x.zip").resolve())
 

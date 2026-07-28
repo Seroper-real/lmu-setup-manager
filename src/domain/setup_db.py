@@ -211,16 +211,28 @@ class SetupDb:
         it. Relies on there being at most one live GO row per car+track,
         guaranteed because every write for that folder goes through the same
         looked-up setup_id via ON CONFLICT above."""
+        return self.fetch_installed_setup_by_identity(car, track, "GO")
+
+    def fetch_installed_setup_by_identity(self, car: str, track: str, setup_type: str) -> InstalledSetup | None:
+        """Look up a previously-installed row by its car+track+type identity,
+        regardless of setup_id - used to detect a manual re-upload of the same
+        logical setup (see processing.manual_upload), where there is no stable
+        TrackTitan id to key a plain lookup off of. Scoped by setup_type so a
+        HYMO and a GO row sharing the same car+track are never confused with
+        each other. Relies on there being at most one live row per
+        car+track+type, guaranteed as long as every write for that identity
+        reuses the same looked-up setup_id via ON CONFLICT (see
+        add_installed_setup)."""
         cursor = self.conn.cursor()
         try:
             cursor.execute(
-                "SELECT * FROM installed_setups WHERE car = ? AND track = ? AND setup_type = 'GO'",
-                (car, track),
+                "SELECT * FROM installed_setups WHERE car = ? AND track = ? AND setup_type = ?",
+                (car, track, setup_type),
             )
             row = cursor.fetchone()
             return InstalledSetup.from_row(row) if row else None
         except Exception as e:
-            log.error(f"Error fetching installed GO setup for {car}/{track}: {e}")
+            log.error(f"Error fetching installed {setup_type} setup for {car}/{track}: {e}")
             return None
         finally:
             cursor.close()

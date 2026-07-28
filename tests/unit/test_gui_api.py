@@ -950,6 +950,31 @@ def test_clean_dropbox_setups_prunes_empty_ancestor_folders_after_every_delete(a
     assert calls.index(prune_calls[0]) > calls.index(delete_calls[-1])
 
 
+def test_clean_dropbox_setups_pushes_live_progress_after_every_delete(api, mocker):
+    client = mocker.Mock()
+    client.list_setups.return_value = [SimpleNamespace(path_lower="/a.zip"), SimpleNamespace(path_lower="/b.zip")]
+    client.list_go_setups.return_value = [SimpleNamespace(path_lower="/go/c.zip")]
+    client.delete_if_exists.side_effect = [True, False, True]
+    mocker.patch("clients.protocols.build_dropbox_client", return_value=client)
+    push = mocker.patch.object(api, "_push_danger_progress")
+
+    api.clean_dropbox_setups()
+
+    # Only the two successful deletes count, in order, and the failed one
+    # (delete_if_exists -> False) must not bump the count.
+    assert [call.args[0] for call in push.call_args_list] == [1, 2]
+
+
+def test_push_danger_progress_evaluates_js_with_the_deleted_count(api, mocker):
+    api._window = mocker.Mock()
+
+    api._push_danger_progress(3)
+
+    js_call = api._window.evaluate_js.call_args[0][0]
+    assert "onDangerProgress" in js_call
+    assert "3" in js_call
+
+
 def test_clean_dropbox_setups_reports_an_auth_error(api, mocker):
     from core.errors import AuthError
     client = mocker.Mock()
