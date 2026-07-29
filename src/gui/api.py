@@ -427,6 +427,47 @@ class Api:
         car_manager.refresh()
         return {}
 
+    def list_manual_mappings(self) -> list[dict[str, object]]:
+        """Every manual_mapping row across both types, for the "Mappature
+        manuali" tab's browse+delete table. Rows are only ever created by the
+        end-of-run unmatched-setup dialog (map_track/map_car above) - this tab
+        reads and deletes, never writes."""
+        from core import settings_db
+
+        tracks = [
+            {"id": m["id"], "type": "track", "name": m["name"], "matcher": m["matcher"]}
+            for m in settings_db.get_manual_mappings("track")
+        ]
+        cars = [
+            {"id": m["id"], "type": "car", "name": m["name"], "matcher": m["matcher"]}
+            for m in settings_db.get_manual_mappings("car")
+        ]
+        return tracks + cars
+
+    def delete_manual_mapping(self, mapping_id: str) -> dict[str, object]:
+        """Deletes one manual_mapping row. If it was a car mapping, refreshes
+        the cached CarManager so the deleted pattern stops matching
+        immediately - TrackManager needs no equivalent call since Api never
+        caches one (every TrackManager-touching method here constructs a fresh
+        instance per call, which already re-reads the DB on __init__)."""
+        from core import settings_db
+
+        deleted_type = settings_db.delete_manual_mapping(mapping_id)
+        if deleted_type == "car":
+            self._get_car_manager().refresh()
+        return {"deleted": deleted_type is not None}
+
+    def delete_all_manual_mappings(self) -> dict[str, object]:
+        """Deletes every manual_mapping row (both types) - the tab's delete-all
+        action, which always covers everything regardless of any active search
+        filter - then refreshes the cached CarManager (see delete_manual_mapping
+        for why TrackManager needs no equivalent call)."""
+        from core import settings_db
+
+        deleted_count = settings_db.delete_all_manual_mappings()
+        self._get_car_manager().refresh()
+        return {"deletedCount": deleted_count}
+
     # ----- download tab ------------------------------------------------------
 
     def validate_start(self, mode: str) -> list[str]:

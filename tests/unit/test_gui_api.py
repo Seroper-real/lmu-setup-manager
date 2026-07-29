@@ -474,6 +474,64 @@ def test_map_car_updates_and_refreshes(api, managers):
     assert result == {}
 
 
+# ----- manual mapping list/delete (Mappature manuali tab) ----------------------
+
+def test_list_manual_mappings_combines_both_types(api, mocker):
+    mocker.patch(
+        "core.settings_db.get_manual_mappings",
+        side_effect=lambda t: (
+            [{"id": "t1", "name": "Spa", "matcher": "spa"}]
+            if t == "track"
+            else [{"id": "c1", "name": "Porsche 963", "matcher": "963"}]
+        ),
+    )
+
+    result = api.list_manual_mappings()
+
+    assert result == [
+        {"id": "t1", "type": "track", "name": "Spa", "matcher": "spa"},
+        {"id": "c1", "type": "car", "name": "Porsche 963", "matcher": "963"},
+    ]
+
+
+def test_delete_manual_mapping_refreshes_car_manager_when_type_car(api, managers, mocker):
+    mocker.patch("core.settings_db.delete_manual_mapping", return_value="car")
+    cm_instance = managers.car_manager.return_value
+
+    result = api.delete_manual_mapping("some-id")
+
+    cm_instance.refresh.assert_called_once()
+    assert result == {"deleted": True}
+
+
+def test_delete_manual_mapping_does_not_touch_car_manager_when_type_track(api, managers, mocker):
+    mocker.patch("core.settings_db.delete_manual_mapping", return_value="track")
+
+    result = api.delete_manual_mapping("some-id")
+
+    managers.car_manager.return_value.refresh.assert_not_called()
+    assert result == {"deleted": True}
+
+
+def test_delete_manual_mapping_handles_missing_id(api, managers, mocker):
+    mocker.patch("core.settings_db.delete_manual_mapping", return_value=None)
+
+    result = api.delete_manual_mapping("does-not-exist")
+
+    managers.car_manager.return_value.refresh.assert_not_called()
+    assert result == {"deleted": False}
+
+
+def test_delete_all_manual_mappings_refreshes_car_manager(api, managers, mocker):
+    mocker.patch("core.settings_db.delete_all_manual_mappings", return_value=3)
+    cm_instance = managers.car_manager.return_value
+
+    result = api.delete_all_manual_mappings()
+
+    cm_instance.refresh.assert_called_once()
+    assert result == {"deletedCount": 3}
+
+
 # ----- validate_start / the 20-char credential rule -----------------------------
 
 def _rule_based_check_credentials(mode: str, mock_tracktitan: bool, mock_dropbox: bool) -> list[str]:
@@ -725,11 +783,11 @@ def test_push_progress_includes_the_unmatched_list_in_the_js_payload(api, mocker
     api._window = mocker.Mock()
     api._push_progress(ProgressEvent(
         kind=ProgressKind.FINISH, title="Download completed",
-        unmatched=[{"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan"}],
+        unmatched={"tracks": ["Mystery Circuit"], "cars": ["Mystery Car"]},
     ))
 
     js_call = api._window.evaluate_js.call_args[0][0]
-    assert '"unmatched": [{"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan"}]' in js_call
+    assert '"unmatched": {"tracks": ["Mystery Circuit"], "cars": ["Mystery Car"]}' in js_call
 
 
 def test_push_progress_unmatched_defaults_to_null_in_the_js_payload(api, mocker):

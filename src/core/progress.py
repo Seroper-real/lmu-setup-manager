@@ -24,11 +24,11 @@ class ProgressEvent:
     # message instead of the English `title` used for the plain activity log.
     error_code: Optional[str] = None
     error_status: Optional[int] = None
-    # Only set on a FINISH/STOPPED event: setups skipped this run because
-    # their car/track didn't resolve against mapping.json + the manual_mapping
-    # fallback (see domain.unmatched.UnmatchedTracker.serialize), for the
-    # GUI's end-of-run correction dialog. None when nothing was skipped.
-    unmatched: Optional[list[dict[str, object]]] = None
+    # Only set on a FINISH/STOPPED event: the distinct track/car strings that
+    # didn't resolve against mapping.json + the manual_mapping fallback this
+    # run (see domain.unmatched.UnmatchedTracker.serialize), for the GUI's
+    # end-of-run correction dialog. None when nothing was skipped.
+    unmatched: Optional[dict[str, list[str]]] = None
 
 
 ProgressCallback = Callable[[ProgressEvent], None]

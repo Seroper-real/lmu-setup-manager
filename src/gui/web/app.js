@@ -18,6 +18,14 @@ const state = {
   activity: [],
   installedSearch: "",
   installedData: { groups: [], totalCount: 0, grandTotal: 0 },
+  // "Mappature manuali" tab: browse+delete view over manual_mapping rows
+  // created exclusively by the end-of-run unmatched-setup dialog below
+  // (map_track/map_car) - refetched unconditionally on every tab visit.
+  manualMappings: [],
+  mappingSearch: "",
+  mappingPage: 0,
+  // { kind: "row", id, name } | { kind: "all" } | null.
+  mappingDeleteTarget: null,
   // Track cards default to collapsed (perf: >400 setups rendered fully expanded
   // was the main source of startup jank) and open on user click; the Set holds
   // manually-expanded track keys. A non-empty search force-expands every card
@@ -47,8 +55,10 @@ const state = {
   // opens or its search text changes.
   uploadDropdownHighlight: {},
   // End-of-run "unmatched setups" dialog (see window.onProgress). Holds
-  // { items: [{ track, car, source, selectedTrack, selectedCar, saved }] }
-  // once populated by openUnmatchedModal(), else null.
+  // { items: [{ kind: "track" | "car", name, selected }] } - one entry per
+  // distinct unmatched track/car value (never a full setup, and never both a
+  // track and a car in the same entry), populated from the {tracks, cars}
+  // payload by openUnmatchedModal(), else null.
   unmatchedTarget: null,
   deleteTarget: null,
   // Settings > Danger Zone confirm/busy dialog. { kind: "dropbox" | "factory" }
@@ -107,6 +117,7 @@ const ICONS = {
   navSetups: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"></rect><path d="M8 2.5v3M16 2.5v3M3.5 9.5h17"></path></svg>`,
   navDownload: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11M8 11l4 4 4-4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>`,
   navUpload: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.5v-11M8 10l4-4 4 4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>`,
+  navMapping: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h11M11 5l3 3-3 3"></path><path d="M20 16H9M13 13l-3 3 3 3"></path></svg>`,
   uploadCloud: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A5.5 5.5 0 0 1 17.3 8.1 4 4 0 0 1 17 16"></path><path d="M12 12v6.5M9.5 14.5 12 12l2.5 2.5"></path></svg>`,
   navSettings: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2.4M12 18.1v2.4M4.9 6.3l1.7 1.7M17.4 16l1.7 1.7M3.5 12H6M18 12h2.5M4.9 17.7l1.7-1.7M17.4 8l1.7-1.7"></path></svg>`,
   search: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M20 20l-4.35-4.35"></path></svg>`,
@@ -157,6 +168,8 @@ const MODE_TITLE_KEYS = { full: "modeFullTitle", master: "modeMasterTitle", slav
 function modeDisplayName(modeKey) {
   return t(MODE_TITLE_KEYS[modeKey] || modeKey);
 }
+
+const MAPPING_PAGE_SIZE = 8;
 
 function readmeUrl(anchor) {
   const base =
@@ -273,6 +286,13 @@ async function refreshInstalled() {
   state.installedData = await api().list_installed_setups(state.installedSearch);
 }
 
+// Unlike refreshInstalled (server-side search), the mapping tab's row set is
+// small and fetched whole every visit; renderMappingView() does search/sort/
+// pagination client-side over it.
+async function refreshMappings() {
+  state.manualMappings = await api().list_manual_mappings();
+}
+
 // ----- progress push channel (Python -> JS) -----------------------------------
 
 window.onProgress = function onProgress(event) {
@@ -333,7 +353,10 @@ window.onProgress = function onProgress(event) {
   // Setups skipped this run because their car/track didn't match -
   // mapping.json + manual_mapping fallback both missed. Offer the
   // end-of-run correction dialog (see openUnmatchedModal below).
-  if ((event.kind === "finish" || event.kind === "stopped") && event.unmatched && event.unmatched.length) {
+  if (
+    (event.kind === "finish" || event.kind === "stopped") && event.unmatched &&
+    (event.unmatched.tracks.length || event.unmatched.cars.length)
+  ) {
     openUnmatchedModal(event.unmatched);
   }
 };
@@ -383,6 +406,7 @@ function render() {
   renderSetupsView();
   renderDownloadView();
   renderUploadView();
+  renderMappingView();
   renderSettingsView();
   applyActiveView();
   renderModals();
@@ -412,22 +436,19 @@ function goToView(target) {
     });
   } else if (state.view === "upload") {
     ensureUploadOptions().then(() => renderUploadView());
+  } else if (state.view === "mapping") {
+    refreshMappings().then(() => renderMappingView());
   }
 }
 
 // ----- sidebar --------------------------------------------------------------
 
-function renderSidebar() {
-  document.getElementById("logo-sub").textContent = "Setup Manager";
-
-  const nav = document.getElementById("nav");
-  const items = [
-    { view: "setups", icon: ICONS.navSetups, label: t("navSetups") },
-    { view: "download", icon: ICONS.navDownload, label: t("navDownload") },
-    { view: "upload", icon: ICONS.navUpload, label: t("navUpload") },
-    { view: "settings", icon: ICONS.navSettings, label: t("navSettings") },
-  ];
-  nav.innerHTML = items
+// Shared by #nav and #nav-bottom (see renderSidebar) - the sidebar's second
+// group (mapping/settings, pushed to the bottom) needs the identical
+// markup/click-binding logic as the primary group, just rendered into a
+// different container.
+function renderNavItemsHtml(items) {
+  return items
     .map(
       (i) => `
         <button class="nav-item" data-view="${i.view}">
@@ -436,7 +457,10 @@ function renderSidebar() {
       `
     )
     .join("");
-  nav.querySelectorAll(".nav-item").forEach((btn) => {
+}
+
+function bindNavItemClicks(containerEl) {
+  containerEl.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const target = btn.dataset.view;
       // Leaving Settings with unsaved edits: hold off navigating until the
@@ -449,6 +473,27 @@ function renderSidebar() {
       goToView(target);
     });
   });
+}
+
+function renderSidebar() {
+  document.getElementById("logo-sub").textContent = "Setup Manager";
+
+  const nav = document.getElementById("nav");
+  nav.innerHTML = renderNavItemsHtml([
+    { view: "setups", icon: ICONS.navSetups, label: t("navSetups") },
+    { view: "download", icon: ICONS.navDownload, label: t("navDownload") },
+    { view: "upload", icon: ICONS.navUpload, label: t("navUpload") },
+  ]);
+  bindNavItemClicks(nav);
+
+  const navBottom = document.getElementById("nav-bottom");
+  navBottom.innerHTML =
+    `<div class="hr"></div>` +
+    renderNavItemsHtml([
+      { view: "mapping", icon: ICONS.navMapping, label: t("navMapping") },
+      { view: "settings", icon: ICONS.navSettings, label: t("navSettings") },
+    ]);
+  bindNavItemClicks(navBottom);
 
   // state.selectedMode is the single source of truth for the current mode: it's
   // seeded from bootstrap.mode at init() and kept in sync on every mode-card
@@ -914,7 +959,10 @@ window.addEventListener("drop", (e) => e.preventDefault());
 // Generic searchable dropdown shared by the Track and Car fields below -
 // options are `{value, label, carClass?}`; carClass (when withLogos is set)
 // renders the same class-logo <img> renderCarGroup() uses for installed setups.
-function renderSearchableSelect({ id, options, selected, placeholder, withLogos }) {
+// clearable adds a fixed "clear selection" row above the (searchable, so
+// possibly filtered-out) option list, letting a value already picked be
+// reset back to the placeholder without hunting for it again.
+function renderSearchableSelect({ id, options, selected, placeholder, withLogos, clearable }) {
   const isOpen = state.uploadOpenDropdown === id;
   const query = (state.uploadDropdownSearch[id] || "").trim().toLowerCase();
   const filtered = query ? options.filter((o) => o.label.toLowerCase().includes(query)) : options;
@@ -938,6 +986,11 @@ function renderSearchableSelect({ id, options, selected, placeholder, withLogos 
       ${isOpen ? `
         <div class="select-panel">
           <input type="text" class="input" data-select-search="${id}" placeholder="${escapeHtml(t("manualUploadSearchPlaceholder"))}" value="${escapeHtml(state.uploadDropdownSearch[id] || "")}">
+          ${clearable && selected ? `
+            <button type="button" class="select-option select-option-clear" data-select-clear="${id}">
+              ${escapeHtml(t("selectClearOption"))}
+            </button>
+          ` : ""}
           <div class="select-options">
             ${filtered.length
               ? filtered
@@ -1065,6 +1118,16 @@ function bindSearchableSelect(el, id, onSelect, rerender) {
       rerender();
     });
   });
+
+  const clearBtn = root.querySelector("[data-select-clear]");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      onSelect(null);
+      state.uploadOpenDropdown = null;
+      state.uploadDropdownSearch[id] = "";
+      rerender();
+    });
+  }
 }
 
 // Closes whichever select-dropdown is open on an outside click - same pattern
@@ -1341,6 +1404,144 @@ function renderModePickerCards() {
       `
     )
     .join("");
+}
+
+// ----- Mappature manuali -----------------------------------------------------
+
+// Client-side search/sort/paginate over state.manualMappings - shared between
+// renderMappingView (row rendering) and the mapping-delete-all confirm dialog
+// in renderModals, whose body count uses the unfiltered total regardless of
+// an active search (matching the mock's own behavior).
+function getMappingViewModel() {
+  const search = state.mappingSearch.trim().toLowerCase();
+  const filtered = state.manualMappings
+    .filter(
+      (row) => !search || row.name.toLowerCase().includes(search) || row.matcher.toLowerCase().includes(search)
+    )
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === "track" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / MAPPING_PAGE_SIZE));
+  const page = Math.min(state.mappingPage, pageCount - 1);
+  const pageRows = filtered.slice(page * MAPPING_PAGE_SIZE, page * MAPPING_PAGE_SIZE + MAPPING_PAGE_SIZE);
+  return { filtered, pageCount, page, pageRows };
+}
+
+// Same rebuilt-input-loses-focus problem as focusSetupsSearchInput, for the
+// mapping tab's own search box.
+function focusMappingSearchInput() {
+  const fresh = document.getElementById("mapping-search");
+  if (fresh) {
+    fresh.focus();
+    const pos = fresh.value.length;
+    fresh.setSelectionRange(pos, pos);
+  }
+}
+
+function renderMappingView() {
+  const el = document.getElementById("view-mapping");
+  if (!el) return;
+
+  const { filtered, pageCount, page, pageRows } = getMappingViewModel();
+  state.mappingPage = page;
+
+  const rowsHtml = pageRows
+    .map(
+      (row) => `
+        <tr>
+          <td><span class="tag ${row.type === "track" ? "tag-accent" : "tag-accent-2"}">${escapeHtml(row.type === "track" ? t("mappingTypeTrack") : t("mappingTypeCar"))}</span></td>
+          <td>${escapeHtml(row.name)}</td>
+          <td class="mapping-matcher">${escapeHtml(row.matcher)}</td>
+          <td class="mapping-actions-col">
+            <span class="tooltip">
+              <button type="button" class="btn btn-ghost text-danger" data-delete-mapping="${escapeHtml(row.id)}" data-delete-mapping-name="${escapeHtml(row.name)}">${ICONS.trash}</button>
+              <span class="tooltip-text">${escapeHtml(t("deleteButton"))}</span>
+            </span>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+
+  const tableHtml = filtered.length
+    ? `
+      <div class="card elev-sm" style="padding:0; overflow:hidden;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>${escapeHtml(t("mappingColType"))}</th>
+              <th>${escapeHtml(t("mappingColName"))}</th>
+              <th>${escapeHtml(t("mappingColMatcher"))}</th>
+              <th class="mapping-actions-col">${escapeHtml(t("mappingColActions"))}</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <span class="pagination-label">${escapeHtml(tFn("mappingPageLabel", page + 1, pageCount))}</span>
+        <button type="button" class="btn btn-ghost" id="mapping-prev-page" ${page === 0 ? "disabled" : ""}>${escapeHtml(t("mappingPrevPage"))}</button>
+        <button type="button" class="btn btn-ghost" id="mapping-next-page" ${page >= pageCount - 1 ? "disabled" : ""}>${escapeHtml(t("mappingNextPage"))}</button>
+      </div>
+    `
+    : `<div class="empty-state">${escapeHtml(t("mappingEmptyText"))}</div>`;
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div>
+        <h2>${escapeHtml(t("mappingTitle"))}</h2>
+        <p>${escapeHtml(t("mappingDesc"))}</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="search-field">
+        ${ICONS.search}
+        <input type="text" class="input" id="mapping-search" placeholder="${escapeHtml(t("mappingSearchPlaceholder"))}" value="${escapeHtml(state.mappingSearch)}">
+      </div>
+      <span class="tag tag-outline results-count">${filtered.length} ${escapeHtml(t("mappingResultsWord"))}</span>
+      <button type="button" class="btn btn-ghost text-danger toolbar-push-end" id="mapping-delete-all-btn" ${state.manualMappings.length ? "" : "disabled"}>${ICONS.trash}${escapeHtml(t("mappingDeleteAllButton"))}</button>
+    </div>
+    ${tableHtml}
+  `;
+
+  document.getElementById("mapping-search").addEventListener(
+    "input",
+    debounce((e) => {
+      state.mappingSearch = e.target.value;
+      state.mappingPage = 0;
+      renderMappingView();
+      focusMappingSearchInput();
+    }, 250)
+  );
+
+  document.getElementById("mapping-delete-all-btn").addEventListener("click", () => {
+    state.mappingDeleteTarget = { kind: "all" };
+    renderModals();
+  });
+
+  el.querySelectorAll("[data-delete-mapping]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.mappingDeleteTarget = { kind: "row", id: btn.dataset.deleteMapping, name: btn.dataset.deleteMappingName };
+      renderModals();
+    });
+  });
+
+  const prevBtn = document.getElementById("mapping-prev-page");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      state.mappingPage = Math.max(0, state.mappingPage - 1);
+      renderMappingView();
+    });
+  }
+
+  const nextBtn = document.getElementById("mapping-next-page");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      state.mappingPage = Math.min(getMappingViewModel().pageCount - 1, state.mappingPage + 1);
+      renderMappingView();
+    });
+  }
 }
 
 function renderSettingsView() {
@@ -1828,43 +2029,37 @@ function authErrorBody(code, status) {
   return t("authErrorGenericBody");
 }
 
-// Populates and opens the end-of-run "unmatched setups" dialog. Reuses
-// ensureUploadOptions() (see the Upload tab above) for the same two
-// dropdown option lists (track folders, cars) the per-row corrections pick
-// from - already cached after a first Upload tab visit, so this is a no-op
-// IPC-wise in the common case.
-async function openUnmatchedModal(items) {
+// Populates and opens the end-of-run "unmatched setups" dialog from the
+// run's {tracks, cars} payload (each already a unique list - see
+// domain.unmatched.UnmatchedTracker.serialize on the Python side, which
+// dedupes by value so hundreds of setups sharing one unmatched track/car
+// only ever need a single correction). Reuses ensureUploadOptions() (see the
+// Upload tab above) for the same two dropdown option lists (track folders,
+// cars) the per-step correction picks from - already cached after a first
+// Upload tab visit, so this is a no-op IPC-wise in the common case.
+async function openUnmatchedModal(unmatched) {
   await ensureUploadOptions();
   state.unmatchedTarget = {
-    // Shown one setup at a time via the dialog's stepper (see renderModals) -
-    // saving the current one advances this to the next.
+    // Shown one track/car value at a time via the dialog's stepper (see
+    // renderModals) - saving the current one advances this to the next.
     currentIndex: 0,
-    items: items.map((it) => ({
-      track: it.track, car: it.car, source: it.source,
-      // A setup can be skipped with only one side unmatched (e.g. the car
-      // resolved fine, only the track didn't) - trackMatched/carMatched say
-      // which field(s) actually need a correction, so only those get a
-      // picker and only those get persisted on save.
-      trackMatched: !!it.trackMatched, carMatched: !!it.carMatched,
-      selectedTrack: null, selectedCar: null,
-      // Set when the user has no matching entry to pick (the correct track/
-      // car isn't in the dropdown yet) and hits "Salta" instead of mapping.
-      skipped: false,
-    })),
+    items: [
+      ...(unmatched.tracks || []).map((name) => ({ kind: "track", name, selected: null })),
+      ...(unmatched.cars || []).map((name) => ({ kind: "car", name, selected: null })),
+    ],
   };
   renderModals();
 }
 
 // Persists every populated, valid selection across all unmatched items in one
-// batch - only track/car fields that were actually unmatched and have a
-// picked value get saved; an item left blank (or explicitly skipped) simply
-// contributes nothing. Shared by the dialog's "Salva e Chiudi"/"Salva e
-// Risegui" buttons (see the data-unmatched-save-close/-rerun bindings).
+// batch - an item left blank simply contributes nothing. Shared by the
+// dialog's "Salva e Chiudi"/"Salva e Risegui" buttons (see the
+// data-unmatched-save-close/-rerun bindings).
 async function saveAllUnmatchedMappings() {
   const calls = [];
   for (const item of state.unmatchedTarget.items) {
-    if (!item.trackMatched && item.selectedTrack) calls.push(api().map_track(item.track, item.selectedTrack));
-    if (!item.carMatched && item.selectedCar) calls.push(api().map_car(item.car, item.selectedCar));
+    if (!item.selected) continue;
+    calls.push(item.kind === "track" ? api().map_track(item.name, item.selected) : api().map_car(item.name, item.selected));
   }
   await Promise.all(calls);
 }
@@ -1896,56 +2091,49 @@ function renderModals() {
     // via prev/next/goto/save below, so this is a no-op in practice.
     const idx = Math.max(0, Math.min(state.unmatchedTarget.currentIndex, total - 1));
     const item = items[idx];
-    const needsTrack = !item.trackMatched;
-    const needsCar = !item.carMatched;
+    const isTrack = item.kind === "track";
+    const fieldLabel = t(isTrack ? "manualUploadTrackLabel" : "manualUploadCarLabel");
 
-    // Only the field(s) that actually failed to match get a picker - a
-    // side that already resolved has nothing to correct, so it's dropped
-    // entirely rather than shown as a disabled placeholder.
-    const trackFieldHtml = needsTrack ? `
+    // Each step is exactly one distinct unmatched track OR car value - never
+    // both at once, since a single mapping already fixes every setup that
+    // shared it, and mixing the two kinds in one step would just re-create
+    // the per-setup pairing this dialog moved away from.
+    const fieldHtml = `
           <div class="field">
-            <label>${escapeHtml(t("manualUploadTrackLabel"))}</label>
+            <label>${escapeHtml(fieldLabel)}</label>
             ${renderSearchableSelect({
-              id: `unmatched-track-${idx}`, options: trackOptions, selected: item.selectedTrack,
-              placeholder: t("manualUploadTrackPlaceholder"),
+              id: `unmatched-field-${idx}`,
+              options: isTrack ? trackOptions : carOptions,
+              selected: item.selected,
+              placeholder: t(isTrack ? "manualUploadTrackPlaceholder" : "manualUploadCarPlaceholder"),
+              withLogos: !isTrack,
+              clearable: true,
             })}
-          </div>` : "";
-    const carFieldHtml = needsCar ? `
-          <div class="field">
-            <label>${escapeHtml(t("manualUploadCarLabel"))}</label>
-            ${renderSearchableSelect({
-              id: `unmatched-car-${idx}`, options: carOptions, selected: item.selectedCar,
-              placeholder: t("manualUploadCarPlaceholder"), withLogos: true,
-            })}
-          </div>` : "";
-    const fieldsHtml = needsTrack && needsCar
-      ? `<div class="field-row">${trackFieldHtml}${carFieldHtml}</div>`
-      : `${trackFieldHtml}${carFieldHtml}`;
+          </div>`;
 
     const rowHtml = `
       <div class="card elev-sm">
         <div class="unmatched-identified">
-          <div>${escapeHtml(t("manualUploadTrackLabel"))}: <strong>${escapeHtml(item.track)}</strong></div>
-          <div>${escapeHtml(t("manualUploadCarLabel"))}: <strong>${escapeHtml(item.car)}</strong></div>
+          <div>${escapeHtml(fieldLabel)}: <strong>${escapeHtml(item.name)}</strong></div>
         </div>
-        ${fieldsHtml}
+        ${fieldHtml}
         <div class="dialog-actions" style="margin-top:0;">
-          <button type="button" class="btn btn-ghost" data-unmatched-skip="${idx}" ${item.skipped ? "disabled" : ""}>
-            ${escapeHtml(item.skipped ? t("unmatchedSkippedTag") : t("unmatchedSkipButton"))}
+          <button type="button" class="btn btn-ghost" id="unmatched-item-next" ${idx === total - 1 ? "disabled" : ""}>
+            ${escapeHtml(t("unmatchedNextButton"))}
           </button>
         </div>
       </div>
     `;
 
-    // Stepper: one dot per setup, so a step can be jumped to directly instead
-    // of only walking through prev/next - ringed when current, outlined amber
-    // when skipped (no mapping will be saved for it), so progress stays
-    // visible at a glance even for a long run. There's no more per-item
-    // "saved" state to show: saving now happens in one batch at the bottom
-    // (see unmatched-save-close/unmatched-save-rerun below), which closes
-    // the dialog immediately, so a dot never needs to reflect it.
+    // Stepper: one dot per unmatched track/car value, so a step can be
+    // jumped to directly instead of only walking through prev/next - ringed
+    // when current, so progress stays visible at a glance even for a long
+    // list. There's no per-item "saved" state to show: saving happens in one
+    // batch at the bottom (see unmatched-save-close/unmatched-save-rerun
+    // below), which closes the dialog immediately, so a dot never needs to
+    // reflect it.
     const dotsHtml = items
-      .map((it, i) => `<button type="button" class="unmatched-stepper-dot ${i === idx ? "active" : ""} ${it.skipped ? "skipped" : ""}" data-unmatched-goto="${i}" title="${escapeHtml(it.track)} - ${escapeHtml(it.car)}"></button>`)
+      .map((it, i) => `<button type="button" class="unmatched-stepper-dot ${i === idx ? "active" : ""}" data-unmatched-goto="${i}" title="${escapeHtml(it.name)}"></button>`)
       .join("");
 
     html += `
@@ -1954,7 +2142,6 @@ function renderModals() {
           <div class="dialog-title">${ICONS.warning}${escapeHtml(t("unmatchedDialogTitle"))}</div>
           <div class="dialog-body">
             <p>${escapeHtml(t("unmatchedDialogIntro"))}</p>
-            <p>${escapeHtml(t("unmatchedDialogSkipHint"))}</p>
             <div style="margin-top: var(--space-2);">
               ${rowHtml}
             </div>
@@ -1968,8 +2155,9 @@ function renderModals() {
             <p class="unmatched-stepper-progress">${tFn("unmatchedStepperProgress", idx + 1, total)}</p>
           </div>
           <div class="dialog-actions">
-            <button type="button" class="btn btn-secondary" id="unmatched-copy">${ICONS.copy}${escapeHtml(t("unmatchedCopyButton"))}</button>
-            <button type="button" class="btn btn-secondary" id="unmatched-save-close" style="margin-left:auto;">${escapeHtml(t("unmatchedSaveCloseButton"))}</button>
+            <button type="button" class="btn btn-secondary" id="unmatched-cancel">${escapeHtml(t("mapFolderCancel"))}</button>
+            <button type="button" class="btn btn-secondary" id="unmatched-copy" style="margin-left:auto;">${ICONS.copy}${escapeHtml(t("unmatchedCopyButton"))}</button>
+            <button type="button" class="btn btn-secondary" id="unmatched-save-close">${escapeHtml(t("unmatchedSaveCloseButton"))}</button>
             <button type="button" class="btn btn-primary" id="unmatched-save-rerun">${escapeHtml(t("unmatchedSaveRerunButton"))}</button>
           </div>
         </div>
@@ -1998,6 +2186,27 @@ function renderModals() {
           <div class="dialog-actions">
             <button type="button" class="btn btn-ghost" id="delete-cancel">${escapeHtml(t("deleteConfirmCancel"))}</button>
             <button type="button" class="btn btn-danger" id="delete-confirm">${escapeHtml(t("deleteConfirmConfirm"))}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state.mappingDeleteTarget) {
+    const mappingDeleteTitle =
+      state.mappingDeleteTarget.kind === "all" ? t("mappingDeleteAllConfirmTitle") : t("mappingDeleteConfirmTitle");
+    const mappingDeleteBody =
+      state.mappingDeleteTarget.kind === "all"
+        ? tFn("mappingDeleteAllConfirmBody", state.manualMappings.length)
+        : tFn("mappingDeleteConfirmBody", state.mappingDeleteTarget.name);
+    html += `
+      <div class="dialog-backdrop" data-modal="mapping-delete-confirm">
+        <div class="dialog elev-lg">
+          <div class="dialog-title">${ICONS.warning}${escapeHtml(mappingDeleteTitle)}</div>
+          <div class="dialog-body">${escapeHtml(mappingDeleteBody)}</div>
+          <div class="dialog-actions">
+            <button type="button" class="btn btn-ghost" id="mapping-delete-cancel">${escapeHtml(t("deleteConfirmCancel"))}</button>
+            <button type="button" class="btn btn-danger" id="mapping-delete-confirm">${escapeHtml(t("deleteConfirmConfirm"))}</button>
           </div>
         </div>
       </div>
@@ -2164,24 +2373,17 @@ function renderModals() {
 
   if (state.unmatchedTarget) {
     const unmatchedIdx = Math.max(0, Math.min(state.unmatchedTarget.currentIndex, state.unmatchedTarget.items.length - 1));
-    // Only the current step's pair of selects exist in the DOM - bindSearchableSelect
-    // no-ops on an id it can't find, so this stays a single unconditional call.
-    bindSearchableSelect(root, `unmatched-track-${unmatchedIdx}`, (value) => { state.unmatchedTarget.items[unmatchedIdx].selectedTrack = value; }, renderModals);
-    bindSearchableSelect(root, `unmatched-car-${unmatchedIdx}`, (value) => { state.unmatchedTarget.items[unmatchedIdx].selectedCar = value; }, renderModals);
+    // Only the current step's single select exists in the DOM -
+    // bindSearchableSelect no-ops on an id it can't find.
+    bindSearchableSelect(root, `unmatched-field-${unmatchedIdx}`, (value) => { state.unmatchedTarget.items[unmatchedIdx].selected = value; }, renderModals);
 
-    root.querySelectorAll("[data-unmatched-skip]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const item = state.unmatchedTarget.items[Number(btn.dataset.unmatchedSkip)];
-        if (!item || item.skipped) return;
-        // No api call: skipping just means "I have nothing to map this to
-        // yet", so nothing is persisted and the setup stays unmatched.
-        item.skipped = true;
-        if (state.unmatchedTarget.currentIndex < state.unmatchedTarget.items.length - 1) {
-          state.unmatchedTarget.currentIndex += 1;
-        }
+    const unmatchedItemNext = document.getElementById("unmatched-item-next");
+    if (unmatchedItemNext) {
+      unmatchedItemNext.addEventListener("click", () => {
+        if (state.unmatchedTarget.currentIndex < state.unmatchedTarget.items.length - 1) state.unmatchedTarget.currentIndex += 1;
         renderModals();
       });
-    });
+    }
 
     const unmatchedPrev = document.getElementById("unmatched-prev");
     if (unmatchedPrev) {
@@ -2209,15 +2411,25 @@ function renderModals() {
     const unmatchedCopy = document.getElementById("unmatched-copy");
     if (unmatchedCopy) {
       unmatchedCopy.addEventListener("click", async () => {
-        // Only the field(s) that actually failed to match are worth pasting
-        // into mapping.json - a side that already resolved has nothing to add.
-        const tracks = [...new Set(state.unmatchedTarget.items.filter((it) => !it.trackMatched).map((it) => it.track))].sort();
-        const cars = [...new Set(state.unmatchedTarget.items.filter((it) => !it.carMatched).map((it) => it.car))].sort();
+        // items is already deduped (see openUnmatchedModal) - just split back
+        // into the two kinds for the copy text.
+        const tracks = state.unmatchedTarget.items.filter((it) => it.kind === "track").map((it) => it.name).sort();
+        const cars = state.unmatchedTarget.items.filter((it) => it.kind === "car").map((it) => it.name).sort();
         const sections = [];
         if (tracks.length) sections.push(`${t("unmatchedCopyTracksLabel")}\n${tracks.join("\n")}`);
         if (cars.length) sections.push(`${t("unmatchedCopyCarsLabel")}\n${cars.join("\n")}`);
         await copyTextToClipboard(sections.join("\n\n"));
         showToast(t("copiedToast"), "success");
+      });
+    }
+
+    const unmatchedCancel = document.getElementById("unmatched-cancel");
+    if (unmatchedCancel) {
+      unmatchedCancel.addEventListener("click", () => {
+        // No api call and no rerun: discards every selection made in this
+        // dialog and simply closes it, leaving all setups unmatched.
+        state.unmatchedTarget = null;
+        renderModals();
       });
     }
 
@@ -2238,7 +2450,7 @@ function renderModals() {
         state.unmatchedTarget = null;
         renderModals();
         // Re-run the same mode's download/upload now that the mappings that
-        // caused these skips are in place, so the freshly-mapped setups get
+        // resolve these items are in place, so the freshly-mapped setups get
         // picked up without the user having to go find the Start button.
         await startRun();
       });
@@ -2270,6 +2482,31 @@ function renderModals() {
       renderSetupsView();
       renderSidebar();
       showToast(t(allInstalled ? "deletedAllInstalledToast" : all ? "deletedAllToast" : "deletedToast"), "success");
+    });
+  }
+
+  const mappingDeleteCancel = document.getElementById("mapping-delete-cancel");
+  if (mappingDeleteCancel) {
+    mappingDeleteCancel.addEventListener("click", () => {
+      state.mappingDeleteTarget = null;
+      renderModals();
+    });
+  }
+
+  const mappingDeleteConfirm = document.getElementById("mapping-delete-confirm");
+  if (mappingDeleteConfirm) {
+    mappingDeleteConfirm.addEventListener("click", async () => {
+      const target = state.mappingDeleteTarget;
+      state.mappingDeleteTarget = null;
+      renderModals();
+      if (target.kind === "all") {
+        await api().delete_all_manual_mappings();
+      } else {
+        await api().delete_manual_mapping(target.id);
+      }
+      await refreshMappings();
+      renderMappingView();
+      showToast(t(target.kind === "all" ? "mappingDeletedAllToast" : "mappingDeletedToast"), "success");
     });
   }
 

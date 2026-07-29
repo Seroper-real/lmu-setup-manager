@@ -188,9 +188,7 @@ def test_unmatched_setup_is_recorded_with_raw_track_and_car(mm):
 
     manager.run()
 
-    assert manager.unmatched.serialize() == [
-        {"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan", "trackMatched": True, "carMatched": False},
-    ]
+    assert manager.unmatched.serialize() == {"tracks": [], "cars": ["Mystery Car"]}
 
 
 def test_unmatched_setups_are_deduped_across_the_run(mm):
@@ -203,9 +201,7 @@ def test_unmatched_setups_are_deduped_across_the_run(mm):
 
     manager.run()
 
-    assert manager.unmatched.serialize() == [
-        {"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan", "trackMatched": True, "carMatched": False},
-    ]
+    assert manager.unmatched.serialize() == {"tracks": [], "cars": ["Mystery Car"]}
 
 
 def test_finish_event_carries_the_unmatched_list(mm):
@@ -218,9 +214,7 @@ def test_finish_event_carries_the_unmatched_list(mm):
     manager.run()
 
     finish = next(e for e in events if e.kind == ProgressKind.FINISH)
-    assert finish.unmatched == [
-        {"track": "Mystery Circuit", "car": "Mystery Car", "source": "tracktitan", "trackMatched": True, "carMatched": False},
-    ]
+    assert finish.unmatched == {"tracks": [], "cars": ["Mystery Car"]}
 
 
 def test_finish_event_unmatched_is_none_when_everything_matched(mm, mocker):
@@ -261,9 +255,7 @@ def test_a_shared_unmatched_tracker_can_be_injected(mocker, tmp_path):
     manager.run()
 
     assert manager.unmatched is tracker
-    assert tracker.serialize() == [
-        {"track": "Spa", "car": "Porsche 963", "source": "tracktitan", "trackMatched": True, "carMatched": False},
-    ]
+    assert tracker.serialize() == {"tracks": [], "cars": ["Porsche 963"]}
 
 
 def test_upload_when_new(mm, mocker):

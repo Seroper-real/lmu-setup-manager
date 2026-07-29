@@ -124,9 +124,7 @@ def test_process_skips_unmatched_setup_and_records_it(sm):
     manager._process(_remote())
 
     setup_manager.install_setup.assert_not_called()
-    assert manager.unmatched.serialize() == [
-        {"track": "Spa", "car": "Porsche 963", "source": "dropbox", "trackMatched": True, "carMatched": False},
-    ]
+    assert manager.unmatched.serialize() == {"tracks": [], "cars": ["Porsche 963"]}
 
 
 def test_process_unmatched_setup_never_emits_start(sm):
@@ -280,9 +278,7 @@ def test_process_go_skips_unmatched_and_records_it_without_downloading(sm):
 
     dbx.download_to.assert_not_called()
     setup_manager.install_setup.assert_not_called()
-    assert manager.unmatched.serialize() == [
-        {"track": "Imola", "car": "Oreca 07", "source": "dropbox", "trackMatched": False, "carMatched": True},
-    ]
+    assert manager.unmatched.serialize() == {"tracks": ["Imola"], "cars": []}
 
 
 def test_process_go_changed_content_reuses_the_existing_setup_id(sm):
@@ -367,9 +363,7 @@ def test_finish_event_carries_the_unmatched_list(sm):
     manager.run()
 
     finish = next(e for e in events if e.kind == ProgressKind.FINISH)
-    assert finish.unmatched == [
-        {"track": "Imola", "car": "Oreca 07", "source": "dropbox", "trackMatched": False, "carMatched": True},
-    ]
+    assert finish.unmatched == {"tracks": ["Imola"], "cars": []}
 
 
 def test_finish_event_unmatched_is_none_when_everything_matched(sm):
@@ -401,6 +395,4 @@ def test_a_shared_unmatched_tracker_can_be_injected(mocker, tmp_path):
     manager.run()
 
     assert manager.unmatched is tracker
-    assert tracker.serialize() == [
-        {"track": "Imola", "car": "Oreca 07", "source": "dropbox", "trackMatched": False, "carMatched": True},
-    ]
+    assert tracker.serialize() == {"tracks": ["Imola"], "cars": []}

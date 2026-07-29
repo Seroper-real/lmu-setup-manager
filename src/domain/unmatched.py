@@ -1,56 +1,35 @@
 import threading
-from dataclasses import dataclass
 from typing import Optional
 
 
-@dataclass(frozen=True)
-class UnmatchedSetup:
-    """One setup skipped during a run because its car or track (or both)
-    didn't resolve against mapping.json + the manual_mapping fallback.
-    `track`/`car` are the raw, unresolved text as seen from `source` - never
-    an officialized name, since there is none. `track_matched`/`car_matched`
-    record which of the two actually failed to resolve (a setup can be
-    skipped with only one side unmatched) - the GUI's correction dialog uses
-    these to only ask for, and only persist, the side that's actually wrong."""
-    track: str
-    car: str
-    source: str  # "tracktitan" | "dropbox"
-    track_matched: bool
-    car_matched: bool
-
-
 class UnmatchedTracker:
-    """Collects UnmatchedSetup entries over the course of one run, so the GUI
-    can show a single end-of-run correction dialog instead of installing/
-    publishing them under a placeholder name. Thread-safe: MasterManager's
-    producer thread and (defensively) any future concurrent caller may both
-    record into the same instance."""
+    """Collects the raw track/car strings that failed to resolve against
+    mapping.json + the manual_mapping fallback over the course of one run, so
+    the GUI can show a single end-of-run correction dialog. Deduped by value,
+    not by setup: hundreds of setups can share the same unmatched track or
+    car, and all of them are fixed by a single mapping, so the dialog only
+    ever needs to ask about each distinct track/car once. Thread-safe:
+    MasterManager's/SlaveManager's producer thread and (defensively) any
+    future concurrent caller may both record into the same instance."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._seen: set[tuple[str, str, str]] = set()
-        self._items: list[UnmatchedSetup] = []
+        # dict, not set: iteration order must follow first-seen order, and a
+        # plain dict (values unused) is the simplest ordered-set available.
+        self._tracks: dict[str, None] = {}
+        self._cars: dict[str, None] = {}
 
-    def record(self, track: str, car: str, source: str, *, track_matched: bool, car_matched: bool) -> None:
-        key = (source, track, car)
+    def record(self, track: str, car: str, *, track_matched: bool, car_matched: bool) -> None:
         with self._lock:
-            if key in self._seen:
-                return
-            self._seen.add(key)
-            self._items.append(UnmatchedSetup(
-                track=track, car=car, source=source, track_matched=track_matched, car_matched=car_matched,
-            ))
+            if not track_matched:
+                self._tracks.setdefault(track, None)
+            if not car_matched:
+                self._cars.setdefault(car, None)
 
-    def serialize(self) -> Optional[list[dict[str, object]]]:
+    def serialize(self) -> Optional[dict[str, list[str]]]:
         """JSON-ready payload for ProgressEvent.unmatched - None when empty,
         so callers/the GUI never need to special-case an empty list."""
         with self._lock:
-            if not self._items:
+            if not self._tracks and not self._cars:
                 return None
-            return [
-                {
-                    "track": u.track, "car": u.car, "source": u.source,
-                    "trackMatched": u.track_matched, "carMatched": u.car_matched,
-                }
-                for u in self._items
-            ]
+            return {"tracks": list(self._tracks), "cars": list(self._cars)}

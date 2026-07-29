@@ -137,7 +137,7 @@ class MasterManager:
         if car_name is None or track_name is None:
             log.warning(f"Setup not matched, skipping publish: {setup.track} - {setup.car}")
             self.unmatched.record(
-                setup.track, setup.car, "tracktitan",
+                setup.track, setup.car,
                 track_matched=track_name is not None, car_matched=car_name is not None,
             )
             return

@@ -175,7 +175,7 @@ def run_full(
             if car_name is None or track_name is None:
                 log.warning(f"Setup not matched, skipping: {setup.track} - {setup.car}")
                 unmatched.record(
-                    setup.track, setup.car, "tracktitan",
+                    setup.track, setup.car,
                     track_matched=track_name is not None, car_matched=car_name is not None,
                 )
                 continue

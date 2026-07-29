@@ -90,7 +90,7 @@ class SlaveManager:
         if not car_matched or not track_matched:
             log.warning(f"Setup not matched, skipping: {setup.track} - {setup.car}")
             self.unmatched.record(
-                setup.track, setup.car, "dropbox", track_matched=track_matched, car_matched=car_matched,
+                setup.track, setup.car, track_matched=track_matched, car_matched=car_matched,
             )
             if CLEAN_DOWNLOAD and local_zip.exists():
                 local_zip.unlink()
@@ -123,7 +123,7 @@ class SlaveManager:
         if car is None or track is None:
             log.warning(f"GO Setup not matched, skipping: {remote.track} - {remote.car}")
             self.unmatched.record(
-                remote.track, remote.car, "dropbox", track_matched=track is not None, car_matched=car is not None,
+                remote.track, remote.car, track_matched=track is not None, car_matched=car is not None,
             )
             return
         label = f"{track} - {car} Setup"

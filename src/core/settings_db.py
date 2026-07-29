@@ -237,9 +237,9 @@ def get_manual_mappings(mapping_type: str) -> list[dict[str, Any]]:
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT name, matcher FROM manual_mapping WHERE type = ? ORDER BY rowid", (mapping_type,)
+            "SELECT id, name, matcher FROM manual_mapping WHERE type = ? ORDER BY rowid", (mapping_type,)
         ).fetchall()
-        return [{"name": name, "matcher": matcher} for name, matcher in rows]
+        return [{"id": row_id, "name": name, "matcher": matcher} for row_id, name, matcher in rows]
     finally:
         conn.close()
 
@@ -253,5 +253,36 @@ def upsert_manual_mapping(mapping_type: str, name: str, raw_value: str) -> None:
     try:
         with conn:
             _upsert_manual_mapping_row(conn, mapping_type, name, re.escape(raw_value))
+    finally:
+        conn.close()
+
+
+def delete_manual_mapping(mapping_id: str) -> Optional[str]:
+    """Delete one manual_mapping row by id. Returns its `type` ("track" or
+    "car") so the caller knows whether a cached CarManager needs refreshing,
+    or None if no row matched."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT type FROM manual_mapping WHERE id = ?", (mapping_id,)).fetchone()
+        if row is None:
+            return None
+        with conn:
+            conn.execute("DELETE FROM manual_mapping WHERE id = ?", (mapping_id,))
+        return row[0]
+    finally:
+        conn.close()
+
+
+def delete_all_manual_mappings(mapping_type: Optional[str] = None) -> int:
+    """Delete every manual_mapping row, or only those of `mapping_type` if
+    given. Returns the number of rows deleted."""
+    conn = _connect()
+    try:
+        with conn:
+            if mapping_type is None:
+                cursor = conn.execute("DELETE FROM manual_mapping")
+            else:
+                cursor = conn.execute("DELETE FROM manual_mapping WHERE type = ?", (mapping_type,))
+        return cursor.rowcount
     finally:
         conn.close()

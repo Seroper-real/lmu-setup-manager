@@ -43,9 +43,10 @@ def test_save_secrets_upserts_and_preserves_other_keys():
 
 def test_upsert_manual_mapping_creates_new_entry():
     settings_db.upsert_manual_mapping("track", "Spa", "spa|francorchamps")
-    assert settings_db.get_manual_mappings("track") == [
-        {"name": "Spa", "matcher": r"spa\|francorchamps"}
-    ]
+    tracks = settings_db.get_manual_mappings("track")
+    assert len(tracks) == 1
+    assert tracks[0]["name"] == "Spa"
+    assert tracks[0]["matcher"] == r"spa\|francorchamps"
 
 
 def test_upsert_manual_mapping_appends_to_existing_entry():
@@ -70,8 +71,69 @@ def test_manual_mappings_are_isolated_by_type():
     settings_db.upsert_manual_mapping("track", "Spa", "circuit de spa")
     settings_db.upsert_manual_mapping("car", "Spa", "not a track")  # same `name`, different `type`
 
-    assert settings_db.get_manual_mappings("track") == [{"name": "Spa", "matcher": r"circuit\ de\ spa"}]
-    assert settings_db.get_manual_mappings("car") == [{"name": "Spa", "matcher": "not\\ a\\ track"}]
+    tracks = settings_db.get_manual_mappings("track")
+    cars = settings_db.get_manual_mappings("car")
+    assert [{"name": t["name"], "matcher": t["matcher"]} for t in tracks] == [
+        {"name": "Spa", "matcher": r"circuit\ de\ spa"}
+    ]
+    assert [{"name": c["name"], "matcher": c["matcher"]} for c in cars] == [
+        {"name": "Spa", "matcher": "not\\ a\\ track"}
+    ]
+
+
+def test_get_manual_mappings_includes_id():
+    settings_db.upsert_manual_mapping("track", "Spa", "spa")
+    tracks = settings_db.get_manual_mappings("track")
+    assert len(tracks) == 1
+    assert isinstance(tracks[0]["id"], str)
+    assert tracks[0]["id"]
+
+
+def test_delete_manual_mapping_removes_row_and_returns_type():
+    settings_db.upsert_manual_mapping("track", "Spa", "spa")
+    mapping_id = settings_db.get_manual_mappings("track")[0]["id"]
+
+    deleted_type = settings_db.delete_manual_mapping(mapping_id)
+
+    assert deleted_type == "track"
+    assert settings_db.get_manual_mappings("track") == []
+
+
+def test_delete_manual_mapping_returns_none_for_unknown_id():
+    assert settings_db.delete_manual_mapping("does-not-exist") is None
+
+
+def test_delete_manual_mapping_only_removes_targeted_row():
+    settings_db.upsert_manual_mapping("track", "Spa", "spa")
+    settings_db.upsert_manual_mapping("track", "Monza", "monza")
+    spa_id = next(m["id"] for m in settings_db.get_manual_mappings("track") if m["name"] == "Spa")
+
+    settings_db.delete_manual_mapping(spa_id)
+
+    remaining = [m["name"] for m in settings_db.get_manual_mappings("track")]
+    assert remaining == ["Monza"]
+
+
+def test_delete_all_manual_mappings_removes_everything_and_returns_count():
+    settings_db.upsert_manual_mapping("track", "Spa", "spa")
+    settings_db.upsert_manual_mapping("car", "Porsche 963", "963")
+
+    deleted_count = settings_db.delete_all_manual_mappings()
+
+    assert deleted_count == 2
+    assert settings_db.get_manual_mappings("track") == []
+    assert settings_db.get_manual_mappings("car") == []
+
+
+def test_delete_all_manual_mappings_filters_by_type():
+    settings_db.upsert_manual_mapping("track", "Spa", "spa")
+    settings_db.upsert_manual_mapping("car", "Porsche 963", "963")
+
+    deleted_count = settings_db.delete_all_manual_mappings("track")
+
+    assert deleted_count == 1
+    assert settings_db.get_manual_mappings("track") == []
+    assert len(settings_db.get_manual_mappings("car")) == 1
 
 
 def test_get_manual_mappings_preserves_insertion_order():
