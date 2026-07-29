@@ -134,25 +134,6 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             "INSERT OR IGNORE INTO config (id, data) VALUES (1, ?)",
             (json.dumps(DEFAULT_CONFIG),),
         )
-        _migrate_legacy_tracks_table(conn)
-
-
-def _migrate_legacy_tracks_table(conn: sqlite3.Connection) -> None:
-    """One-time fold of the pre-manual_mapping "tracks" table (the old
-    per-track-only Correggi storage) into manual_mapping(type="track"), then
-    drop it. Guarded by a sqlite_master check so this is a no-op on every call
-    after the first - `tracks` is gone by then."""
-    exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tracks'"
-    ).fetchone()
-    if not exists:
-        return
-    rows = conn.execute("SELECT lmu_folder_name, tt_patterns FROM tracks").fetchall()
-    for lmu_folder_name, patterns_json in rows:
-        patterns = json.loads(patterns_json)
-        if patterns:
-            _upsert_manual_mapping_row(conn, "track", lmu_folder_name, "|".join(patterns))
-    conn.execute("DROP TABLE tracks")
 
 
 def _connect() -> sqlite3.Connection:

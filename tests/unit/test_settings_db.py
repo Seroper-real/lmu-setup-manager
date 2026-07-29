@@ -1,6 +1,3 @@
-import json
-import sqlite3
-
 from core import settings_db
 
 
@@ -156,32 +153,3 @@ def test_reset_to_factory_defaults_clears_everything():
     assert settings_db.get_secret("USER_ID") is None
     assert settings_db.get_manual_mappings("track") == []
     assert settings_db.get_manual_mappings("car") == []
-
-
-# --- legacy `tracks` table migration ---------------------------------------
-
-
-def test_legacy_tracks_table_is_migrated_into_manual_mapping_and_dropped():
-    # Seed a pre-manual_mapping settings.db by hand, as an old app version
-    # would have left it - _isolate_settings_db (conftest.py) already points
-    # SETTINGS_DB_PATH at a fresh per-test tmp_path, so this is the only DB
-    # settings_db will ever open in this test.
-    conn = sqlite3.connect(settings_db.SETTINGS_DB_PATH)
-    try:
-        conn.execute("CREATE TABLE tracks (id INTEGER PRIMARY KEY AUTOINCREMENT, lmu_folder_name TEXT NOT NULL, tt_patterns TEXT NOT NULL)")
-        conn.execute("INSERT INTO tracks (lmu_folder_name, tt_patterns) VALUES (?, ?)", ("Spa", json.dumps(["spa", "francorchamps"])))
-        conn.execute("INSERT INTO tracks (lmu_folder_name, tt_patterns) VALUES (?, ?)", ("Nurburgring", json.dumps(["nordschleife"])))
-        conn.commit()
-    finally:
-        conn.close()
-
-    tracks = settings_db.get_manual_mappings("track")
-    by_name = {t["name"]: t["matcher"] for t in tracks}
-    assert by_name == {"Spa": "spa|francorchamps", "Nurburgring": "nordschleife"}
-
-    conn = sqlite3.connect(settings_db.SETTINGS_DB_PATH)
-    try:
-        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tracks'").fetchone()
-        assert exists is None
-    finally:
-        conn.close()

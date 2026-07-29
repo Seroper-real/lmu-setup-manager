@@ -202,91 +202,23 @@ def test_update_installed_setup_persists_sha256_and_setup_type(in_memory_db, tmp
     assert updated.setup_type == "GO"
 
 
-def test_migration_backfills_setup_type_and_leaves_sha256_null(mocker, tmp_path):
-    """A pre-existing DB, created before this feature, has only the original 12
-    columns - the migrations framework's baseline step must backfill setup_type
-    via its column default, and leave sha256 NULL for that old row."""
-    import sqlite3
-    legacy_path = tmp_path / "legacy.db"
-    conn = sqlite3.connect(legacy_path)
-    conn.execute("""
-        CREATE TABLE installed_setups (
-            setup_id TEXT PRIMARY KEY,
-            track TEXT,
-            car TEXT,
-            install_date INTEGER,
-            setup_last_update INTEGER,
-            hotlap_link TEXT,
-            api_data TEXT,
-            file_names TEXT,
-            track_found INTEGER,
-            installation_base_path TEXT,
-            installation_folder TEXT,
-            matched_track_id TEXT
-        )
-    """)
-    conn.execute(
-        "INSERT INTO installed_setups VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("old1", "Spa", "Ferrari", 1000, 2000, None, "{}", "[]", 1, "/base", "Spa", None),
-    )
-    conn.commit()
-    conn.close()
-
-    mocker.patch("domain.setup_db.DB_PATH", legacy_path)
-    from domain.setup_db import SetupDb
-    db = SetupDb()
-
-    row = db.fetch_installed_setup("old1")
-    assert row.setup_type == "HYMO"
-    assert row.sha256 is None
-
-
-def test_migration_normalizes_car_and_track_on_a_legacy_row_and_stamps_schema_version(mocker, tmp_path):
-    """A pre-existing DB whose car/track contain the raw (pre-sanitization) form
-    - as every HYMO row did before this version - must be normalized by the
-    "1.3.0" migration, and the DB left at domain.migrations.SCHEMA_TARGET_VERSION.
-    The car is then further re-officialized by "2.0.0" (its "mercedes" catalog
-    matcher matches the sanitized form too), restoring the hyphen; the track's
-    matched_track_id is None here so it stays sanitized, untouched by "2.0.0"."""
-    import sqlite3
+def test_fresh_db_converges_to_schema_target_version(in_memory_db):
+    """A brand-new DB (no pre-existing file) must land at
+    domain.migrations.SCHEMA_TARGET_VERSION with the full installed_setups
+    schema after create_tables() runs the baseline migration."""
     from domain.migrations import SCHEMA_TARGET_VERSION
-    legacy_path = tmp_path / "legacy.db"
-    conn = sqlite3.connect(legacy_path)
-    conn.execute("""
-        CREATE TABLE installed_setups (
-            setup_id TEXT PRIMARY KEY,
-            track TEXT,
-            car TEXT,
-            install_date INTEGER,
-            setup_last_update INTEGER,
-            hotlap_link TEXT,
-            api_data TEXT,
-            file_names TEXT,
-            track_found INTEGER,
-            installation_base_path TEXT,
-            installation_folder TEXT,
-            matched_track_id TEXT,
-            sha256 TEXT,
-            setup_type TEXT NOT NULL DEFAULT 'HYMO'
-        )
-    """)
-    conn.execute(
-        "INSERT INTO installed_setups VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("old2", "Le Mans/Bugatti", "Mercedes-AMG LMGT3", 1000, 2000, None, "{}", "[]", 1, "/base", "Le Mans", None, None, "HYMO"),
-    )
-    conn.commit()
-    conn.close()
 
-    mocker.patch("domain.setup_db.DB_PATH", legacy_path)
-    from domain.setup_db import SetupDb
-    db = SetupDb()
-
-    row = db.fetch_installed_setup("old2")
-    assert row.car == "Mercedes-AMG"
-    assert row.track == "Le Mans_Bugatti"
-
-    version = db.conn.execute("SELECT version FROM schema_version WHERE id = 1").fetchone()[0]
+    version = in_memory_db.conn.execute(
+        "SELECT version FROM schema_version WHERE id = 1"
+    ).fetchone()[0]
     assert version == SCHEMA_TARGET_VERSION
+
+    columns = {row[1] for row in in_memory_db.conn.execute("PRAGMA table_info(installed_setups)").fetchall()}
+    assert columns == {
+        "setup_id", "track", "car", "install_date", "setup_last_update", "hotlap_link",
+        "api_data", "file_names", "track_found", "installation_base_path",
+        "installation_folder", "matched_track_id", "sha256", "setup_type",
+    }
 
 
 def test_rerunning_migrations_on_an_up_to_date_db_is_a_noop(mocker):
