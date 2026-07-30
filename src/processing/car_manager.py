@@ -29,11 +29,18 @@ class CarManager:
         "lmp3": "P3",
     }
 
+    # Fixed display/sort order for the "Setup installati" tab's per-track car
+    # list (class first, alphabetical within a class) - independent of
+    # _CLASS_LABELS' logo-asset collapsing: "lmp2" and "lmp2 (elms)" share a
+    # P2 logo but sort as distinct classes.
+    _CLASS_ORDER: tuple[str, ...] = ("hypercar", "lmp2 (elms)", "lmp2", "lmp3", "lmgt3", "lmgte")
+
     def __init__(self) -> None:
         self.mapping_json_path = get_path("config/mapping.json")
         self.car_patterns: list[tuple[re.Pattern[str], str]] = []
         self.custom_car_patterns: list[tuple[re.Pattern[str], str]] = []
         self.car_classes: dict[str, str] = {}
+        self._car_raw_classes: dict[str, str] = {}
         self._car_entries: list[dict] = []
         self.refresh()
 
@@ -58,6 +65,7 @@ class CarManager:
             for name, raw in raw_classes.items()
             if (normalized := self._normalize_class(raw)) is not None
         }
+        self._car_raw_classes = {name: raw.strip().lower() for name, raw in raw_classes.items()}
         # Same "|"-joined-single-regex shape as TrackManager.custom_track_patterns.
         custom_entries = [{"name": m["name"], "matcher": [m["matcher"]]} for m in settings_db.get_manual_mappings("car")]
         self.custom_car_patterns = compile_patterns(custom_entries, pattern_key="matcher", name_key="name")
@@ -80,6 +88,16 @@ class CarManager:
 
     def get_car_class(self, name: str) -> Optional[str]:
         return self.car_classes.get(name)
+
+    def get_class_rank(self, name: str) -> int:
+        """Sort rank for `name`'s class, per the fixed _CLASS_ORDER - used by
+        the "Setup installati" tab to order cars by class before falling back
+        to alphabetical. A car with no known raw class (e.g. a custom-mapped
+        identity with no "class" entry) sorts after every known class."""
+        raw = self._car_raw_classes.get(name)
+        if raw in self._CLASS_ORDER:
+            return self._CLASS_ORDER.index(raw)
+        return len(self._CLASS_ORDER)
 
     def get_all_cars(self) -> list[dict[str, object]]:
         """Every car mapping.json declares, in its own order - for the Upload

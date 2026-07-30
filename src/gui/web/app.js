@@ -38,8 +38,10 @@ const state = {
   // Per-installed-setup accordion inside an expanded car/type group, keyed by
   // setupId - reveals that one installed setup's individual file names on click.
   expandedCars: new Set(),
-  trackFolderOptions: [],
-  // Lazy-fetched once (like trackFolderOptions above), for the Upload tab's
+  // Track dropdown options for the Upload tab + the "Correggi" unmatched-setup
+  // dialog - mapping.json's official `name` values, not the physical lmu_folder.
+  trackOptions: [],
+  // Lazy-fetched once (like trackOptions above), for the Upload tab's
   // car dropdown.
   uploadCarOptions: [],
   // { filePath, fileName, type, track, car } once a zip is picked on the
@@ -892,8 +894,8 @@ const UPLOAD_MODE_DESC_KEYS = { full: "uploadFullDesc", master: "uploadMasterDes
 // Lazy-fetched once: both lists are static per mapping.json load, so a first
 // visit to the Upload tab is the only time either needs an IPC round trip.
 async function ensureUploadOptions() {
-  if (!state.trackFolderOptions.length) {
-    state.trackFolderOptions = await api().get_track_folder_options();
+  if (!state.trackOptions.length) {
+    state.trackOptions = await api().get_track_options();
   }
   if (!state.uploadCarOptions.length) {
     state.uploadCarOptions = await api().get_car_options();
@@ -1160,7 +1162,7 @@ document.addEventListener("mousedown", (e) => {
 });
 
 function renderManualUploadForm(upload) {
-  const trackOptions = state.trackFolderOptions.map((folder) => ({ value: folder, label: folder }));
+  const trackOptions = state.trackOptions.map((name) => ({ value: name, label: name }));
   const carOptions = state.uploadCarOptions.map((c) => ({ value: c.name, label: c.name, carClass: c.carClass }));
   const canConfirm = !!(upload.track && upload.car);
 
@@ -2100,7 +2102,7 @@ function renderModals() {
   }
 
   if (state.unmatchedTarget) {
-    const trackOptions = state.trackFolderOptions.map((folder) => ({ value: folder, label: folder }));
+    const trackOptions = state.trackOptions.map((name) => ({ value: name, label: name }));
     const carOptions = state.uploadCarOptions.map((c) => ({ value: c.name, label: c.name, carClass: c.carClass }));
     const items = state.unmatchedTarget.items;
     const total = items.length;

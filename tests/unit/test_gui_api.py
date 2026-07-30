@@ -199,13 +199,16 @@ def test_list_installed_setups_groups_by_track(api, mocker):
 
 
 def test_list_installed_setups_groups_by_matched_track_id_across_raw_names(api, mocker):
-    # TrackTitan exposes the same physical track under different raw names; both
-    # resolve to the same matched_track_id and must collapse into one card.
+    # TrackTitan exposes the same physical track under different raw API text;
+    # both are already resolved to the same official name by the time they
+    # reach the DB (SetupManager.install_setup's safe_track), and share the
+    # same matched_track_id (the physical folder) - they must collapse into
+    # one card, displayed by that shared official name.
     mocker.patch.object(api, "current_mode", return_value="full")
     mocker.patch("processing.car_manager.CarManager")
     setups = [
-        _fake_installed(setup_id="1", track="Bahrain - WEC", car="Porsche 963", track_found=True, matched_track_id="Bahrain"),
-        _fake_installed(setup_id="2", track="Bahrain International Circuit", car="BMW M4", track_found=True, matched_track_id="Bahrain"),
+        _fake_installed(setup_id="1", track="Bahrain", car="Porsche 963", track_found=True, matched_track_id="Bahrain"),
+        _fake_installed(setup_id="2", track="Bahrain", car="BMW M4", track_found=True, matched_track_id="Bahrain"),
     ]
     db_cls = mocker.patch("domain.setup_db.SetupDb")
     db_cls.return_value.fetch_all_installed_setups.return_value = setups
@@ -215,6 +218,24 @@ def test_list_installed_setups_groups_by_matched_track_id_across_raw_names(api, 
     assert len(result["groups"]) == 1
     assert result["groups"][0]["track"] == "Bahrain"
     assert len(result["groups"][0]["cars"]) == 2
+
+
+def test_list_installed_setups_displays_the_resolved_track_name_not_the_matched_folder_id(api, mocker):
+    # matched_track_id is the physical LMU folder (e.g. "Daytonarc") used only
+    # to collapse raw-name variants into one card - the label shown to the
+    # user must be the officially resolved name (e.g. "Daytona Race"), never
+    # that folder id.
+    mocker.patch.object(api, "current_mode", return_value="full")
+    mocker.patch("processing.car_manager.CarManager")
+    setups = [
+        _fake_installed(setup_id="1", track="Daytona Race", car="Porsche 963", track_found=True, matched_track_id="Daytonarc"),
+    ]
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = setups
+
+    result = api.list_installed_setups("")
+
+    assert result["groups"][0]["track"] == "Daytona Race"
 
 
 def test_list_installed_setups_search_matches_track_or_car(api, mocker):
@@ -318,6 +339,31 @@ def test_list_installed_setups_includes_car_class_from_car_manager(api, mocker):
 
     assert result["groups"][0]["cars"][0]["carClass"] == "HYPERCAR"
     cm_cls.return_value.get_car_class.assert_called_once_with("Porsche 963")
+
+
+def test_list_installed_setups_orders_cars_by_class_then_alphabetically(api, mocker):
+    # Class order (per CarManager.get_class_rank) wins over alphabetical: an
+    # LMP3 car ("Ligier") must still come before a Hypercar one ("Zonda")
+    # would sort alphabetically after it, but the fixed class order puts
+    # Hypercar first.
+    mocker.patch.object(api, "current_mode", return_value="full")
+    cm_cls = mocker.patch("processing.car_manager.CarManager")
+    ranks = {"Ligier JS P325": 3, "Alpine A424": 0, "Porsche 963": 0, "BMW M4": 1}
+    cm_cls.return_value.get_class_rank.side_effect = lambda car: ranks[car]
+    setups = [
+        _fake_installed(setup_id="1", track="Spa", car="Ligier JS P325"),
+        _fake_installed(setup_id="2", track="Spa", car="BMW M4"),
+        _fake_installed(setup_id="3", track="Spa", car="Porsche 963"),
+        _fake_installed(setup_id="4", track="Spa", car="Alpine A424"),
+    ]
+    db_cls = mocker.patch("domain.setup_db.SetupDb")
+    db_cls.return_value.fetch_all_installed_setups.return_value = setups
+
+    result = api.list_installed_setups("")
+
+    cars = [c["car"] for c in result["groups"][0]["cars"]]
+    # Rank 0 (Alpine, Porsche) alphabetically, then rank 1 (BMW), then rank 3 (Ligier).
+    assert cars == ["Alpine A424", "Porsche 963", "BMW M4", "Ligier JS P325"]
 
 
 # ----- get_car_options ------------------------------------------------------
@@ -446,27 +492,27 @@ def test_restore_factory_settings_handles_nothing_installed(api, managers, mocke
     managers.setup_manager.return_value.delete_setup.assert_not_called()
 
 
-def test_get_track_folder_options_delegates_to_track_manager(api, mocker):
+def test_get_track_options_delegates_to_track_manager(api, mocker):
     tm_cls = mocker.patch("processing.track_manager.TrackManager")
-    tm_cls.return_value.get_known_folder_names.return_value = ["Imola", "Spa"]
+    tm_cls.return_value.get_known_track_names.return_value = ["Imola", "Spa"]
 
-    assert api.get_track_folder_options() == ["Imola", "Spa"]
+    assert api.get_track_options() == ["Imola", "Spa"]
 
 
 def test_guess_manual_upload_identity_delegates_to_car_and_track_managers(api, managers):
     managers.car_manager.return_value.get_car_name.return_value = "Ferrari 499P"
-    managers.track_manager.return_value.get_track_folder_name.return_value = "Sebring"
+    managers.track_manager.return_value.get_official_track_name.return_value = "Sebring"
 
     result = api.guess_manual_upload_identity("GO-FERRARI-499P-SEBRING.zip")
 
     assert result == {"car": "Ferrari 499P", "track": "Sebring"}
     managers.car_manager.return_value.get_car_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
-    managers.track_manager.return_value.get_track_folder_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
+    managers.track_manager.return_value.get_official_track_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
 
 
 def test_guess_manual_upload_identity_returns_none_values_when_unrecognized(api, managers):
     managers.car_manager.return_value.get_car_name.return_value = None
-    managers.track_manager.return_value.get_track_folder_name.return_value = None
+    managers.track_manager.return_value.get_official_track_name.return_value = None
 
     assert api.guess_manual_upload_identity("setup1.zip") == {"car": None, "track": None}
 

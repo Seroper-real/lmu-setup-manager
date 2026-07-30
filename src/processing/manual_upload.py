@@ -21,20 +21,24 @@ log = logging.getLogger("TrackTitanDownloader")
 def guess_car_track_from_filename(
     file_name: str, car_manager: CarManager, track_manager: TrackManager
 ) -> tuple[Optional[str], Optional[str]]:
-    """Best-effort (car, lmu_folder) guess for the Upload tab's dropdowns from
-    a picked/dropped file's name, e.g. "GO-FERRARI-499P-SEBRING.zip" ->
-    ("Ferrari 499P", "Sebring").
+    """Best-effort (car, official track name) guess for the Upload tab's
+    dropdowns from a picked/dropped file's name, e.g.
+    "GO-FERRARI-499P-SEBRING.zip" -> ("Ferrari 499P", "Sebring").
 
     Reuses mapping.json's own car/track matchers (see CarManager.get_car_name,
-    TrackManager.get_track_folder_name): those are already substring regexes
+    TrackManager.get_official_track_name): those are already substring regexes
     meant to recognize a known name inside arbitrary raw text (TrackTitan's
     own combo strings), so searching the same patterns against the raw
     filename stem works without any bespoke parsing - no attempt is made to
     split the name into car/track segments, since a car name can itself
-    contain the separators (spaces, hyphens) used between segments.
+    contain the separators (spaces, hyphens) used between segments. Must
+    return the official `name` (not the physical lmu_folder), since that's
+    what the Upload tab's Track dropdown is populated with (see
+    TrackManager.get_known_track_names) - a folder-only value wouldn't match
+    any of its options when they differ.
     """
     stem = Path(file_name).stem
-    return car_manager.get_car_name(stem), track_manager.get_track_folder_name(stem)
+    return car_manager.get_car_name(stem), track_manager.get_official_track_name(stem)
 
 
 def build_manual_setup(track: str, car: str) -> Setup:
@@ -50,8 +54,8 @@ def build_manual_setup(track: str, car: str) -> Setup:
         "isBundle": False,
     })
     # track/car come straight from the Upload tab's dropdowns, themselves built
-    # from mapping.json's own `name`/lmu_folder values (see CarManager.get_all_cars,
-    # TrackManager.get_known_folder_names) - already-official identities, not raw
+    # from mapping.json's own `name` values (see CarManager.get_all_cars,
+    # TrackManager.get_known_track_names) - already-official identities, not raw
     # TrackTitan text. Assigned to safe_track/safe_car directly, bypassing Setup's
     # default sanitize_identity normalization (which would mangle a hyphen or slash
     # in an official name, e.g. "Cadillac V-Series.R"), so the Dropbox folder this

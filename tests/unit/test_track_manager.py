@@ -166,11 +166,35 @@ def test_get_official_track_name_falls_back_to_custom_folder_name(local_manager)
     assert local_manager.get_official_track_name("Nordschleife") == "Nurburgring"
 
 
-# --- get_known_folder_names / add_or_update_mapping / refresh --------------
+def test_add_or_update_mapping_with_a_known_name_installs_into_the_real_folder(make_manager):
+    # The GUI's Correggi dropdown (get_known_track_names) offers `name`
+    # values, not lmu_folder ones - mapping an unmatched raw text onto an
+    # *existing* mapping.json track (picked by its official name) must still
+    # resolve to that track's real physical folder, not a new one literally
+    # named after the official name.
+    mgr = make_manager({"tracks": [{"name": "Daytona Race", "matcher": ["daytona"], "lmu_folder": "Daytonarc"}]})
+    mgr.add_or_update_mapping("DIS", "Daytona Race")
+    mgr.refresh()
+
+    assert mgr.get_track_folder_name("DIS") == "Daytonarc"
+    assert mgr.get_official_track_name("DIS") == "Daytona Race"
 
 
-def test_get_known_folder_names_sorted_and_deduped(local_manager):
-    assert local_manager.get_known_folder_names() == ["Imola", "Spa"]
+def test_add_or_update_mapping_with_a_brand_new_name_uses_it_as_the_folder(local_manager):
+    # For a genuinely new track (no mapping.json entry to translate through),
+    # `name` and the physical folder are the same single value.
+    local_manager.add_or_update_mapping("Nordschleife", "Nurburgring")
+    local_manager.refresh()
+
+    assert local_manager.get_track_folder_name("Nordschleife") == "Nurburgring"
+    assert local_manager.get_official_track_name("Nordschleife") == "Nurburgring"
+
+
+# --- get_known_track_names / add_or_update_mapping / refresh --------------
+
+
+def test_get_known_track_names_sorted_and_deduped(local_manager):
+    assert local_manager.get_known_track_names() == ["Imola", "Spa"]
 
 
 def test_add_or_update_mapping_appends_to_existing_entry(local_manager):
@@ -190,17 +214,17 @@ def test_add_or_update_mapping_creates_new_entry(local_manager):
     from core import settings_db
     custom = settings_db.get_manual_mappings("track")
     monza = next(t for t in custom if t["name"] == "Monza")
-    # Both the raw track's own pattern and a self-matching one for the folder
-    # name itself (see test_add_or_update_mapping_folder_name_resolves_to_itself).
+    # Both the raw track's own pattern and a self-matching one for the name
+    # itself (see test_add_or_update_mapping_name_resolves_to_itself).
     assert monza["matcher"] == "|".join([re.escape("Monza Circuit"), re.escape("Monza")])
-    # get_known_folder_names merges file-derived and DB-customization names.
-    assert local_manager.get_known_folder_names() == ["Imola", "Monza", "Spa"]
+    # get_known_track_names merges file-derived and DB-customization names.
+    assert local_manager.get_known_track_names() == ["Imola", "Monza", "Spa"]
 
 
-def test_add_or_update_mapping_folder_name_resolves_to_itself(local_manager):
-    # Picking an existing lmu_folder_name back out of get_known_folder_names()
-    # (e.g. the Upload tab's Track dropdown) must resolve to that same folder,
-    # not create a new "<folder> - HYMO" one.
+def test_add_or_update_mapping_name_resolves_to_itself(local_manager):
+    # Picking an existing name back out of get_known_track_names() (e.g. the
+    # Upload tab's Track dropdown) must resolve to that same folder, not
+    # create a new "<name> - HYMO" one.
     local_manager.add_or_update_mapping("Monza Circuit", "Monza")
     local_manager.refresh()
 

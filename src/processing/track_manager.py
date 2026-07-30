@@ -21,7 +21,12 @@ class TrackManager:
     physical LMU installation folder) are resolved independently from the
     same matcher patterns - they coincide for every entry in mapping.json
     today, but are conceptually distinct fields (see get_official_track_name
-    vs get_track_folder_name).
+    vs get_track_folder_name). GUI dropdowns (get_known_track_names) only
+    ever expose `name`, never `lmu_folder` - a manual_mapping row created
+    from one of those dropdowns is keyed by that `name` too, so
+    get_track_folder_name translates it back to the real folder via
+    _folder_for_known_name when it happens to name an existing mapping.json
+    entry.
     """
 
     def __init__(self) -> None:
@@ -52,6 +57,21 @@ class TrackManager:
         custom_entries = [{"name": m["name"], "matcher": [m["matcher"]]} for m in settings_db.get_manual_mappings("track")]
         self.custom_track_patterns = compile_patterns(custom_entries, pattern_key="matcher", name_key="name")
 
+    def _folder_for_known_name(self, name: str) -> str:
+        # A custom_track_patterns match yields whatever the GUI's track
+        # dropdown offered when the mapping was created - which, per
+        # get_known_track_names(), is an official `name` (e.g. "Daytona
+        # Race"), not necessarily the physical `lmu_folder` ("Daytonarc")
+        # those two happen to differ for. If `name` matches an existing
+        # mapping.json entry, install into that entry's real folder instead
+        # of a wrong new one literally named after the official name; a
+        # genuinely custom identity (no distinct name/folder split) passes
+        # through unchanged.
+        for entry in self._track_entries:
+            if entry["name"] == name:
+                return entry["lmu_folder"]
+        return name
+
     def get_track_folder_name(self, track: Optional[str]) -> str | None:
         # Physical LMU folder identity (lmu_folder) - used to compute the
         # installation path. First-match-wins: file-derived patterns first,
@@ -67,9 +87,9 @@ class TrackManager:
         for pattern, lmu_folder in self.file_track_folder_patterns:
             if pattern.search(normalized):
                 return lmu_folder
-        for pattern, lmu_folder in self.custom_track_patterns:
+        for pattern, name in self.custom_track_patterns:
             if pattern.search(normalized):
-                return lmu_folder
+                return self._folder_for_known_name(name)
         return None
 
     def get_official_track_name(self, track: Optional[str]) -> str | None:
@@ -81,34 +101,43 @@ class TrackManager:
         for pattern, name in self.file_track_name_patterns:
             if pattern.search(normalized):
                 return name
-        for pattern, lmu_folder in self.custom_track_patterns:
-            # User "Correggi" mappings have no `name` distinct from
-            # lmu_folder_name - use that as the official value too.
+        for pattern, name in self.custom_track_patterns:
+            # A custom_track_patterns match already carries the official
+            # `name` the GUI's track dropdown offered (see
+            # get_known_track_names) - unlike get_track_folder_name, no
+            # translation to a physical folder is needed here.
             if pattern.search(normalized):
-                return lmu_folder
+                return name
         return None
 
-    def get_known_folder_names(self) -> list[str]:
-        # Sorted, de-duplicated lmu_folder values, for the GUI's "Correggi" <select>.
-        file_names = {t["lmu_folder"] for t in self._track_entries}
+    def get_known_track_names(self) -> list[str]:
+        # Sorted, de-duplicated `name` values, for the GUI's track dropdowns
+        # (Upload tab + the "Correggi" unmatched-setup dialog) - the app-wide
+        # official identity, not the physical lmu_folder (see the class
+        # docstring: they coincide today but are conceptually distinct).
+        file_names = {t["name"] for t in self._track_entries}
         custom_names = {m["name"] for m in settings_db.get_manual_mappings("track")}
         return sorted(file_names | custom_names)
 
-    def add_or_update_mapping(self, track: str, lmu_folder_name: str) -> None:
-        settings_db.upsert_manual_mapping("track", lmu_folder_name, track)
-        # Also register a self-matching pattern for the folder name itself, so
-        # picking lmu_folder_name back out of get_known_folder_names() (e.g.
-        # the Upload tab's Track dropdown) resolves to this same existing
-        # folder instead of creating a new "<folder> - HYMO" one. Skipped when
-        # it's already identical to `track`'s own pattern (nothing to add) or
-        # when lmu_folder_name already resolves on its own (a known
-        # mapping.json track, most commonly) - otherwise this would pollute
-        # that track's matcher with its own name as a spurious extra
-        # alternative (e.g. mapping "Nordschleife" onto the existing "Monza"
-        # would leave "Monza"'s matcher as "Nordschleife|Monza" instead of
-        # just "Nordschleife").
-        if track != lmu_folder_name and self.get_track_folder_name(lmu_folder_name) is None:
-            settings_db.upsert_manual_mapping("track", lmu_folder_name, lmu_folder_name)
+    def add_or_update_mapping(self, track: str, name: str) -> None:
+        # `name` is whatever the GUI's track dropdown offered (see
+        # get_known_track_names) - an official `name`, not necessarily the
+        # physical `lmu_folder`. get_track_folder_name's custom-pattern branch
+        # (via _folder_for_known_name) translates it back to the real folder
+        # at lookup time, so this can persist `name` as-is.
+        settings_db.upsert_manual_mapping("track", name, track)
+        # Also register a self-matching pattern for the name itself, so
+        # picking it back out of get_known_track_names() (e.g. the Upload
+        # tab's Track dropdown) resolves to this same existing mapping
+        # instead of creating a new "<name> - HYMO" one. Skipped when it's
+        # already identical to `track`'s own pattern (nothing to add) or when
+        # `name` already resolves on its own (a known mapping.json track,
+        # most commonly) - otherwise this would pollute that track's matcher
+        # with its own name as a spurious extra alternative (e.g. mapping
+        # "Nordschleife" onto the existing "Monza" would leave "Monza"'s
+        # matcher as "Nordschleife|Monza" instead of just "Nordschleife").
+        if track != name and self.get_track_folder_name(name) is None:
+            settings_db.upsert_manual_mapping("track", name, name)
 
     def refresh(self) -> None:
         # Rebuild from the now-updated file/DB. A plain attribute reassignment: safe

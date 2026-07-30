@@ -12,7 +12,7 @@ def test_guess_car_track_from_filename_searches_car_and_track_matchers():
     car_manager = MagicMock()
     car_manager.get_car_name.return_value = "Ferrari 499P"
     track_manager = MagicMock()
-    track_manager.get_track_folder_name.return_value = "Sebring"
+    track_manager.get_official_track_name.return_value = "Sebring"
 
     car, track = guess_car_track_from_filename("GO-FERRARI-499P-SEBRING.zip", car_manager, track_manager)
 
@@ -21,7 +21,7 @@ def test_guess_car_track_from_filename_searches_car_and_track_matchers():
     # patterns themselves are substring regexes, so no bespoke splitting of
     # car vs track is attempted.
     car_manager.get_car_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
-    track_manager.get_track_folder_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
+    track_manager.get_official_track_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
 
 
 def test_guess_car_track_from_filename_against_real_mapping_json():
@@ -44,7 +44,7 @@ def test_guess_car_track_from_filename_returns_none_when_unrecognized():
     car_manager = MagicMock()
     car_manager.get_car_name.return_value = None
     track_manager = MagicMock()
-    track_manager.get_track_folder_name.return_value = None
+    track_manager.get_official_track_name.return_value = None
 
     assert guess_car_track_from_filename("setup1.zip", car_manager, track_manager) == (None, None)
 

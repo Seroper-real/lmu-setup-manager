@@ -33,6 +33,15 @@
         {"name": "Toyota GR010", "class": "hypercar", "matcher": ["gr.*10"]},
         {"name": "Toyota TR010", "class": "hypercar", "matcher": ["tr.*10"]},
 
+        {"name": "Oreca 07 (ELMS)", "class": "lmp2 (elms)", "matcher": ["oreca.*07.*elms"]},
+        {"name": "Oreca 07", "class": "lmp2", "matcher": ["oreca.*07(?!.*elms)"]},
+
+        {"name": "ADESS AD25", "class": "lmp3", "matcher": ["adess", "ad25"]},
+        {"name": "Duqueine D09", "class": "lmp3", "matcher": ["duqueine"]},
+        {"name": "Ginetta G61-LT-P325 EVO", "class": "lmp3", "matcher": ["g61"]},
+        {"name": "Ligier JS P325", "class": "lmp3", "matcher": ["ligier", "js.*p325"]},
+
+
         {"name": "Aston Martin Vantage AMR", "class": "lmgt3", "matcher": ["vantage.*gt3"]},
         {"name": "BMW M4", "class": "lmgt3", "matcher": ["bmw.*m4", "m4.*gt3"]},
         {"name": "Corvette Z06", "class": "lmgt3", "matcher": ["z06"]},
@@ -47,14 +56,7 @@
         {"name": "Aston Martin Vantage", "class": "lmgte", "matcher": ["vantage.*gte"]},
         {"name": "Corvette C8.R", "class": "lmgte", "matcher": ["c8.*r"]},
         {"name": "Ferrari 488", "class": "lmgte", "matcher": ["488"]},
-        {"name": "Porsche 911", "class": "lmgte", "matcher": ["911.*rsr", "rsr.*19"]},
+        {"name": "Porsche 911", "class": "lmgte", "matcher": ["911.*rsr", "rsr.*19"]}
 
-        {"name": "Oreca 07", "class": "lmp2", "matcher": ["oreca.*07(?!.*elms)"]},
-        {"name": "Oreca 07 (ELMS)", "class": "lmp2 (elms)", "matcher": ["oreca.*07.*elms"]},
-
-        {"name": "ADESS AD25", "class": "lmp3", "matcher": ["adess", "ad25"]},
-        {"name": "Duqueine D09", "class": "lmp3", "matcher": ["duqueine"]},
-        {"name": "Ginetta G61-LT-P325 EVO", "class": "lmp3", "matcher": ["g61"]},
-        {"name": "Ligier JS P325", "class": "lmp3", "matcher": ["ligier", "js.*p325"]}
     ]
 }

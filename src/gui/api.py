@@ -201,14 +201,23 @@ class Api:
             key = s.matched_track_id if (s.track_found and s.matched_track_id) else s.track
             groups.setdefault(key, []).append(s)
 
-        grouped: list[dict[str, object]] = [
-            {
-                "track": track,
-                "trackFound": items[0].track_found,
-                "cars": self._group_by_car_and_type(items),
-            }
-            for track, items in sorted(groups.items())
-        ]
+        # The grouping key above (matched_track_id) is the physical LMU folder
+        # name, used only to collapse raw-name variants of the same track into
+        # one card - it must never reach the UI itself (e.g. "Daytonarc"
+        # instead of "Daytona Race"). Each item's own .track is already the
+        # officially resolved mapping.json `name` (see SetupManager.install_setup's
+        # safe_track), so the first item in the group carries the right label.
+        grouped: list[dict[str, object]] = sorted(
+            (
+                {
+                    "track": items[0].track,
+                    "trackFound": items[0].track_found,
+                    "cars": self._group_by_car_and_type(items),
+                }
+                for items in groups.values()
+            ),
+            key=lambda g: g["track"],
+        )
 
         return {"groups": grouped, "totalCount": len(filtered), "grandTotal": len(setups)}
 
@@ -232,6 +241,8 @@ class Api:
             by_car.setdefault(s.car, {}).setdefault(s.setup_type, []).append(s)
 
         car_manager = self._get_car_manager()
+        # Cars sort by class first (CarManager.get_class_rank's fixed order),
+        # alphabetically within the same class.
         return [
             {
                 "car": car,
@@ -241,7 +252,10 @@ class Api:
                     for setup_type in self._ordered_setup_types(by_type)
                 ],
             }
-            for car, by_type in sorted(by_car.items())
+            for car, by_type in sorted(
+                by_car.items(),
+                key=lambda entry: (car_manager.get_class_rank(entry[0]), entry[0]),
+            )
         ]
 
     def _serialize_installed(self, setup: "InstalledSetup") -> dict[str, object]:
@@ -349,9 +363,9 @@ class Api:
         self._settings_dirty = False
         return {"deletedCount": deleted_count}
 
-    def get_track_folder_options(self) -> list[str]:
+    def get_track_options(self) -> list[str]:
         from processing.track_manager import TrackManager
-        return TrackManager().get_known_folder_names()
+        return TrackManager().get_known_track_names()
 
     def get_car_options(self) -> list[dict[str, object]]:
         return self._get_car_manager().get_all_cars()
@@ -419,14 +433,14 @@ class Api:
             log.exception("Manual upload failed")
             return {"ok": False, "error": str(e), "authError": False}
 
-    def map_track(self, track: str, folder: str) -> dict[str, object]:
+    def map_track(self, track: str, name: str) -> dict[str, object]:
         """Persists one track correction from the end-of-run "unmatched
         setups" dialog (see map_car below for the car half of the same
         action)."""
         from processing.track_manager import TrackManager
 
         track_manager = TrackManager()
-        track_manager.add_or_update_mapping(track, folder)
+        track_manager.add_or_update_mapping(track, name)
         track_manager.refresh()
 
         return {}

@@ -173,6 +173,33 @@ def test_get_car_class_returns_none_for_missing_or_unrecognized_class(make_manag
     assert mgr.get_car_class(query) is None
 
 
+def test_get_class_rank_follows_the_fixed_class_order_regardless_of_file_order(make_manager):
+    # The fixed order is Hypercar, LMP2 (ELMS), LMP2, LMP3, LMGT3, LMGTE - the
+    # file below deliberately lists them in a different order, to prove the
+    # rank doesn't just mirror file position.
+    mgr = make_manager({
+        "cars": [
+            {"name": "GTE Car", "class": "lmgte", "matcher": ["gte"]},
+            {"name": "GT3 Car", "class": "lmgt3", "matcher": ["gt3"]},
+            {"name": "P3 Car", "class": "lmp3", "matcher": ["p3"]},
+            {"name": "P2 Car", "class": "lmp2", "matcher": ["p2"]},
+            {"name": "P2 ELMS Car", "class": "lmp2 (elms)", "matcher": ["p2elms"]},
+            {"name": "Hyper Car", "class": "hypercar", "matcher": ["hyper"]},
+        ],
+    })
+
+    assert mgr.get_class_rank("Hyper Car") == 0
+    assert mgr.get_class_rank("P2 ELMS Car") == 1
+    assert mgr.get_class_rank("P2 Car") == 2
+    assert mgr.get_class_rank("P3 Car") == 3
+    assert mgr.get_class_rank("GT3 Car") == 4
+    assert mgr.get_class_rank("GTE Car") == 5
+
+
+def test_get_class_rank_unknown_car_sorts_after_every_known_class(local_manager):
+    assert local_manager.get_class_rank("Unknown Car") > local_manager.get_class_rank("Ferrari 499P")
+
+
 def test_get_all_cars_preserves_mapping_json_order_and_includes_class(local_manager):
     assert local_manager.get_all_cars() == [
         {"name": "Ferrari 499P", "carClass": "HYPERCAR"},
