@@ -453,6 +453,24 @@ def test_get_track_folder_options_delegates_to_track_manager(api, mocker):
     assert api.get_track_folder_options() == ["Imola", "Spa"]
 
 
+def test_guess_manual_upload_identity_delegates_to_car_and_track_managers(api, managers):
+    managers.car_manager.return_value.get_car_name.return_value = "Ferrari 499P"
+    managers.track_manager.return_value.get_track_folder_name.return_value = "Sebring"
+
+    result = api.guess_manual_upload_identity("GO-FERRARI-499P-SEBRING.zip")
+
+    assert result == {"car": "Ferrari 499P", "track": "Sebring"}
+    managers.car_manager.return_value.get_car_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
+    managers.track_manager.return_value.get_track_folder_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
+
+
+def test_guess_manual_upload_identity_returns_none_values_when_unrecognized(api, managers):
+    managers.car_manager.return_value.get_car_name.return_value = None
+    managers.track_manager.return_value.get_track_folder_name.return_value = None
+
+    assert api.guess_manual_upload_identity("setup1.zip") == {"car": None, "track": None}
+
+
 def test_map_track_updates_and_refreshes(api, managers):
     tm_instance = managers.track_manager.return_value
 

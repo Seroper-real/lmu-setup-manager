@@ -48,8 +48,11 @@ class Setup:
         # see remote_filename. Never true for a real TrackTitan setup, so real
         # uploads are byte-for-byte unaffected.
         self.sandbox = sandbox
-        self._safe_track = sanitize_identity(self.track)
-        self._safe_car = sanitize_identity(self.car)
+        # Computed lazily (see safe_track/safe_car below): some catalog entries
+        # (e.g. bundles) have no track/car in their combo at all, and callers
+        # are expected to check is_bundle before ever reading these.
+        self._safe_track: Optional[str] = None
+        self._safe_car: Optional[str] = None
 
     @property
     def id(self) -> str:
@@ -64,15 +67,23 @@ class Setup:
         return self.data["setupCombos"][0]
     
     @property
-    def car(self) -> str:
-        return self.combo["car"]["name"]
-    
+    def car(self) -> Optional[str]:
+        # Some catalog entries (e.g. certain e-sports/event setups) omit the
+        # car from their combo entirely - None here, rather than a KeyError,
+        # is what lets callers fold this into their existing "not matched"
+        # skip path instead of crashing.
+        car = self.combo.get("car")
+        return car["name"] if car else None
+
     @property
-    def track(self) -> str:
-        return self.combo["track"]["name"]
+    def track(self) -> Optional[str]:
+        track = self.combo.get("track")
+        return track["name"] if track else None
     
     @property
     def safe_track(self) -> str:
+        if self._safe_track is None:
+            self._safe_track = sanitize_identity(self.track)
         return self._safe_track
 
     @safe_track.setter
@@ -89,6 +100,8 @@ class Setup:
         # zip filename - GO Setups read their car identity straight back out
         # of this same folder name, so keeping it space-preserving is what
         # makes a GO archive's car match TrackTitan's.
+        if self._safe_car is None:
+            self._safe_car = sanitize_identity(self.car)
         return self._safe_car
 
     @safe_car.setter

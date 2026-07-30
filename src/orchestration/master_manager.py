@@ -116,19 +116,31 @@ class MasterManager:
         log.info("#################")
         log.info(setup.title)
         log.info(f"  ID: {setup.id}")
+
+        # Checked before any car/track access: a bundle's combo may not carry a
+        # single track/car at all, so reading those first would crash instead
+        # of hitting this skip.
+        if setup.is_bundle:
+            log.info("Skipping bundle.")
+            return
+
         log.info(f"  Car: {setup.car}")
         log.info(f"  Track: {setup.track}")
         self._emit(ProgressEvent(ProgressKind.START, setup.title, meta=f"{setup.track} - {setup.car}"))
+
+        # Some catalog entries carry no car/track identity at all (e.g. certain
+        # e-sports/event setups) - there is no raw name for the user to map in
+        # this case, so this is skipped outright rather than surfacing a blank
+        # entry in the end-of-run correction dialog below.
+        if setup.car is None or setup.track is None:
+            log.warning(f"Setup missing car/track data, skipping publish: {setup.title}")
+            return
 
         # Resolve mapping.json's official name before anything below reads
         # setup.safe_car/safe_track: both _relocate_if_stale_path and _publish
         # build the Dropbox path from them.
         car_name = self.car_manager.get_car_name(setup.car)
         track_name = self.track_manager.get_official_track_name(setup.track)
-
-        if setup.is_bundle:
-            log.info("Skipping bundle.")
-            return
 
         # Unmatched car/track: ignored outright, never uploaded under a raw/
         # placeholder name - recorded for the end-of-run correction dialog

@@ -158,13 +158,25 @@ def run_full(
             log.info(f"#################")
             log.info(f"{setup.title}")
             log.info(f"  ID: {setup.id}")
+
+            # Checked before any car/track access: a bundle's combo may not
+            # carry a single track/car at all, so reading those first would
+            # crash instead of hitting this skip.
+            if setup.is_bundle:
+                log.info(f"Skipping bundle.")
+                continue  # Non scarichiamo i bundle
+
             log.info(f"  Car: {setup.car}")
             log.info(f"  Track: {setup.track}")
             _emit(ProgressEvent(ProgressKind.START, setup.title, meta=f"{setup.track} - {setup.car}"))
 
-            if setup.is_bundle:
-                log.info(f"Skipping bundle.")
-                continue  # Non scarichiamo i bundle
+            # Some catalog entries carry no car/track identity at all (e.g.
+            # certain e-sports/event setups) - there is no raw name for the
+            # user to map in this case, so this is skipped outright rather
+            # than surfacing a blank entry in the correction dialog below.
+            if setup.car is None or setup.track is None:
+                log.warning(f"Setup missing car/track data, skipping: {setup.title}")
+                continue
 
             # Unmatched car/track: ignored outright, never installed under a
             # placeholder "-HYMO" name - recorded for the end-of-run

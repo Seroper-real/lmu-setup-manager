@@ -13,7 +13,9 @@
         {"name": "Monza", "matcher": ["monza"], "lmu_folder": "Monza"},
         {"name": "Sebring", "matcher": ["sebr"], "lmu_folder": "Sebring"},
         {"name": "Silverstone", "matcher": ["silv"], "lmu_folder": "Silverstone"},
-        {"name": "Circuit De Barcelona", "matcher": ["barc"], "lmu_folder": "Circuit De Barcelona"}
+        {"name": "Circuit De Barcelona", "matcher": ["barc"], "lmu_folder": "Circuit De Barcelona"},
+        {"name": "Laguna Seca", "matcher": ["laguna|seca"], "lmu_folder": "Lagunaseca"},
+        {"name": "Daytona Race", "matcher": ["daytona|daytonarc"], "lmu_folder": "Daytonarc"}
     ],
     "cars": [
         {"name": "Alpine A424", "class": "hypercar", "matcher": ["a424"]},

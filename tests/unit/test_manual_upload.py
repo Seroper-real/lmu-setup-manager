@@ -6,6 +6,49 @@ from unittest.mock import MagicMock
 import pytest
 
 
+def test_guess_car_track_from_filename_searches_car_and_track_matchers():
+    from processing.manual_upload import guess_car_track_from_filename
+
+    car_manager = MagicMock()
+    car_manager.get_car_name.return_value = "Ferrari 499P"
+    track_manager = MagicMock()
+    track_manager.get_track_folder_name.return_value = "Sebring"
+
+    car, track = guess_car_track_from_filename("GO-FERRARI-499P-SEBRING.zip", car_manager, track_manager)
+
+    assert (car, track) == ("Ferrari 499P", "Sebring")
+    # Extension stripped, raw stem handed to both matchers unmodified - the
+    # patterns themselves are substring regexes, so no bespoke splitting of
+    # car vs track is attempted.
+    car_manager.get_car_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
+    track_manager.get_track_folder_name.assert_called_once_with("GO-FERRARI-499P-SEBRING")
+
+
+def test_guess_car_track_from_filename_against_real_mapping_json():
+    """End-to-end with the actual bundled mapping.json, matching the exact
+    naming convention this feature exists for."""
+    from processing.car_manager import CarManager
+    from processing.manual_upload import guess_car_track_from_filename
+    from processing.track_manager import TrackManager
+
+    car, track = guess_car_track_from_filename(
+        "GO-FERRARI-499P-SEBRING.zip", CarManager(), TrackManager()
+    )
+
+    assert (car, track) == ("Ferrari 499P", "Sebring")
+
+
+def test_guess_car_track_from_filename_returns_none_when_unrecognized():
+    from processing.manual_upload import guess_car_track_from_filename
+
+    car_manager = MagicMock()
+    car_manager.get_car_name.return_value = None
+    track_manager = MagicMock()
+    track_manager.get_track_folder_name.return_value = None
+
+    assert guess_car_track_from_filename("setup1.zip", car_manager, track_manager) == (None, None)
+
+
 def test_build_manual_setup_shapes_a_synthetic_setup():
     from processing.manual_upload import build_manual_setup
 

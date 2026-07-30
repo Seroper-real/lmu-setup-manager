@@ -18,6 +18,23 @@ log = logging.getLogger("TrackTitanDownloader")
 # user to log into - see gui.api.Api.tracktitan_fetch_tokens_start().
 TRACKTITAN_LOGIN_URL = "https://app.tracktitan.io"
 
+# requests' default "python-requests/x.x" User-Agent is a well-known automated-
+# client fingerprint; TrackTitan's API front end has been seen rejecting it
+# outright (417 Expectation Failed) even with otherwise-valid tokens. These
+# requests already carry a real, user-owned session's tokens (extracted via the
+# readme's bookmarklet) - mirroring the headers the actual app.tracktitan.io
+# frontend sends just keeps an already-authorized request from being fingerprinted
+# as a generic script.
+_BROWSER_HEADERS: dict[str, str] = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Origin": TRACKTITAN_LOGIN_URL,
+    "Referer": f"{TRACKTITAN_LOGIN_URL}/",
+}
+
 # Cognito cookie name suffixes, e.g.
 # "CognitoIdentityServiceProvider.<clientId>.<username>.accessToken" - the
 # client/username segments vary per account, so only the suffix is stable.
@@ -60,12 +77,14 @@ class TrackTitanClient:
 
     def get(self, path: str, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         url = f"{BASE_URL}{path}"
+        headers = {
+            **_BROWSER_HEADERS,
+            "Authorization": f"{ACCESS_TOKEN_LIST}",
+            "Accept": "application/json, text/plain, */*",
+            "x-consumer-id": f"{CONSUMER_ID}"
+        }
         try:
-            r = requests.get(url, params=params, timeout=NETWORK_TIMEOUT, headers={
-                "Authorization": f"{ACCESS_TOKEN_LIST}",
-                "Accept": "application/json, text/plain, */*",
-                "x-consumer-id": f"{CONSUMER_ID}"
-            })
+            r = requests.get(url, params=params, timeout=NETWORK_TIMEOUT, headers=headers)
         finally:
             self._mark_request()
         self._raise_for_status(r)
@@ -74,8 +93,8 @@ class TrackTitanClient:
     def download_link(self, setup_id: str) -> dict[str, Any]:
         url = f"{BASE_URL}/v1/user/{USER_ID}/setup/{setup_id}/download"
         headers = {
+            **_BROWSER_HEADERS,
             "accept": "application/json, text/plain, */*",
-            "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
             "authorization": f"{ACCESS_TOKEN_DOWNLOAD}",
             "x-consumer-id": f"{CONSUMER_ID}"
         }
@@ -90,7 +109,7 @@ class TrackTitanClient:
 
     def download(self, url: str) -> requests.Response:
         try:
-            response = requests.get(url, timeout=NETWORK_TIMEOUT)
+            response = requests.get(url, timeout=NETWORK_TIMEOUT, headers=_BROWSER_HEADERS)
         finally:
             self._mark_request()
         self._raise_for_status(response)

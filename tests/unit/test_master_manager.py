@@ -9,12 +9,14 @@ import pytest
 from core.progress import ProgressKind
 
 
-def _setup(id="id1", ts=2000, bundle=False, track="Spa", car="Porsche 963"):
+def _setup(id="id1", ts=2000, bundle=False, track="Spa", car="Porsche 963", combos=None):
     from domain.setup import Setup
+    if combos is None:
+        combos = [{"car": {"name": car}, "track": {"name": track}}]
     return Setup({
         "id": id,
         "title": "T",
-        "setupCombos": [{"car": {"name": car}, "track": {"name": track}}],
+        "setupCombos": combos,
         "hotlapLink": None,
         "lastUpdatedAt": ts,
         "isBundle": bundle,
@@ -189,6 +191,21 @@ def test_unmatched_setup_is_recorded_with_raw_track_and_car(mm):
     manager.run()
 
     assert manager.unmatched.serialize() == {"tracks": [], "cars": ["Mystery Car"]}
+
+
+def test_setup_missing_track_is_skipped_without_crashing_or_being_recorded(mm):
+    # Real-world case: some catalog entries (e-sports/event setups) carry a
+    # combo with a car but no track at all - there is no raw track name for
+    # the user to map, so this must be skipped outright rather than crashing
+    # or polluting the unmatched-correction dialog with a blank entry.
+    manager, dm, dbx, tmp = mm
+    _pages(dm, [_setup(id="id1", combos=[{"car": {"name": "Lexus RCF LMGT3"}}])])
+
+    manager.run()
+
+    dm.download.assert_not_called()
+    dbx.upload.assert_not_called()
+    assert manager.unmatched.serialize() is None
 
 
 def test_unmatched_setups_are_deduped_across_the_run(mm):
