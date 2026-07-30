@@ -5,14 +5,36 @@ import time
 import uuid
 import zipfile
 from pathlib import Path
+from typing import Optional
 
 from clients.protocols import DropboxClientProtocol
 from core.archive import METADATA_FILENAME, find_files_recursive, sha256_file, unzip_recursive
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, GO_SETUP_FILE_EXTENSIONS, SETUP_FILE_EXTENSIONS
 from domain.setup import Setup
+from processing.car_manager import CarManager
 from processing.setup_manager import SetupManager
+from processing.track_manager import TrackManager
 
 log = logging.getLogger("TrackTitanDownloader")
+
+
+def guess_car_track_from_filename(
+    file_name: str, car_manager: CarManager, track_manager: TrackManager
+) -> tuple[Optional[str], Optional[str]]:
+    """Best-effort (car, lmu_folder) guess for the Upload tab's dropdowns from
+    a picked/dropped file's name, e.g. "GO-FERRARI-499P-SEBRING.zip" ->
+    ("Ferrari 499P", "Sebring").
+
+    Reuses mapping.json's own car/track matchers (see CarManager.get_car_name,
+    TrackManager.get_track_folder_name): those are already substring regexes
+    meant to recognize a known name inside arbitrary raw text (TrackTitan's
+    own combo strings), so searching the same patterns against the raw
+    filename stem works without any bespoke parsing - no attempt is made to
+    split the name into car/track segments, since a car name can itself
+    contain the separators (spaces, hyphens) used between segments.
+    """
+    stem = Path(file_name).stem
+    return car_manager.get_car_name(stem), track_manager.get_track_folder_name(stem)
 
 
 def build_manual_setup(track: str, car: str) -> Setup:

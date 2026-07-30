@@ -62,7 +62,13 @@ class CarManager:
         custom_entries = [{"name": m["name"], "matcher": [m["matcher"]]} for m in settings_db.get_manual_mappings("car")]
         self.custom_car_patterns = compile_patterns(custom_entries, pattern_key="matcher", name_key="name")
 
-    def get_car_name(self, car: str) -> str | None:
+    def get_car_name(self, car: Optional[str]) -> str | None:
+        # Some TrackTitan catalog entries omit the car entirely (e.g. certain
+        # e-sports/event setups) - Setup.car surfaces that as None rather than
+        # raising, so this must treat it as "no match" instead of crashing on
+        # unicodedata.normalize(None).
+        if not car:
+            return None
         normalized = self._normalize_car(car)
         for pattern, name in self.car_patterns:
             if pattern.search(normalized):

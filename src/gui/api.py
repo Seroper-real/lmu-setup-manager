@@ -381,6 +381,18 @@ class Api:
         dest.write_bytes(base64.b64decode(data_base64))
         return str(dest)
 
+    def guess_manual_upload_identity(self, file_name: str) -> dict[str, Optional[str]]:
+        """Best-effort car/track pre-fill for the Upload tab's dropdowns, run
+        right after a file is picked/dropped - e.g. "GO-FERRARI-499P-SEBRING.zip"
+        pre-selects "Ferrari 499P"/"Sebring". Either value is None (dropdown
+        left blank) when mapping.json's matchers can't recognize that part of
+        the name; the user can always override both regardless."""
+        from processing.manual_upload import guess_car_track_from_filename
+        from processing.track_manager import TrackManager
+
+        car, track = guess_car_track_from_filename(file_name, self._get_car_manager(), TrackManager())
+        return {"car": car, "track": track}
+
     def upload_manual_setup(self, zip_path: str, setup_type: str, track: str, car: str) -> dict[str, object]:
         from core.errors import AuthError
         from processing.manual_upload import build_manual_setup, install_manual_setup_locally, upload_manual_setup_to_dropbox

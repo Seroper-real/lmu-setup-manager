@@ -76,9 +76,34 @@ def test_combo_returns_first_element():
     assert s.combo["car"]["name"] == "Ferrari 499P"
 
 
-def test_empty_combos_raises_on_init():
+def test_track_is_none_when_combo_omits_it():
+    # Real-world case: some catalog entries (e.g. e-sports/event setups) carry
+    # a combo with a car but no track at all.
+    s = _make(combos=[{"car": {"name": "Lexus RCF LMGT3"}}])
+    assert s.track is None
+    assert s.car == "Lexus RCF LMGT3"
+
+
+def test_car_is_none_when_combo_omits_it():
+    s = _make(combos=[{"track": {"name": "Daytona"}}])
+    assert s.car is None
+    assert s.track == "Daytona"
+
+
+def test_empty_combos_does_not_raise_on_init():
+    # Construction must survive a combo-less entry (e.g. a bundle) so a single
+    # malformed setup in an API page can't take down the whole page - callers
+    # are expected to check is_bundle before ever reading track/car.
+    s = _make(combos=[])
+    assert s.is_bundle is False
+
+
+def test_empty_combos_raises_on_track_or_car_access():
+    s = _make(combos=[])
     with pytest.raises(IndexError):
-        _make(combos=[])
+        s.track
+    with pytest.raises(IndexError):
+        s.car
 
 
 def test_safe_car_replaces_slash_and_hyphen_but_keeps_spaces():

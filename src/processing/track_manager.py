@@ -1,6 +1,7 @@
 import re
 import unicodedata
 import logging
+from typing import Optional
 from core.config import REMOTE_MAPPINGS_ENABLED, REMOTE_MAPPINGS_TIMEOUT, REMOTE_MAPPINGS_URL
 from core.utils import get_path
 from core import settings_db
@@ -51,11 +52,17 @@ class TrackManager:
         custom_entries = [{"name": m["name"], "matcher": [m["matcher"]]} for m in settings_db.get_manual_mappings("track")]
         self.custom_track_patterns = compile_patterns(custom_entries, pattern_key="matcher", name_key="name")
 
-    def get_track_folder_name(self, track: str) -> str | None:
+    def get_track_folder_name(self, track: Optional[str]) -> str | None:
         # Physical LMU folder identity (lmu_folder) - used to compute the
         # installation path. First-match-wins: file-derived patterns first,
         # then per-user DB customizations, then None (callers fall back to
         # the -HYMO suffix).
+        # Some TrackTitan catalog entries omit the track entirely (e.g.
+        # certain e-sports/event setups) - Setup.track surfaces that as None
+        # rather than raising, so this must treat it as "no match" instead of
+        # crashing on unicodedata.normalize(None).
+        if not track:
+            return None
         normalized = self._normalize_track(track)
         for pattern, lmu_folder in self.file_track_folder_patterns:
             if pattern.search(normalized):
@@ -65,9 +72,11 @@ class TrackManager:
                 return lmu_folder
         return None
 
-    def get_official_track_name(self, track: str) -> str | None:
+    def get_official_track_name(self, track: Optional[str]) -> str | None:
         # Official, app-wide track identity (name) - used to officialize
         # installed_setups.track. Same precedence as get_track_folder_name.
+        if not track:
+            return None
         normalized = self._normalize_track(track)
         for pattern, name in self.file_track_name_patterns:
             if pattern.search(normalized):

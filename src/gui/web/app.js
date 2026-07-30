@@ -903,12 +903,28 @@ async function ensureUploadOptions() {
 async function onPickSetupZip() {
   const picked = await api().pick_setup_zip_file();
   if (!picked) return;
-  state.manualUpload = { filePath: picked, fileName: picked.split(/[\\/]/).pop(), type: "GO", track: null, car: null };
+  const fileName = picked.split(/[\\/]/).pop();
+  state.manualUpload = { filePath: picked, fileName, type: "GO", track: null, car: null };
   state.uploadOpenDropdown = null;
   state.uploadDropdownSearch = {};
   state.uploadDropdownHighlight = {};
   await ensureUploadOptions();
   renderUploadView();
+  applyGuessedIdentity(fileName);
+}
+
+// Best-effort car/track pre-fill from the file name (e.g.
+// "GO-FERRARI-499P-SEBRING.zip" -> Ferrari 499P / Sebring), run after the
+// dropdowns are already rendered with empty selections so the user sees
+// them fill in rather than waiting on this round trip before anything shows.
+// Guarded on fileName still matching in case a second file was picked/dropped
+// before this resolved.
+async function applyGuessedIdentity(fileName) {
+  const guess = await api().guess_manual_upload_identity(fileName);
+  if (!guess || !state.manualUpload || state.manualUpload.fileName !== fileName) return;
+  if (guess.car) state.manualUpload.car = guess.car;
+  if (guess.track) state.manualUpload.track = guess.track;
+  if (guess.car || guess.track) renderUploadView();
 }
 
 // Base64-encodes an ArrayBuffer in chunks (avoids blowing the call stack on
@@ -941,6 +957,7 @@ async function onDropSetupZip(file) {
   state.uploadDropdownHighlight = {};
   await ensureUploadOptions();
   renderUploadView();
+  applyGuessedIdentity(file.name);
 }
 
 // The WebView2 shell's default behavior for a file dropped anywhere on the
