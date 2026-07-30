@@ -193,19 +193,44 @@ def test_unmatched_setup_is_recorded_with_raw_track_and_car(mm):
     assert manager.unmatched.serialize() == {"tracks": [], "cars": ["Mystery Car"]}
 
 
-def test_setup_missing_track_is_skipped_without_crashing_or_being_recorded(mm):
-    # Real-world case: some catalog entries (e-sports/event setups) carry a
-    # combo with a car but no track at all - there is no raw track name for
-    # the user to map, so this must be skipped outright rather than crashing
-    # or polluting the unmatched-correction dialog with a blank entry.
+def test_setup_missing_track_falls_back_to_title_for_matching(mm, mocker):
+    # Real-world case: TrackTitan's pagination API omits track (or car) from
+    # some catalog entries (e-sports/event setups) - the setup's own title is
+    # tried against mapping.json instead of skipping outright, the same
+    # fallback the Upload tab's guess_car_track_from_filename applies to a
+    # manually-uploaded archive's filename (see domain.setup.Setup.track).
     manager, dm, dbx, tmp = mm
-    _pages(dm, [_setup(id="id1", combos=[{"car": {"name": "Lexus RCF LMGT3"}}])])
+    manager.track_manager.get_official_track_name.side_effect = (
+        lambda track: "Spa" if track == "Lexus RCF LMGT3 @ Spa" else None
+    )
+    setup = _setup(id="id1", ts=2000, combos=[{"car": {"name": "Lexus RCF LMGT3"}}])
+    setup.data["title"] = "Lexus RCF LMGT3 @ Spa"
+    _pages(dm, [setup])
+    _downloadable(dm, tmp)
+    _fake_extraction(mocker, [_svm(tmp)])
+
+    manager.run()
+
+    manager.track_manager.get_official_track_name.assert_called_once_with("Lexus RCF LMGT3 @ Spa")
+    dbx.upload.assert_called_once()
+
+
+def test_setup_missing_track_recorded_as_unmatched_using_the_title(mm):
+    # When even the title fallback doesn't match anything in mapping.json,
+    # the title (not None) is what gets recorded for the correction dialog -
+    # it is the only raw text available for the user to build a manual
+    # mapping from.
+    manager, dm, dbx, tmp = mm
+    manager.track_manager.get_official_track_name.side_effect = lambda track: None
+    setup = _setup(id="id1", ts=2000, combos=[{"car": {"name": "Lexus RCF LMGT3"}}])
+    setup.data["title"] = "Lexus RCF LMGT3 Hotlap"
+    _pages(dm, [setup])
 
     manager.run()
 
     dm.download.assert_not_called()
     dbx.upload.assert_not_called()
-    assert manager.unmatched.serialize() is None
+    assert manager.unmatched.serialize() == {"tracks": ["Lexus RCF LMGT3 Hotlap"], "cars": []}
 
 
 def test_unmatched_setups_are_deduped_across_the_run(mm):

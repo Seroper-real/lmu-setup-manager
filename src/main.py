@@ -170,18 +170,14 @@ def run_full(
             log.info(f"  Track: {setup.track}")
             _emit(ProgressEvent(ProgressKind.START, setup.title, meta=f"{setup.track} - {setup.car}"))
 
-            # Some catalog entries carry no car/track identity at all (e.g.
-            # certain e-sports/event setups) - there is no raw name for the
-            # user to map in this case, so this is skipped outright rather
-            # than surfacing a blank entry in the correction dialog below.
-            if setup.car is None or setup.track is None:
-                log.warning(f"Setup missing car/track data, skipping: {setup.title}")
-                continue
-
             # Unmatched car/track: ignored outright, never installed under a
             # placeholder "-HYMO" name - recorded for the end-of-run
             # correction dialog instead. Checked before the download, since
             # car/track are already known from the TrackTitan API response.
+            # setup.car/setup.track already fall back to the setup's title
+            # when TrackTitan's pagination API omits the field, so a missing
+            # field gets the same best-effort match attempt as a present one
+            # instead of skipping outright (see domain.setup.Setup.car/track).
             car_name = car_manager.get_car_name(setup.car)
             track_name = track_manager.get_official_track_name(setup.track)
             if car_name is None or track_name is None:

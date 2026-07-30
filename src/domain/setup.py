@@ -69,17 +69,22 @@ class Setup:
     @property
     def car(self) -> Optional[str]:
         # Some catalog entries (e.g. certain e-sports/event setups) omit the
-        # car from their combo entirely - None here, rather than a KeyError,
-        # is what lets callers fold this into their existing "not matched"
-        # skip path instead of crashing.
+        # car from their combo entirely - TrackTitan's pagination API is known
+        # to do this. Falling back to the setup's own title gives callers'
+        # existing mapping.json matching (CarManager.get_car_name) a
+        # best-effort chance at the car instead of being handed None and
+        # skipping outright - the same fallback
+        # processing.manual_upload.guess_car_track_from_filename applies to a
+        # manually-uploaded archive's filename.
         car = self.combo.get("car")
-        return car["name"] if car else None
+        return car["name"] if car else self.title
 
     @property
     def track(self) -> Optional[str]:
+        # See car above: same title fallback when the combo omits the track.
         track = self.combo.get("track")
-        return track["name"] if track else None
-    
+        return track["name"] if track else self.title
+
     @property
     def safe_track(self) -> str:
         if self._safe_track is None:

@@ -76,17 +76,19 @@ def test_combo_returns_first_element():
     assert s.combo["car"]["name"] == "Ferrari 499P"
 
 
-def test_track_is_none_when_combo_omits_it():
-    # Real-world case: some catalog entries (e.g. e-sports/event setups) carry
-    # a combo with a car but no track at all.
-    s = _make(combos=[{"car": {"name": "Lexus RCF LMGT3"}}])
-    assert s.track is None
+def test_track_falls_back_to_title_when_combo_omits_it():
+    # Real-world case: TrackTitan's pagination API omits track (or car) from
+    # some catalog entries (e.g. e-sports/event setups) - falling back to the
+    # title gives callers' mapping.json matching a raw name to try instead of
+    # None, which used to make the setup skip outright.
+    s = _make(title="Lexus RCF LMGT3 @ Sebring", combos=[{"car": {"name": "Lexus RCF LMGT3"}}])
+    assert s.track == "Lexus RCF LMGT3 @ Sebring"
     assert s.car == "Lexus RCF LMGT3"
 
 
-def test_car_is_none_when_combo_omits_it():
-    s = _make(combos=[{"track": {"name": "Daytona"}}])
-    assert s.car is None
+def test_car_falls_back_to_title_when_combo_omits_it():
+    s = _make(title="Porsche 963 @ Daytona", combos=[{"track": {"name": "Daytona"}}])
+    assert s.car == "Porsche 963 @ Daytona"
     assert s.track == "Daytona"
 
 

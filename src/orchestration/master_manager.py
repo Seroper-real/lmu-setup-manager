@@ -128,17 +128,13 @@ class MasterManager:
         log.info(f"  Track: {setup.track}")
         self._emit(ProgressEvent(ProgressKind.START, setup.title, meta=f"{setup.track} - {setup.car}"))
 
-        # Some catalog entries carry no car/track identity at all (e.g. certain
-        # e-sports/event setups) - there is no raw name for the user to map in
-        # this case, so this is skipped outright rather than surfacing a blank
-        # entry in the end-of-run correction dialog below.
-        if setup.car is None or setup.track is None:
-            log.warning(f"Setup missing car/track data, skipping publish: {setup.title}")
-            return
-
         # Resolve mapping.json's official name before anything below reads
         # setup.safe_car/safe_track: both _relocate_if_stale_path and _publish
-        # build the Dropbox path from them.
+        # build the Dropbox path from them. setup.car/setup.track already fall
+        # back to the setup's title when TrackTitan's pagination API omits the
+        # field, so a missing field gets the same best-effort match attempt as
+        # a present one instead of skipping outright (see
+        # domain.setup.Setup.car/track).
         car_name = self.car_manager.get_car_name(setup.car)
         track_name = self.track_manager.get_official_track_name(setup.track)
 
