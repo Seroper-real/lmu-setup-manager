@@ -69,21 +69,22 @@ class Setup:
     @property
     def car(self) -> Optional[str]:
         # Some catalog entries (e.g. certain e-sports/event setups) omit the
-        # car from their combo entirely - TrackTitan's pagination API is known
-        # to do this. Falling back to the setup's own title gives callers'
-        # existing mapping.json matching (CarManager.get_car_name) a
-        # best-effort chance at the car instead of being handed None and
-        # skipping outright - the same fallback
+        # car from their combo entirely, or include one with no "name" -
+        # TrackTitan's pagination API is known to do both. Falling back to the
+        # setup's own title gives callers' existing mapping.json matching
+        # (CarManager.get_car_name) a best-effort chance at the car instead of
+        # being handed None and skipping outright - the same fallback
         # processing.manual_upload.guess_car_track_from_filename applies to a
         # manually-uploaded archive's filename.
-        car = self.combo.get("car")
-        return car["name"] if car else self.title
+        car = self.combo.get("car") or {}
+        return car.get("name") or self.title
 
     @property
     def track(self) -> Optional[str]:
-        # See car above: same title fallback when the combo omits the track.
-        track = self.combo.get("track")
-        return track["name"] if track else self.title
+        # See car above: same title fallback when the combo omits the track,
+        # or has one with no "name" (TrackTitan has been seen sending both).
+        track = self.combo.get("track") or {}
+        return track.get("name") or self.title
 
     @property
     def safe_track(self) -> str:
@@ -151,7 +152,7 @@ class Setup:
 
     @property
     def hotlap_link(self) -> Optional[str]:
-        return self.data["hotlapLink"]
+        return self.data.get("hotlapLink")
     
     @property
     def last_updated(self) -> int:

@@ -61,6 +61,20 @@ def test_hotlap_link_reflects_the_data(hotlap):
     assert _make(hotlap=hotlap).hotlap_link == hotlap
 
 
+def test_hotlap_link_defaults_to_none_when_key_is_missing():
+    # Real-world case: some TrackTitan API entries omit hotlapLink entirely
+    # (not even null) - packaged verbatim into .metadata.json by MASTER, so
+    # SLAVE must not raise a KeyError rebuilding the Setup from it.
+    s = Setup({
+        "id": "abc-123",
+        "title": "Test Setup",
+        "setupCombos": [{"car": {"name": "Ferrari 499P"}, "track": {"name": "Le Mans"}}],
+        "lastUpdatedAt": 1000,
+        "isBundle": False,
+    })
+    assert s.hotlap_link is None
+
+
 def test_last_updated():
     assert _make(last_updated=9999).last_updated == 9999
 
@@ -90,6 +104,19 @@ def test_car_falls_back_to_title_when_combo_omits_it():
     s = _make(title="Porsche 963 @ Daytona", combos=[{"track": {"name": "Daytona"}}])
     assert s.car == "Porsche 963 @ Daytona"
     assert s.track == "Daytona"
+
+
+def test_car_falls_back_to_title_when_present_but_missing_name():
+    # Same real-world flakiness as the combo-omits-car case above, but with an
+    # empty car object instead of a missing key entirely - direct ["name"]
+    # indexing used to raise KeyError here.
+    s = _make(title="Lexus RCF LMGT3 @ Sebring", combos=[{"car": {}, "track": {"name": "Sebring"}}])
+    assert s.car == "Lexus RCF LMGT3 @ Sebring"
+
+
+def test_track_falls_back_to_title_when_present_but_missing_name():
+    s = _make(title="Porsche 963 @ Daytona", combos=[{"car": {"name": "Porsche 963"}, "track": {}}])
+    assert s.track == "Porsche 963 @ Daytona"
 
 
 def test_empty_combos_does_not_raise_on_init():
