@@ -241,6 +241,16 @@ def test_install_setup_matched_returns_true(sm, sample_setup, install_setup_env)
     assert sm.install_setup(zip_path, sample_setup) is True
 
 
+def test_install_setup_returns_false_when_archive_has_no_recognized_files(sm, sample_setup, install_setup_env):
+    # Car/track both resolve, but the archive holds nothing with a recognized
+    # extension (sm fixture: SETUP_FILE_EXTENSIONS == {".svm"}). Nothing is
+    # installed, so the return must be falsy - install_manual_setup_locally
+    # relies on this to surface a failed manual upload.
+    zip_path = install_setup_env({"readme.txt": b"not a setup", "telemetry.ld": b"x"})
+    assert sm.install_setup(zip_path, sample_setup) is False
+    assert sm.database.fetch_installed_setup(sample_setup.id) is None
+
+
 def test_install_setup_unmatched_deletes_download_when_clean_download_enabled(
     sm, sample_setup, install_setup_env, mocker,
 ):

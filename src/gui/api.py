@@ -658,6 +658,11 @@ class Api:
         # drop the cached instance so the next call rebuilds it against the
         # reloaded processing.car_manager module and current config.
         self._car_manager = None
+        # Same reason for the process-lifetime remote-mapping fetch cache: this
+        # is the only place it is invalidated, so an explicit Settings change to
+        # remote_mappings.* takes effect without an app restart.
+        from processing.catalog_loader import invalidate_remote_catalog_cache
+        invalidate_remote_catalog_cache()
 
         import main
         main.apply_log_level(config.LOG_LEVEL)

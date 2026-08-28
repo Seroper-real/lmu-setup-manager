@@ -105,6 +105,19 @@ def _isolate_settings_db(tmp_path, monkeypatch):
     monkeypatch.setattr(settings_db, "SETTINGS_DB_PATH", tmp_path / "settings.db")
 
 
+@pytest.fixture(autouse=True)
+def _reset_remote_catalog_cache():
+    """catalog_loader caches a successful remote-mapping fetch for the whole
+    process. Without a reset between tests, the first test that lets a real (or
+    mocked-success) fetch through would freeze that payload for every later
+    test - including the ones asserting on requests.get call counts / offline
+    fallback in test_track_manager.py and test_car_manager.py."""
+    import processing.catalog_loader as cl
+    cl.invalidate_remote_catalog_cache()
+    yield
+    cl.invalidate_remote_catalog_cache()
+
+
 @pytest.fixture
 def in_memory_db():
     """SetupDb su SQLite :memory: — nessun file su disco, nessuna dipendenza da DB_PATH."""

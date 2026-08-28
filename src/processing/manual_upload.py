@@ -90,10 +90,19 @@ def install_manual_setup_locally(
     staged_path = Path(DOWNLOAD_PATH) / f"manual-{setup.id}{Path(zip_path).suffix}"
     shutil.copy2(zip_path, staged_path)
     sha256 = sha256_file(staged_path)
-    setup_manager.install_setup(
+    installed = setup_manager.install_setup(
         staged_path, setup, extensions=_extensions_for(setup_type), setup_type=setup_type,
         sha256=sha256,
     )
+    # install_setup() silently no-ops (returns False) when the track/car don't
+    # resolve or the archive held no recognized setup file - without this the
+    # Upload tab would report success while installing nothing (see
+    # Api.upload_manual_setup, which turns this into {"ok": False, "error": ...}).
+    if not installed:
+        raise ValueError(
+            f"Setup non installato: traccia o auto non riconosciute, o nessun file "
+            f"setup valido nell'archivio ({setup.track} - {setup.car})."
+        )
     log.info(f"Manually installed setup: {setup.car} - {setup.track} ({setup_type})")
 
 

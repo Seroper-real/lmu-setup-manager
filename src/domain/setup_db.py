@@ -48,7 +48,16 @@ class InstalledSetup:
     
 class SetupDb:
     def __init__(self):
-        self.conn = sqlite3.connect(DB_PATH)
+        # WAL + a real busy_timeout so a manual upload's own SetupDb() doesn't
+        # error out with "database is locked" (or stack default 5s waits per
+        # statement) when it overlaps a still-running - or not-yet-GC'd - sync
+        # connection on the daemon worker thread. WAL lets a reader and a writer
+        # proceed at once; busy_timeout makes a genuine writer/writer clash wait
+        # once instead of raising. The `timeout` arg is the same wait applied to
+        # acquiring the connection-level lock.
+        self.conn = sqlite3.connect(DB_PATH, timeout=30)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.create_tables()
 
 

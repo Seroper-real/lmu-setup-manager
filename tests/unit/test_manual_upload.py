@@ -38,6 +38,22 @@ def test_guess_car_track_from_filename_against_real_mapping_json():
     assert (car, track) == ("Ferrari 499P", "Sebring")
 
 
+def test_guess_car_track_resolves_daytona_from_the_dtn_abbreviation(mocker):
+    """The reported case: a GO archive named '...LMGT3 DTN.zip'. 'dtn' is a
+    matcher alias for Daytona in the bundled mapping.json."""
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
+    mocker.patch("processing.car_manager.REMOTE_MAPPINGS_ENABLED", False)
+    from processing.car_manager import CarManager
+    from processing.manual_upload import guess_car_track_from_filename
+    from processing.track_manager import TrackManager
+
+    car, track = guess_car_track_from_filename(
+        "GO V1.4 992GT3 LMGT3 DTN.zip", CarManager(), TrackManager()
+    )
+
+    assert (car, track) == ("Porsche 992", "Daytona Race")
+
+
 def test_guess_car_track_from_filename_returns_none_when_unrecognized():
     from processing.manual_upload import guess_car_track_from_filename
 
@@ -223,6 +239,27 @@ def test_install_manual_setup_locally_updates_a_previous_manual_upload_for_the_s
         "SELECT COUNT(*) FROM installed_setups WHERE car='Porsche 963' AND track='Spa' AND setup_type='HYMO'"
     )
     assert cur.fetchone()[0] == 1
+
+
+def test_install_manual_setup_locally_raises_when_nothing_was_installed(sm, dl_path, tmp_path, mocker):
+    """install_setup() no-ops (returns False) when the car/track don't resolve.
+    The manual-upload path must turn that into an error, not a silent success -
+    Api.upload_manual_setup then surfaces it as {"ok": False, "error": ...}."""
+    from processing.manual_upload import build_manual_setup, install_manual_setup_locally
+
+    def fake_extract(archive, outdir, verbosity):
+        Path(outdir).mkdir(parents=True, exist_ok=True)
+        (Path(outdir) / "setup.svm").write_bytes(b"data")
+
+    mocker.patch("core.archive.patoolib.extract_archive", side_effect=fake_extract)
+    sm.car_manager.get_car_name.return_value = None  # unmatched -> install_setup returns False
+
+    original = tmp_path / "go-setup.zip"
+    original.write_bytes(b"zip")
+    setup = build_manual_setup("Spa", "Porsche 963")
+
+    with pytest.raises(ValueError, match="non installato"):
+        install_manual_setup_locally(sm, original, setup, "GO")
 
 
 def test_install_manual_setup_locally_keeps_hymo_and_go_as_separate_rows(sm, dl_path, tmp_path, mocker):

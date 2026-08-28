@@ -2,6 +2,21 @@ import pytest
 from domain.setup_db import InstalledSetup
 
 
+def test_setupdb_opens_in_wal_mode_with_a_busy_timeout(tmp_path, mocker):
+    """WAL + busy_timeout let a manual upload's own SetupDb() coexist with a
+    still-running sync connection on the worker thread instead of failing with
+    'database is locked'."""
+    mocker.patch("domain.setup_db.DB_PATH", tmp_path / "wal.db")
+    from domain.setup_db import SetupDb
+
+    db = SetupDb()
+    try:
+        assert db.conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert db.conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+    finally:
+        db.conn.close()
+
+
 def _setup(id="s1", track="Spa", car="Ferrari", last_updated=1000):
     from domain.setup import Setup
     return Setup({

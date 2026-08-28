@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import threading
 from pathlib import Path
 from typing import Callable, Optional, TypeVar
 
@@ -9,6 +10,22 @@ import requests
 log = logging.getLogger("TrackTitanDownloader")
 
 T = TypeVar("T")
+
+# Process-lifetime cache of a successful remote-mapping fetch, keyed by URL.
+# The remote mirror is versionless and only ever changes on a repo push, so
+# fetching it once per process (not once per TrackManager()/CarManager()
+# construction - which the GUI does dozens of times, each a blocking 5s-timeout
+# requests.get) is enough. A *failed* fetch is never stored: the caller falls
+# back to the bundled local file and the next construction retries, until one
+# succeeds and freezes the result until the app is restarted. Cleared only by
+# invalidate_remote_catalog_cache() (an explicit Settings save / factory reset).
+_remote_cache: dict[str, dict] = {}
+_remote_cache_lock = threading.Lock()
+
+
+def invalidate_remote_catalog_cache() -> None:
+    with _remote_cache_lock:
+        _remote_cache.clear()
 
 
 def load_local_json(path: Path) -> Optional[dict]:
@@ -19,13 +36,22 @@ def load_local_json(path: Path) -> Optional[dict]:
 
 
 def load_remote_json(url: str, timeout: float, label: str) -> Optional[dict]:
+    with _remote_cache_lock:
+        cached = _remote_cache.get(url)
+    if cached is not None:
+        return cached
+
     try:
         response = requests.get(url, timeout=timeout)
         response.raise_for_status()
-        return response.json()
+        value = response.json()
     except Exception as e:
         log.error(f"Cannot download {label} file from Github. Error: {e}")
         return None
+
+    with _remote_cache_lock:
+        _remote_cache[url] = value
+    return value
 
 
 def load_catalog_with_fallback(

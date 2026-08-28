@@ -45,14 +45,18 @@ class SetupManager:
         setup_type: str = "HYMO",
         sha256: Optional[str] = None,
     ) -> bool:
-        """Returns False (without touching the DB or the LMU folder) when the
-        setup's car or track doesn't resolve against mapping.json + the
-        manual_mapping fallback - an unmatched setup is ignored outright, not
-        installed under a placeholder "-HYMO"/"-GO" name. This is the
-        authoritative, last-resort check: callers upstream (run_full,
+        """Returns False when nothing was installed: either the setup's car or
+        track doesn't resolve against mapping.json + the manual_mapping fallback
+        (an unmatched setup is ignored outright, not installed under a
+        placeholder "-HYMO"/"-GO" name), or the archive held no file with a
+        recognized extension. Returns True only when at least one setup file
+        actually landed in the LMU folder. The car/track check here is the
+        authoritative, last-resort one: callers upstream (run_full,
         MasterManager, SlaveManager) also pre-check for efficiency (so an
         unmatched setup is never even downloaded when its identity is known
-        ahead of time), but this is what guarantees the invariant regardless."""
+        ahead of time), but this is what guarantees the invariant regardless.
+        run_full/SlaveManager ignore the return value; install_manual_setup_locally
+        relies on it to surface a failed manual upload instead of reporting success."""
         setup_installation_dir = self._calculate_setup_installation_dir(setup.track)
         car_name = self.car_manager.get_car_name(setup.car)
         if setup_installation_dir is None or car_name is None:
@@ -79,7 +83,7 @@ class SetupManager:
                 setup_type=setup_type, sha256=sha256,
             )
         self._cleanup_temp(downloaded_path,extraction_path,installed)
-        return True
+        return installed
 
     def _unzip_recursive(self, zip_path: str | Path, dest_dir: str | Path) -> None:
         unzip_recursive(zip_path, dest_dir)

@@ -296,3 +296,25 @@ def test_neither_file_nor_db_match_returns_none(local_manager):
     local_manager.refresh()
 
     assert local_manager.get_track_folder_name("Unknown Circuit") is None
+
+
+# --- real bundled config/mapping.json ---------------------------------------
+
+
+@pytest.fixture
+def bundled_manager(mocker):
+    """TrackManager against the real repo config/mapping.json, remote disabled."""
+    mocker.patch("processing.track_manager.REMOTE_MAPPINGS_ENABLED", False)
+    from processing.track_manager import TrackManager
+    return TrackManager()
+
+
+@pytest.mark.parametrize("raw", [
+    "Daytona",
+    "Daytonarc",                       # the physical LMU folder / GO pack inner folder
+    "GO V1.4 992GT3 LMGT3 DTN",        # abbreviated GO archive stem - the reported case
+    "dtn",
+])
+def test_daytona_resolves_including_the_dtn_abbreviation(bundled_manager, raw):
+    assert bundled_manager.get_official_track_name(raw) == "Daytona Race"
+    assert bundled_manager.get_track_folder_name(raw) == "Daytonarc"
