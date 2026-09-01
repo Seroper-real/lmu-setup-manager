@@ -1,4 +1,7 @@
 {
+    "conf": {
+        "tracktitan_login_url": "https://app.tracktitan.io/login"
+    },
     "tracks": [
         {"name": "Qatar", "matcher": ["losail|lusail|qatar"], "lmu_folder": "Qatar"},
         {"name": "Imola", "matcher": ["imola"], "lmu_folder": "Imola"},

@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -88,3 +89,63 @@ def test_cache_is_keyed_by_url(mocker):
     assert a == {"url": "https://example.test/a.json"}
     assert b == {"url": "https://example.test/b.json"}
     assert get.call_count == 2
+
+
+# ----- load_tracktitan_login_url ---------------------------------------------
+
+def _write_mapping(tmp_path, payload):
+    path = tmp_path / "mapping.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_login_url_read_from_local_file_when_remote_disabled(tmp_path):
+    local = _write_mapping(tmp_path, {"conf": {"tracktitan_login_url": "https://local.test/login"}})
+
+    result = cl.load_tracktitan_login_url(local, False, "https://example.test/m.json", 5)
+
+    assert result == "https://local.test/login"
+
+
+def test_login_url_remote_wins_when_reachable(tmp_path, mocker):
+    local = _write_mapping(tmp_path, {"conf": {"tracktitan_login_url": "https://local.test/login"}})
+    mocker.patch(
+        "processing.catalog_loader.requests.get",
+        return_value=_ok_response({"conf": {"tracktitan_login_url": "https://remote.test/login"}}),
+    )
+
+    result = cl.load_tracktitan_login_url(local, True, "https://example.test/m.json", 5)
+
+    assert result == "https://remote.test/login"
+
+
+def test_login_url_falls_back_to_local_when_remote_lacks_conf(tmp_path, mocker):
+    local = _write_mapping(tmp_path, {"conf": {"tracktitan_login_url": "https://local.test/login"}})
+    mocker.patch(
+        "processing.catalog_loader.requests.get",
+        return_value=_ok_response({"tracks": []}),  # older mirror, no "conf"
+    )
+
+    result = cl.load_tracktitan_login_url(local, True, "https://example.test/m.json", 5)
+
+    assert result == "https://local.test/login"
+
+
+def test_login_url_falls_back_to_default_when_everything_is_unusable(tmp_path, mocker):
+    local = _write_mapping(tmp_path, {"tracks": []})  # local also missing "conf"
+    mocker.patch(
+        "processing.catalog_loader.requests.get",
+        side_effect=ConnectionError("offline"),
+    )
+
+    result = cl.load_tracktitan_login_url(local, True, "https://example.test/m.json", 5)
+
+    assert result == cl.DEFAULT_TRACKTITAN_LOGIN_URL
+
+
+def test_login_url_rejects_blank_value(tmp_path):
+    local = _write_mapping(tmp_path, {"conf": {"tracktitan_login_url": "   "}})
+
+    result = cl.load_tracktitan_login_url(local, False, "https://example.test/m.json", 5)
+
+    assert result == cl.DEFAULT_TRACKTITAN_LOGIN_URL

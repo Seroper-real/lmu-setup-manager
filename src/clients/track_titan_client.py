@@ -14,9 +14,12 @@ from core.errors import AuthError
 
 log = logging.getLogger("TrackTitanDownloader")
 
-# The page the GUI's automatic token-fetch flow opens in its own window for the
-# user to log into - see gui.api.Api.tracktitan_fetch_tokens_start().
-TRACKTITAN_LOGIN_URL = "https://app.tracktitan.io"
+# The TrackTitan web app's origin, used only for the Origin/Referer headers
+# below. The page the GUI's automatic token-fetch flow opens for the user to log
+# into is no longer a constant here: it lives in config/mapping.json's "conf"
+# section (resolved by processing.catalog_loader.load_tracktitan_login_url), so
+# it can be corrected via the remote mirror without an app release.
+TRACKTITAN_APP_ORIGIN = "https://app.tracktitan.io"
 
 # requests' default "python-requests/x.x" User-Agent is a well-known automated-
 # client fingerprint; TrackTitan's API front end has been seen rejecting it
@@ -31,8 +34,8 @@ _BROWSER_HEADERS: dict[str, str] = {
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Origin": TRACKTITAN_LOGIN_URL,
-    "Referer": f"{TRACKTITAN_LOGIN_URL}/",
+    "Origin": TRACKTITAN_APP_ORIGIN,
+    "Referer": f"{TRACKTITAN_APP_ORIGIN}/",
 }
 
 # Cognito cookie name suffixes, e.g.

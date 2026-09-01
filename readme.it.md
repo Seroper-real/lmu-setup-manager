@@ -249,7 +249,7 @@ curl -u APP_KEY:APP_SECRET \
 
 Serve solo se **Ottieni automaticamente** non funziona.
 
-1. Effettua il login su https://app.tracktitan.io nel tuo browser.
+1. Effettua il login su https://app.tracktitan.io/login nel tuo browser.
 2. Apri gli strumenti per sviluppatori (`F12`, oppure `Cmd + Option + I` su macOS) e vai nella tab **Console**.
 3. Incolla questa singola riga e premi Invio:
 

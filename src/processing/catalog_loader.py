@@ -88,6 +88,37 @@ def load_catalog_with_fallback(
     return process_fn(local_json)
 
 
+# The GUI's automatic token-fetch flow opens this page in its own window for the
+# user to log into (see gui.api.Api.tracktitan_fetch_tokens_start). It lives in
+# config/mapping.json's "conf" section so it can be corrected via the remote
+# mirror without an app release; this is only the offline/malformed fallback.
+DEFAULT_TRACKTITAN_LOGIN_URL = "https://app.tracktitan.io/login"
+
+
+def load_tracktitan_login_url(
+    local_path: Path, remote_enabled: bool, remote_url: str, remote_timeout: float
+) -> str:
+    """Resolve config/mapping.json's conf.tracktitan_login_url with the same
+    remote->local precedence used for the track/car catalogs. An older remote
+    mirror without the "conf" key makes _process raise, so load_catalog_with_fallback
+    falls back to the bundled local file (which does carry it); a broken local
+    file too falls back to DEFAULT_TRACKTITAN_LOGIN_URL rather than crashing the
+    token-fetch flow."""
+    def _process(data: dict) -> str:
+        url = data["conf"]["tracktitan_login_url"]
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("conf.tracktitan_login_url missing or empty")
+        return url.strip()
+
+    try:
+        return load_catalog_with_fallback(
+            local_path, remote_enabled, remote_url, remote_timeout, "mapping", _process
+        )
+    except Exception as e:
+        log.error(f"Cannot resolve TrackTitan login URL from mapping, using default. Error: {e}")
+        return DEFAULT_TRACKTITAN_LOGIN_URL
+
+
 def compile_patterns(entries: list[dict], *, pattern_key: str, name_key: str) -> list[tuple[re.Pattern[str], str]]:
     """Turn a list of {name_key: str, pattern_key: [regex, ...]} dicts into a
     flat list of (compiled_pattern, name) pairs, order preserved from

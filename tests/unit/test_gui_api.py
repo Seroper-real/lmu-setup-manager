@@ -1273,7 +1273,7 @@ def test_tracktitan_fetch_tokens_start_opens_a_window_and_starts_polling(api, mo
     api._tt_thread.join(timeout=2)
 
     assert result == {"started": True}
-    assert create_window.call_args.kwargs["url"] == "https://app.tracktitan.io"
+    assert create_window.call_args.kwargs["url"] == "https://app.tracktitan.io/login"
     assert api._tt_window is child
     run_fetch.assert_called_once()
     assert run_fetch.call_args.args[0] is child

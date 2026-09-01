@@ -731,7 +731,19 @@ class Api:
     _TT_TIMEOUT_SECONDS = 300.0
 
     def tracktitan_fetch_tokens_start(self) -> dict[str, object]:
-        from clients.track_titan_client import TRACKTITAN_LOGIN_URL
+        from core.config import REMOTE_MAPPINGS_ENABLED, REMOTE_MAPPINGS_TIMEOUT, REMOTE_MAPPINGS_URL
+        from core.utils import get_path
+        from processing.catalog_loader import load_tracktitan_login_url
+
+        # Resolved here (not at import) so a remote-mirror correction to the
+        # login URL takes effect without an app restart - _reload_config()
+        # already drops the remote-mapping fetch cache on a settings save.
+        login_url = load_tracktitan_login_url(
+            get_path("config/mapping.json"),
+            REMOTE_MAPPINGS_ENABLED,
+            REMOTE_MAPPINGS_URL,
+            REMOTE_MAPPINGS_TIMEOUT,
+        )
 
         with self._tt_lock:
             if self._tt_thread is not None and self._tt_thread.is_alive():
@@ -741,7 +753,7 @@ class Api:
             self._tt_cancel_event = cancel_event
             child = webview.create_window(
                 title="TrackTitan Login",
-                url=TRACKTITAN_LOGIN_URL,
+                url=login_url,
                 width=480,
                 height=760,
                 on_top=True,
