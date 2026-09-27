@@ -18,6 +18,11 @@ def _ok(json_data=None):
     return m
 
 
+def _download_link_ok(url="x"):
+    # v2's response envelope: the signed URL lives at data.items[0].url.
+    return _ok({"data": {"items": [{"url": url}]}})
+
+
 def test_get_correct_url(client, mocker):
     mock_get = mocker.patch("clients.track_titan_client.requests.get", return_value=_ok())
     client.get("/v2/games/leMansUltimate/setups")
@@ -68,17 +73,34 @@ def test_download_link_raises_auth_error_on_403(client, mocker):
 
 
 def test_download_link_posts_to_correct_url(client, mocker):
-    mock_post = mocker.patch("clients.track_titan_client.requests.post", return_value=_ok({"url": "x"}))
+    mock_post = mocker.patch("clients.track_titan_client.requests.post", return_value=_download_link_ok())
     client.download_link("setup-uuid-999")
     url = mock_post.call_args.args[0]
-    assert "setup-uuid-999" in url
+    assert "/v2/users/" in url
+    assert "/setups/setup-uuid-999/download" in url
 
 
-def test_download_link_sends_download_token(client, mocker):
-    mock_post = mocker.patch("clients.track_titan_client.requests.post", return_value=_ok({"url": "x"}))
+def test_download_link_sends_list_token(client, mocker):
+    # v2 authorizes with the Cognito access token (ACCESS_TOKEN_LIST), not the
+    # id token (ACCESS_TOKEN_DOWNLOAD) the old v1 endpoint used - confirmed
+    # against a real browser session's HAR capture, where the id token gets a
+    # 403 on this same endpoint.
+    mock_post = mocker.patch("clients.track_titan_client.requests.post", return_value=_download_link_ok())
     client.download_link("any-id")
     headers = mock_post.call_args.kwargs["headers"]
-    assert headers["authorization"] == "test-token-download"
+    assert headers["authorization"] == "test-token-list"
+    assert headers["x-user-id"] == "test-user-id"
+
+
+def test_download_link_extracts_url_from_v2_items_envelope(client, mocker):
+    # v2 wraps the signed URL in data.items[] (one entry per file) instead of
+    # v1's flat {"url": ...} - the client normalizes it back to the old flat
+    # shape so callers (and the mock client) stay unaware of the v2 envelope.
+    mocker.patch(
+        "clients.track_titan_client.requests.post",
+        return_value=_download_link_ok("https://cdn.example.com/file.zip"),
+    )
+    assert client.download_link("any-id") == {"url": "https://cdn.example.com/file.zip"}
 
 
 def test_download_returns_response(client, mocker):
@@ -160,7 +182,7 @@ def test_a_failed_request_still_marks_the_throttle_clock(client, mocker):
 
 def test_requests_send_a_timeout(client, mocker):
     mock_get = mocker.patch("clients.track_titan_client.requests.get", return_value=_ok())
-    mock_post = mocker.patch("clients.track_titan_client.requests.post", return_value=_ok({"url": "x"}))
+    mock_post = mocker.patch("clients.track_titan_client.requests.post", return_value=_download_link_ok())
 
     client.get("/path")
     client.download_link("any-id")

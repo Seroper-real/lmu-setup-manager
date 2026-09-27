@@ -94,12 +94,14 @@ class TrackTitanClient:
         return r.json()
 
     def download_link(self, setup_id: str) -> dict[str, Any]:
-        url = f"{BASE_URL}/v1/user/{USER_ID}/setup/{setup_id}/download"
+        url = f"{BASE_URL}/v2/users/{USER_ID}/setups/{setup_id}/download"
         headers = {
             **_BROWSER_HEADERS,
             "accept": "application/json, text/plain, */*",
-            "authorization": f"{ACCESS_TOKEN_DOWNLOAD}",
-            "x-consumer-id": f"{CONSUMER_ID}"
+            "authorization": f"{ACCESS_TOKEN_LIST}",
+            "x-consumer-id": f"{CONSUMER_ID}",
+            "x-user-id": f"{USER_ID}",
+            "x-user-device": "desktop",
         }
         # POST without body (curl -X POST with content-length: 0)
         try:
@@ -107,8 +109,15 @@ class TrackTitanClient:
         finally:
             self._mark_request()
         self._raise_for_status(response)
-        log.debug(response.json())
-        return response.json()
+        body = response.json()
+        log.debug(body)
+        # v2 wraps the signed URL in data.items[] (one entry per file a setup
+        # unpacks to) instead of v1's flat {"url": ...} - normalized back to
+        # the old flat shape here so callers (and the mock client) don't need
+        # to know about the v2 envelope. Bundles are filtered out by callers
+        # before this is ever reached (see Setup.is_bundle), so there's always
+        # exactly one item.
+        return {"url": body["data"]["items"][0]["url"]}
 
     def download(self, url: str) -> requests.Response:
         try:
