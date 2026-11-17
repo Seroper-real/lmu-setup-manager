@@ -56,7 +56,7 @@
         {"name": "Lexus RCF", "class": "lmgt3", "matcher": ["rcf", "lexus"]},
         {"name": "McLaren 720S Evo", "class": "lmgt3", "matcher": ["720s", "mclaren"]},
         {"name": "Mercedes-AMG", "class": "lmgt3", "matcher": ["mercedes"]},
-        {"name": "Porsche 992", "class": "lmgt3", "matcher": ["992"]},
+        {"name": "Porsche 992", "class": "lmgt3", "matcher": ["992", "911.*gt3"]},
 
         {"name": "Aston Martin Vantage", "class": "lmgte", "matcher": ["vantage.*gte"]},
         {"name": "Corvette C8.R", "class": "lmgte", "matcher": ["c8.*r"]},
