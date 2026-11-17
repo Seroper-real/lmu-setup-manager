@@ -22,7 +22,10 @@ CAR_KEYS = [
     "carFilterLoadError", "carFilterSaveError",
 ]
 FUNCTION_KEYS = {"carFilterCounter"}
-CAR_FUNCS = ["refreshCarFilter", "saveCarFilter", "changeCarFilter", "carClassRank", "renderCarFilterSection"]
+CAR_FUNCS = [
+    "refreshCarFilter", "saveCarFilter", "changeCarFilter", "carClassRank", "carFilterCountText",
+    "updateCarFilterCount", "renderCarFilterList", "renderCarFilterSection",
+]
 
 
 def _extra_block(lang: str) -> str:
@@ -180,7 +183,7 @@ def test_app_car_filter_functions_balanced(fn):
 
 def test_app_calls_backend_api():
     assert re.search(r"api\(\)\.get_car_filter\(", APP_JS)
-    assert re.search(r"api\(\)\.set_car_filter\(\s*state\.carFilter\.all\s*,\s*state\.carFilter\.selected\s*\)", APP_JS)
+    assert re.search(r"api\(\)\.set_car_filter\(\s*snapshot\.all\s*,\s*snapshot\.selected\s*\)", APP_JS)
 
 
 def test_app_backend_methods_exist_on_api():
@@ -217,7 +220,38 @@ def test_app_refresh_wired_next_to_refresh_mappings():
 
 def test_app_rollback_on_error_present():
     fn = _function_source("saveCarFilter")
-    assert "catch" in fn and "previous.all" in fn and "previous.selected" in fn and "carFilterSaveError" in fn
+    assert "catch" in fn and "carFilterSaveError" in fn
+    assert "carFilterConfirmed.all" in fn and "carFilterConfirmed.selected" in fn
+    # Saves are serialized and only the newest failed change rolls back.
+    assert "carFilterSaveChain.then(" in fn and "seq === carFilterSaveSeq" in fn
+
+
+def test_app_search_input_only_rerenders_list():
+    """Typing must not rebuild the search input (it would lose focus/caret)."""
+    fn = _function_source("renderCarFilterSection")
+    m = re.search(r'getElementById\("car-filter-search"\)\.addEventListener\("input",(.*?)\}\);', fn, re.S)
+    assert m
+    assert "renderCarFilterList()" in m.group(1)
+    assert "renderCarFilterSection" not in m.group(1)
+    assert "car-filter-search" not in _function_source("renderCarFilterList")
+
+
+def test_app_changes_blocked_until_loaded():
+    assert "if (!state.carFilter.loaded) return" in _function_source("changeCarFilter")
+    assert "loaded: true" in _function_source("refreshCarFilter")
+
+
+def test_app_class_order_matches_car_manager_labels():
+    from processing.car_manager import CarManager
+    m = re.search(r"const CAR_CLASS_ORDER = \[(.*?)\];", APP_JS)
+    assert m
+    js_order = re.findall(r'"([^"]+)"', m.group(1))
+    expected: list[str] = []
+    for raw in CarManager._CLASS_ORDER:
+        label = CarManager._CLASS_LABELS[raw].lower()
+        if label not in expected:
+            expected.append(label)
+    assert js_order == expected
 
 
 # ----- real Python API, with the shapes the JS relies on ---------------------

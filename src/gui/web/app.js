@@ -25,8 +25,9 @@ const state = {
   mappingSearch: "",
   mappingPage: 0,
   // "Cars to download" section of the mapping tab: mirrors api.get_car_filter()
-  // ({all, selected, cars:[{name, carClass}]}) plus the section's own search box.
-  carFilter: { all: true, selected: [], cars: [] },
+  // ({all, selected, cars:[{name, carClass}]}) plus the section's own search box;
+  // `loaded` stays false until get_car_filter() succeeds (controls disabled).
+  carFilter: { all: true, selected: [], cars: [], loaded: false },
   carFilterSearch: "",
   // { kind: "row", id, name } | { kind: "all" } | null.
   mappingDeleteTarget: null,
@@ -300,9 +301,13 @@ async function refreshMappings() {
 }
 
 async function refreshCarFilter() {
+  // Let queued saves land first, so a fast tab switch never reads a stale filter.
+  await carFilterSaveChain;
   try {
     const data = await api().get_car_filter();
-    state.carFilter = { all: !!data.all, selected: data.selected || [], cars: data.cars || [] };
+    const selected = data.selected || [];
+    state.carFilter = { all: !!data.all, selected, cars: data.cars || [], loaded: true };
+    carFilterConfirmed = { all: !!data.all, selected: selected.slice() };
   } catch (err) {
     showToast(t("carFilterLoadError"), "error");
   }
@@ -1473,37 +1478,70 @@ function focusMappingSearchInput() {
 
 // ----- Cars to download (car filter) -------------------------------------------
 
-const CAR_CLASS_ORDER = ["hypercar", "lmp2", "lmp3", "lmgt3", "lmgte"];
+// CarManager._CLASS_LABELS values (get_car_filter() returns the logo label,
+// not mapping.json's raw class), in CarManager._CLASS_ORDER's order.
+const CAR_CLASS_ORDER = ["hypercar", "p2", "p3", "gt3", "gte"];
 
 function carClassRank(carClass) {
   const idx = CAR_CLASS_ORDER.indexOf(String(carClass || "").toLowerCase());
   return idx === -1 ? CAR_CLASS_ORDER.length : idx;
 }
 
-// Optimistic save: the caller already updated the local state; on a backend
-// error the previous filter is restored and a toast is shown.
-async function saveCarFilter(previous) {
-  try {
-    await api().set_car_filter(state.carFilter.all, state.carFilter.selected);
-  } catch (err) {
-    state.carFilter.all = previous.all;
-    state.carFilter.selected = previous.selected;
-    showToast(t("carFilterSaveError"), "error");
-    renderCarFilterSection();
-  }
+// Saves are queued one after the other so rapid clicks reach the backend in
+// click order. Each save sends its own snapshot; carFilterConfirmed is the last
+// snapshot the backend accepted, and on a failure the UI rolls back to it -
+// but only if no newer change is queued behind the failed one (that newer save
+// supersedes it).
+let carFilterSaveChain = Promise.resolve();
+let carFilterSaveSeq = 0;
+let carFilterConfirmed = { all: true, selected: [] };
+
+function saveCarFilter(snapshot) {
+  const seq = ++carFilterSaveSeq;
+  carFilterSaveChain = carFilterSaveChain.then(async () => {
+    try {
+      await api().set_car_filter(snapshot.all, snapshot.selected);
+      carFilterConfirmed = snapshot;
+    } catch (err) {
+      showToast(t("carFilterSaveError"), "error");
+      if (seq === carFilterSaveSeq) {
+        state.carFilter.all = carFilterConfirmed.all;
+        state.carFilter.selected = carFilterConfirmed.selected.slice();
+        renderCarFilterSection();
+      }
+    }
+  });
+  return carFilterSaveChain;
 }
 
-function changeCarFilter(mutate) {
-  const previous = { all: state.carFilter.all, selected: state.carFilter.selected.slice() };
+// Optimistic update: mutate the local state, re-render (unless the caller
+// already reflects the change in the DOM), then queue the save.
+function changeCarFilter(mutate, rerender = true) {
+  if (!state.carFilter.loaded) return Promise.resolve();
   mutate(state.carFilter);
-  renderCarFilterSection();
-  return saveCarFilter(previous);
+  if (rerender) renderCarFilterSection();
+  else updateCarFilterCount();
+  return saveCarFilter({ all: state.carFilter.all, selected: state.carFilter.selected.slice() });
 }
 
-function renderCarFilterSection() {
-  const el = document.getElementById("car-filter-section");
-  if (!el) return;
+function carFilterCountText() {
   const { all, selected, cars } = state.carFilter;
+  const selectedSet = new Set(selected);
+  const selectedCount = cars.filter((c) => all || selectedSet.has(c.name)).length;
+  return tFn("carFilterCounter", selectedCount, cars.length);
+}
+
+function updateCarFilterCount() {
+  const count = document.getElementById("car-filter-count");
+  if (count) count.textContent = carFilterCountText();
+}
+
+// Renders only the per-class checkbox list, so typing in the search box never
+// rebuilds (and so never blurs) the input itself.
+function renderCarFilterList() {
+  const container = document.getElementById("car-filter-groups");
+  if (!container) return;
+  const { all, selected, cars, loaded } = state.carFilter;
   const selectedSet = new Set(selected);
   const search = state.carFilterSearch.trim().toLowerCase();
   const visible = cars.filter((c) => !search || c.name.toLowerCase().includes(search));
@@ -1539,28 +1577,58 @@ function renderCarFilterSection() {
     })
     .join("");
 
-  const selectedCount = cars.filter((c) => all || selectedSet.has(c.name)).length;
+  const emptyKey = loaded ? "carFilterEmpty" : "carFilterLoadError";
+  container.innerHTML = groupsHtml || `<div class="empty-state">${escapeHtml(t(emptyKey))}</div>`;
+
+  container.querySelectorAll("[data-car-name]").forEach((box) => {
+    box.addEventListener("change", () => {
+      const name = box.dataset.carName;
+      const checked = box.checked;
+      // The checkbox already shows the new value: skip the re-render so the
+      // list keeps its scroll position.
+      changeCarFilter((f) => {
+        const rest = f.selected.filter((n) => n !== name);
+        f.selected = checked ? [...rest, name] : rest;
+      }, false);
+    });
+  });
+}
+
+function renderCarFilterSection() {
+  const el = document.getElementById("car-filter-section");
+  if (!el) return;
+  const { all, loaded } = state.carFilter;
+  const previousList = document.getElementById("car-filter-groups");
+  const scrollTop = previousList ? previousList.scrollTop : 0;
+  // Until get_car_filter() succeeded there is no car list to seed a manual
+  // selection from, so every control stays disabled (a save would otherwise
+  // persist all=false with an empty selection, filtering everything out).
+  const lockAll = loaded ? "" : "disabled";
+  const lockList = all || !loaded ? "disabled" : "";
 
   el.innerHTML = `
     <div class="card elev-sm car-filter-card">
       <h3 class="car-filter-title">${escapeHtml(t("carFilterTitle"))}</h3>
       <label class="car-filter-all">
-        <input type="checkbox" id="car-filter-all" ${all ? "checked" : ""}>
+        <input type="checkbox" id="car-filter-all" ${all ? "checked" : ""} ${lockAll}>
         <span>${escapeHtml(t("carFilterAllLabel"))}</span>
       </label>
       <p class="text-muted car-filter-hint">${escapeHtml(t(all ? "carFilterHintAll" : "carFilterHintSelected"))}</p>
       <div class="toolbar">
         <div class="search-field">
           ${ICONS.search}
-          <input type="text" class="input" id="car-filter-search" placeholder="${escapeHtml(t("carFilterSearchPlaceholder"))}" value="${escapeHtml(state.carFilterSearch)}" ${all ? "disabled" : ""}>
+          <input type="text" class="input" id="car-filter-search" placeholder="${escapeHtml(t("carFilterSearchPlaceholder"))}" value="${escapeHtml(state.carFilterSearch)}" ${lockList}>
         </div>
-        <span class="tag tag-outline results-count" id="car-filter-count">${escapeHtml(tFn("carFilterCounter", selectedCount, cars.length))}</span>
-        <button type="button" class="btn btn-ghost toolbar-push-end" id="car-filter-select-all" ${all ? "disabled" : ""}>${escapeHtml(t("carFilterSelectAll"))}</button>
-        <button type="button" class="btn btn-ghost" id="car-filter-deselect-all" ${all ? "disabled" : ""}>${escapeHtml(t("carFilterDeselectAll"))}</button>
+        <span class="tag tag-outline results-count" id="car-filter-count">${escapeHtml(carFilterCountText())}</span>
+        <button type="button" class="btn btn-ghost toolbar-push-end" id="car-filter-select-all" ${lockList}>${escapeHtml(t("carFilterSelectAll"))}</button>
+        <button type="button" class="btn btn-ghost" id="car-filter-deselect-all" ${lockList}>${escapeHtml(t("carFilterDeselectAll"))}</button>
       </div>
-      <div class="car-filter-groups">${groupsHtml || `<div class="empty-state">${escapeHtml(t("carFilterEmpty"))}</div>`}</div>
+      <div class="car-filter-groups" id="car-filter-groups"></div>
     </div>
   `;
+
+  renderCarFilterList();
+  document.getElementById("car-filter-groups").scrollTop = scrollTop;
 
   document.getElementById("car-filter-all").addEventListener("change", (e) => {
     const checked = e.target.checked;
@@ -1573,13 +1641,7 @@ function renderCarFilterSection() {
 
   document.getElementById("car-filter-search").addEventListener("input", (e) => {
     state.carFilterSearch = e.target.value;
-    renderCarFilterSection();
-    const fresh = document.getElementById("car-filter-search");
-    if (fresh) {
-      fresh.focus();
-      const pos = fresh.value.length;
-      fresh.setSelectionRange(pos, pos);
-    }
+    renderCarFilterList();
   });
 
   document.getElementById("car-filter-select-all").addEventListener("click", () => {
@@ -1590,15 +1652,6 @@ function renderCarFilterSection() {
   document.getElementById("car-filter-deselect-all").addEventListener("click", () => {
     changeCarFilter((f) => {
       f.selected = [];
-    });
-  });
-
-  el.querySelectorAll("[data-car-name]").forEach((box) => {
-    box.addEventListener("change", () => {
-      const name = box.dataset.carName;
-      changeCarFilter((f) => {
-        f.selected = box.checked ? [...f.selected.filter((n) => n !== name), name] : f.selected.filter((n) => n !== name);
-      });
     });
   });
 }
