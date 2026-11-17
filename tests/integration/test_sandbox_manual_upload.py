@@ -125,3 +125,84 @@ def test_manual_upload_update_sequence_across_master_and_slave_runs(sandbox, in_
     assert sandbox.installed_files() == {"Spa/quali_v2.svm"}, \
         "the superseded .svm must be replaced, not left alongside the new one"
     assert in_memory_db.is_installed_last_version(first.id, second.last_updated) is True
+
+
+# ----- DUAL mode: publish + local install ------------------------------------
+
+
+def _zip(tmp_path, members):
+    import zipfile
+    p = tmp_path / "user.zip"
+    with zipfile.ZipFile(p, "w") as zf:
+        for n, c in members.items():
+            zf.writestr(n, c)
+    return p
+
+
+def _dual_manual(sandbox, db, tmp_path, setup_type="HYMO"):
+    from processing.manual_upload import build_manual_setup, publish_and_install_manual_setup
+    setup = build_manual_setup(TRACK, CAR)
+    src = _zip(tmp_path, {"quali.svm": "m1"})
+    publish_and_install_manual_setup(sandbox.dropbox(), sandbox.setup_manager(db), src, setup, setup_type)
+    return setup, src
+
+
+def test_dual_manual_upload_publishes_and_installs(sandbox, in_memory_db, tmp_path):
+    setup, src = _dual_manual(sandbox, in_memory_db, tmp_path)
+
+    assert len(sandbox.share_names()) == 1
+    assert sandbox.installed_files() == {"Spa/quali.svm"}
+    assert src.exists()
+    row = in_memory_db.fetch_installed_setup_by_identity(CAR, TRACK, "HYMO")
+    assert row is not None
+    assert row.setup_id in next(iter(sandbox.share_names()))
+
+
+def test_dual_manual_install_failure_reports_error_but_uploads(sandbox, in_memory_db, tmp_path, mocker):
+    from processing.setup_manager import SetupManager
+    mocker.patch.object(SetupManager, "install_setup", return_value=False)
+
+    with pytest.raises(ValueError):
+        _dual_manual(sandbox, in_memory_db, tmp_path)
+
+    assert len(sandbox.share_names()) == 1
+
+
+def test_dual_manual_upload_failure_reports_error_but_installs(sandbox, in_memory_db, tmp_path, mocker):
+    from clients.mocks.mock_dropbox_client import MockDropboxClient
+    mocker.patch.object(MockDropboxClient, "upload", side_effect=RuntimeError("quota"))
+
+    with pytest.raises(RuntimeError, match="quota"):
+        _dual_manual(sandbox, in_memory_db, tmp_path)
+
+    assert sandbox.installed_files() == {"Spa/quali.svm"}
+
+
+def test_dual_manual_both_fail_reports_the_upload_error(sandbox, in_memory_db, tmp_path, mocker):
+    from clients.mocks.mock_dropbox_client import MockDropboxClient
+    from processing.setup_manager import SetupManager
+    mocker.patch.object(MockDropboxClient, "upload", side_effect=RuntimeError("quota"))
+    mocker.patch.object(SetupManager, "install_setup", return_value=False)
+
+    with pytest.raises(RuntimeError, match="quota"):
+        _dual_manual(sandbox, in_memory_db, tmp_path)
+
+
+def test_dual_manual_upload_auth_error_wins(sandbox, in_memory_db, tmp_path, mocker):
+    from clients.mocks.mock_dropbox_client import MockDropboxClient
+    from core.errors import AuthError
+    from processing.setup_manager import SetupManager
+    mocker.patch.object(MockDropboxClient, "upload", side_effect=AuthError("x", code="dropbox"))
+    mocker.patch.object(SetupManager, "install_setup", side_effect=ValueError("y"))
+
+    with pytest.raises(AuthError):
+        _dual_manual(sandbox, in_memory_db, tmp_path)
+
+
+def test_other_modes_manual_paths_unchanged(sandbox, in_memory_db, tmp_path):
+    """upload_manual_setup_to_dropbox alone still never installs locally."""
+    from processing.manual_upload import build_manual_setup, upload_manual_setup_to_dropbox
+    setup = build_manual_setup(TRACK, CAR)
+    upload_manual_setup_to_dropbox(sandbox.dropbox(), _zip(tmp_path, {"q.svm": "x"}), setup, "HYMO")
+    assert sandbox.installed_files() == set()
+    assert len(sandbox.share_names()) == 1

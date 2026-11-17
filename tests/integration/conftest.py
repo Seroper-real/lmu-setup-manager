@@ -30,6 +30,7 @@ def sandbox(tmp_path, mocker) -> Sandbox:
     for module in (
         "orchestration.download_manager",
         "orchestration.master_manager",
+        "orchestration.dual_manager",
         "orchestration.slave_manager",
         "processing.setup_manager",
         "processing.manual_upload",

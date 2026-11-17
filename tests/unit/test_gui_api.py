@@ -606,12 +606,12 @@ def _rule_based_check_credentials(mode: str, mock_tracktitan: bool, mock_dropbox
     import core.config as config
 
     errors: list[str] = []
-    if mode in {"full", "master"} and not mock_tracktitan:
+    if mode in {"full", "master", "dual"} and not mock_tracktitan:
         for name in ("ACCESS_TOKEN_LIST", "ACCESS_TOKEN_DOWNLOAD", "USER_ID"):
             value = getattr(config, name, None)
             if not value or len(value) < 20:
                 errors.append(name)
-    if mode in {"master", "slave"} and not mock_dropbox:
+    if mode in {"master", "slave", "dual"} and not mock_dropbox:
         for name in ("DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN"):
             value = getattr(config, name, None)
             if not value or len(value) < 20:
@@ -664,7 +664,7 @@ def test_validate_start_checks_dropbox_for_slave_mode(api, mocker):
 # only those two modes must fail validate_start over a missing LMU_SETUPS_BASE_PATH.
 
 
-@pytest.mark.parametrize("mode", ["full", "slave"])
+@pytest.mark.parametrize("mode", ["full", "slave", "dual"])
 def test_validate_start_flags_missing_lmu_path(api, mocker, tmp_path, mode):
     import core.config as config
     mocker.patch.object(config, "MOCK_TRACKTITAN", True)
@@ -676,7 +676,7 @@ def test_validate_start_flags_missing_lmu_path(api, mocker, tmp_path, mode):
     assert api.validate_start(mode) == ["Invalid or missing LMU_PATH"]
 
 
-@pytest.mark.parametrize("mode", ["full", "slave"])
+@pytest.mark.parametrize("mode", ["full", "slave", "dual"])
 def test_validate_start_passes_with_an_existing_lmu_path(api, mocker, tmp_path, mode):
     import core.config as config
     mocker.patch.object(config, "MOCK_TRACKTITAN", True)
@@ -901,6 +901,7 @@ def test_resolve_run_fn_maps_every_mode(api):
     assert api._resolve_run_fn("full") is main.run_full
     assert api._resolve_run_fn("master") is main.run_master
     assert api._resolve_run_fn("slave") is main.run_slave
+    assert api._resolve_run_fn("dual") is main.run_dual
 
 
 def test_resolve_run_fn_rejects_an_unknown_mode(api):
@@ -1388,3 +1389,50 @@ def test_push_tracktitan_tokens_sends_the_expected_payload(api):
     assert '"ok": true' in api._last_js
     assert '"reason": "ok"' in api._last_js
     assert '"ACCESS_TOKEN_LIST": "x"' in api._last_js
+
+
+def test_validate_start_dual_checks_both_credential_groups(api, mocker):
+    import core.config as config
+    for name in ("ACCESS_TOKEN_LIST", "ACCESS_TOKEN_DOWNLOAD", "USER_ID",
+                 "DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN"):
+        mocker.patch.object(config, name, "short")
+    mocker.patch.object(config, "MOCK_TRACKTITAN", False)
+    mocker.patch.object(config, "MOCK_DROPBOX", False)
+    mocker.patch.object(config, "MOCK_LMU", True)
+    mocker.patch("core.config.check_credentials", side_effect=_rule_based_check_credentials, create=True)
+
+    assert len(api.validate_start("dual")) == 6
+
+
+def test_upload_manual_setup_dual_mode_publishes_and_installs(api, managers, mocker):
+    mocker.patch.object(api, "current_mode", return_value="dual")
+    build_setup = mocker.patch("processing.manual_upload.build_manual_setup")
+    install_locally = mocker.patch("processing.manual_upload.install_manual_setup_locally")
+    upload_to_dropbox = mocker.patch("processing.manual_upload.upload_manual_setup_to_dropbox")
+    publish_and_install = mocker.patch("processing.manual_upload.publish_and_install_manual_setup")
+    dropbox_factory = mocker.patch("clients.protocols.build_dropbox_client")
+
+    result = api.upload_manual_setup("C:/a.zip", "HYMO", "Spa", "Porsche 963")
+
+    publish_and_install.assert_called_once_with(
+        dropbox_factory.return_value, managers.setup_manager.return_value, "C:/a.zip",
+        build_setup.return_value, "HYMO",
+    )
+    install_locally.assert_not_called()
+    upload_to_dropbox.assert_not_called()
+    assert result == {"ok": True}
+
+
+def test_upload_manual_setup_dual_mode_reports_an_auth_error(api, managers, mocker):
+    from core.errors import AuthError
+    mocker.patch.object(api, "current_mode", return_value="dual")
+    mocker.patch("processing.manual_upload.build_manual_setup")
+    mocker.patch(
+        "processing.manual_upload.publish_and_install_manual_setup",
+        side_effect=AuthError("Dropbox authentication failed.", code="dropbox"),
+    )
+    mocker.patch("clients.protocols.build_dropbox_client")
+
+    result = api.upload_manual_setup("C:/a.zip", "HYMO", "Spa", "Porsche 963")
+
+    assert result["ok"] is False and result["authError"] is True
