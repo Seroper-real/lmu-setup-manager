@@ -74,17 +74,40 @@ class DownloadManager:
         
         path = Path(f"{DOWNLOAD_PATH}/HYMO-{setup.safe_track}-{setup.id}.zip")
 
-        if setup.id not in self.already_downloaded:
-            log.debug(f"Downloading setup {setup.id}")
-            self.track_titan_client.throttle()
-            data = self.track_titan_client.download_link(setup.id)
-            download_url = data["url"]
-            # Scaricare il file
-            file_resp = self.track_titan_client.download(download_url)
-            with open(path, "wb") as f:
-                f.write(file_resp.content)
-            log.info(f"Download completed for {setup.id}")
-            self.already_downloaded.add(setup.id)
-        else:
+        if setup.id in self.already_downloaded and self._reuse_cached_archive(setup.id, path):
             log.debug(f"Setup downloaded but not yet installed for {setup.id}")
+            return path
+
+        log.debug(f"Downloading setup {setup.id}")
+        self.track_titan_client.throttle()
+        data = self.track_titan_client.download_link(setup.id)
+        download_url = data["url"]
+        # Scaricare il file
+        file_resp = self.track_titan_client.download(download_url)
+        with open(path, "wb") as f:
+            f.write(file_resp.content)
+        log.info(f"Download completed for {setup.id}")
+        self.already_downloaded.add(setup.id)
         return path
+
+    def _reuse_cached_archive(self, setup_id: str, path: Path) -> bool:
+        """already_downloaded only records *ids* (sliced from any .zip name in
+        DOWNLOAD_PATH), not where the archive is: the file may sit under another
+        track segment (a FULL run names it after the raw TrackTitan track, MASTER/
+        DUAL after mapping.json's official name, set before download), or the id
+        may come from a file that is not a TrackTitan archive at all (e.g. DUAL's
+        dual-<id>.zip staging copy). Returning `path` without checking would hand
+        callers a missing file. Returns True only when the archive is at `path`,
+        moving a leftover HYMO-<other track>-<id>.zip there if needed; False means
+        the caller must download it again."""
+        if path.exists():
+            return True
+        for candidate in Path(DOWNLOAD_PATH).glob(f"HYMO-*-{setup_id}.zip"):
+            try:
+                candidate.replace(path)
+            except OSError as e:
+                log.warning(f"Failed to reuse cached archive {candidate.name} for {setup_id}: {e}")
+                continue
+            log.debug(f"Reusing cached archive {candidate.name} for {setup_id}")
+            return True
+        return False
