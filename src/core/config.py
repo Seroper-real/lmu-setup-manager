@@ -138,6 +138,14 @@ DROPBOX_TIMEOUT: int = _dropbox_cfg.get("timeout", 30)
 # fully serial behavior.
 DROPBOX_UPLOAD_WORKERS: int = max(1, int(_dropbox_cfg.get("upload_workers", 4)))
 
+# ===== CAR FILTER =====
+# all=True disables filtering entirely; otherwise only the official car names in
+# CAR_FILTER_SELECTED are processed. Snapshot at import time - CarManager's
+# is_car_selected() reads the live setting instead.
+_cars_cfg = _config.get("cars", {})
+CAR_FILTER_ALL: bool = bool(_cars_cfg.get("all", True))
+CAR_FILTER_SELECTED: list[str] = list(_cars_cfg.get("selected", []))
+
 # ===== UI =====
 # The GUI's own persisted preferences: the dashboard language and whether the
 # one-time HYMO warning dialog has already been dismissed.

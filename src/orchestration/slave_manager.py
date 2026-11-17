@@ -11,7 +11,7 @@ from clients.protocols import DropboxClientProtocol
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, GO_SETUP_FILE_EXTENSIONS
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from domain.go_setup import RemoteGoSetup
-from domain.setup import RemoteSetup, Setup
+from domain.setup import RemoteSetup, Setup, parse_remote_zip_car_candidates
 from domain.setup_db import SetupDb
 from domain.unmatched import UnmatchedTracker
 from processing.setup_manager import SetupManager
@@ -69,6 +69,23 @@ class SlaveManager:
             log.info("Already installed (latest version). Skipping.")
             return
 
+        # Car filter, applied before the download using the car recovered from
+        # the zip name. The {track}_{car} split is ambiguous and the matcher is
+        # a regex search, so a longer candidate can resolve to another car via
+        # text in the track name. Kept conservative: skip only when at least
+        # one candidate resolves and none of the resolved cars is selected. A
+        # missed skip only costs a download - the post-metadata check below
+        # still filters it out.
+        car_manager = self.setup_manager.car_manager
+        resolved_cars: list[str] = []
+        for candidate in parse_remote_zip_car_candidates(remote.name):
+            resolved: Optional[str] = car_manager.get_car_name(candidate)
+            if resolved is not None and resolved not in resolved_cars:
+                resolved_cars.append(resolved)
+        if resolved_cars and not any(car_manager.is_car_selected(c) for c in resolved_cars):
+            log.info(f"Car filtered out, skipping: {remote.name} ({', '.join(resolved_cars)})")
+            return
+
         local_zip = Path(DOWNLOAD_PATH) / remote.name
         self.dropbox_client.download_to(remote.path_lower, local_zip)
         sha256 = sha256_file(local_zip)
@@ -85,13 +102,23 @@ class SlaveManager:
         # placeholder "-HYMO" name - recorded for the end-of-run correction
         # dialog instead. Checked before START is even emitted, so a fully
         # ignored setup never appears in the activity log at all.
-        car_matched = self.setup_manager.car_manager.get_car_name(setup.car) is not None
+        car_name: Optional[str] = self.setup_manager.car_manager.get_car_name(setup.car)
+        car_matched: bool = car_name is not None
         track_matched = self.setup_manager.track_manager.get_track_folder_name(setup.track) is not None
         if not car_matched or not track_matched:
             log.warning(f"Setup not matched, skipping: {setup.track} - {setup.car}")
             self.unmatched.record(
                 setup.track, setup.car, track_matched=track_matched, car_matched=car_matched,
             )
+            if CLEAN_DOWNLOAD and local_zip.exists():
+                local_zip.unlink()
+            return
+
+        # Authoritative car filter on the official name from the metadata: the
+        # zip-name pre-check above may not have resolved (or may have been
+        # inconclusive). Filtered setups are not unmatched - never recorded.
+        if not self.setup_manager.car_manager.is_car_selected(car_name):
+            log.info(f"Car filtered out, skipping: {setup.track} - {car_name}")
             if CLEAN_DOWNLOAD and local_zip.exists():
                 local_zip.unlink()
             return
@@ -125,6 +152,9 @@ class SlaveManager:
             self.unmatched.record(
                 remote.track, remote.car, track_matched=track is not None, car_matched=car is not None,
             )
+            return
+        if not self.setup_manager.car_manager.is_car_selected(car):
+            log.info(f"Car filtered out, skipping GO setup: {track} - {car}")
             return
         label = f"{track} - {car} Setup"
 
