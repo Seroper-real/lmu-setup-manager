@@ -113,6 +113,7 @@ Gli stessi passi di Solo Upload (app Dropbox, token TrackTitan, **Token Lettura/
 **Carica Setup** — Trascina un `.zip` (o clicca per sceglierlo), seleziona il tipo (**GO Setups** o **HYMO**), la pista e l'auto, e premi **Carica setup**. In Diretta/Solo installazione viene installato direttamente in LMU; in Solo Upload viene pubblicato sul tuo Dropbox per gli altri PC; in Upload + Locale viene sia pubblicato su Dropbox sia installato in LMU. Pista e auto vengono indovinate dal nome del file quando possibile. È il modo più semplice per aggiungere archivi [GO Setups](#setup-go).
 
 **Associazioni manuali** — I nomi di piste e auto che hai associato a mano (vedi [Quando un setup non viene riconosciuto](#quando-un-setup-non-viene-riconosciuto)). Ricercabili, paginati, con eliminazione singola o totale.
+
 **Impostazioni** — Lingua, modalità di funzionamento, cartella LMU, token TrackTitan, credenziali Dropbox, più un blocco **Impostazioni avanzate** richiuso (ogni campo ha un tooltip ⓘ che lo spiega) e una [Zona pericolosa](#zona-pericolosa).
 
 > Nelle Impostazioni non c'è un pulsante Salva: l'app chiede se salvare quando esci dalla tab o chiudi la finestra.
