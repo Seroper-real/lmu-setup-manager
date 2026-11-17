@@ -106,14 +106,13 @@ Gli stessi passi di Solo Upload (app Dropbox, token TrackTitan, **Token Lettura/
 
 **Download** — Mostra la modalità attiva, il pulsante **Avvia download** / **Interrompi** e un flusso di attività in tempo reale con tutto ciò che viene installato o caricato. Vengono scaricati solo i setup nuovi e aggiornati, quindi una seconda esecuzione subito dopo la prima non ha quasi nulla da fare.
 
-**Auto da scaricare** — Nella tab **Associazioni manuali** scegli quali auto scaricare da TrackTitan. Di default sono incluse tutte (anche quelle future); togli la spunta a "Scarica i setup per tutte le auto" e seleziona solo quelle che guidi per scaricare e aggiornare solo quelle.
+**Auto Selezionate** — Nella tab **Auto Selezionate** (nel gruppo in basso della barra laterale sinistra, subito sopra **Associazioni manuali**) scegli quali auto scaricare da TrackTitan. Di default sono incluse tutte (anche quelle future); togli la spunta a "Scarica i setup per tutte le auto" e seleziona solo quelle che guidi per scaricare e aggiornare solo quelle.
 
 **Setup installati** — Tutto ciò che l'app ha installato, raggruppato per pista e auto, con il logo della classe dell'auto e un link **Hotlap** che apre il giro su YouTube di TrackTitan per quel setup. Puoi cercare per pista o auto ed eliminare un singolo setup, un'intera auto, tutti quelli di una pista o tutti in blocco.
 
 **Carica Setup** — Trascina un `.zip` (o clicca per sceglierlo), seleziona il tipo (**GO Setups** o **HYMO**), la pista e l'auto, e premi **Carica setup**. In Diretta/Solo installazione viene installato direttamente in LMU; in Solo Upload viene pubblicato sul tuo Dropbox per gli altri PC; in Upload + Locale viene sia pubblicato su Dropbox sia installato in LMU. Pista e auto vengono indovinate dal nome del file quando possibile. È il modo più semplice per aggiungere archivi [GO Setups](#setup-go).
 
-**Associazioni manuali** — I nomi di piste e auto che hai associato a mano (vedi [Quando un setup non viene riconosciuto](#quando-un-setup-non-viene-riconosciuto)). Ricercabili, paginati, con eliminazione singola o totale. In questa tab trovi anche il filtro **Auto da scaricare** (vedi sopra).
-
+**Associazioni manuali** — I nomi di piste e auto che hai associato a mano (vedi [Quando un setup non viene riconosciuto](#quando-un-setup-non-viene-riconosciuto)). Ricercabili, paginati, con eliminazione singola o totale.
 **Impostazioni** — Lingua, modalità di funzionamento, cartella LMU, token TrackTitan, credenziali Dropbox, più un blocco **Impostazioni avanzate** richiuso (ogni campo ha un tooltip ⓘ che lo spiega) e una [Zona pericolosa](#zona-pericolosa).
 
 > Nelle Impostazioni non c'è un pulsante Salva: l'app chiede se salvare quando esci dalla tab o chiudi la finestra.

@@ -29,6 +29,7 @@ const state = {
   // `loaded` stays false until get_car_filter() succeeds (controls disabled).
   carFilter: { all: true, selected: [], cars: [], loaded: false },
   carFilterSearch: "",
+  carFilterPage: 0,
   // { kind: "row", id, name } | { kind: "all" } | null.
   mappingDeleteTarget: null,
   // Track cards default to collapsed (perf: >400 setups rendered fully expanded
@@ -124,6 +125,7 @@ const ICONS = {
   navSetups: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"></rect><path d="M8 2.5v3M16 2.5v3M3.5 9.5h17"></path></svg>`,
   navDownload: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11M8 11l4 4 4-4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>`,
   navUpload: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.5v-11M8 10l4-4 4 4"></path><path d="M4.5 16v2.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V16"></path></svg>`,
+  navCarFilter: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16V12l2-5h10l2 5v4"></path><path d="M3 16h18v2H3z"></path><circle cx="7.5" cy="13.5" r="0.6"></circle><circle cx="16.5" cy="13.5" r="0.6"></circle></svg>`,
   navMapping: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h11M11 5l3 3-3 3"></path><path d="M20 16H9M13 13l-3 3 3 3"></path></svg>`,
   uploadCloud: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A5.5 5.5 0 0 1 17.3 8.1 4 4 0 0 1 17 16"></path><path d="M12 12v6.5M9.5 14.5 12 12l2.5 2.5"></path></svg>`,
   navSettings: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2.4M12 18.1v2.4M4.9 6.3l1.7 1.7M17.4 16l1.7 1.7M3.5 12H6M18 12h2.5M4.9 17.7l1.7-1.7M17.4 8l1.7-1.7"></path></svg>`,
@@ -426,6 +428,7 @@ function render() {
   renderSetupsView();
   renderDownloadView();
   renderUploadView();
+  renderCarFilterView();
   renderMappingView();
   renderSettingsView();
   applyActiveView();
@@ -457,7 +460,9 @@ function goToView(target) {
   } else if (state.view === "upload") {
     ensureUploadOptions().then(() => renderUploadView());
   } else if (state.view === "mapping") {
-    Promise.all([refreshMappings(), refreshCarFilter()]).then(() => renderMappingView());
+    refreshMappings().then(() => renderMappingView());
+  } else if (state.view === "carfilter") {
+    refreshCarFilter().then(() => renderCarFilterView());
   }
 }
 
@@ -510,6 +515,7 @@ function renderSidebar() {
   navBottom.innerHTML =
     `<div class="hr"></div>` +
     renderNavItemsHtml([
+      { view: "carfilter", icon: ICONS.navCarFilter, label: t("navCarFilter") },
       { view: "mapping", icon: ICONS.navMapping, label: t("navMapping") },
       { view: "settings", icon: ICONS.navSettings, label: t("navSettings") },
     ]);
@@ -1539,49 +1545,80 @@ function updateCarFilterCount() {
   if (count) count.textContent = carFilterCountText();
 }
 
-// Renders only the per-class checkbox list, so typing in the search box never
+// Search + sort (class order, then name) + paginate over state.carFilter.cars.
+// Select/deselect-all act on state.carFilter.cars, never on this page/search.
+function getCarFilterViewModel() {
+  const search = state.carFilterSearch.trim().toLowerCase();
+  const filtered = state.carFilter.cars
+    .filter((c) => !search || c.name.toLowerCase().includes(search))
+    .sort((a, b) => carClassRank(a.carClass) - carClassRank(b.carClass) || a.name.localeCompare(b.name));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / MAPPING_PAGE_SIZE));
+  const page = Math.max(0, Math.min(state.carFilterPage, pageCount - 1));
+  const pageRows = filtered.slice(page * MAPPING_PAGE_SIZE, page * MAPPING_PAGE_SIZE + MAPPING_PAGE_SIZE);
+  return { filtered, pageCount, page, pageRows };
+}
+
+// Renders only the paginated car table, so typing in the search box never
 // rebuilds (and so never blurs) the input itself.
 function renderCarFilterList() {
   const container = document.getElementById("car-filter-groups");
   if (!container) return;
-  const { all, selected, cars, loaded } = state.carFilter;
+  const { all, selected, loaded } = state.carFilter;
   const selectedSet = new Set(selected);
-  const search = state.carFilterSearch.trim().toLowerCase();
-  const visible = cars.filter((c) => !search || c.name.toLowerCase().includes(search));
+  const { filtered, pageCount, page, pageRows } = getCarFilterViewModel();
+  state.carFilterPage = page;
 
-  const groups = new Map();
-  visible.forEach((c) => {
-    const key = c.carClass || "";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(c);
-  });
-  const groupKeys = [...groups.keys()].sort((a, b) => carClassRank(a) - carClassRank(b));
-
-  const groupsHtml = groupKeys
-    .map((key) => {
+  const rowsHtml = pageRows
+    .map((c) => {
+      const key = c.carClass || "";
       const logo = key
         ? `<img class="car-class-logo" src="assets/class-logos/${encodeURIComponent(key)}.png" alt="${escapeHtml(key)}">`
         : "";
-      const items = groups
-        .get(key)
-        .map(
-          (c) => `
-          <label class="car-filter-item">
-            <input type="checkbox" data-car-name="${escapeHtml(c.name)}" ${all || selectedSet.has(c.name) ? "checked" : ""} ${all ? "disabled" : ""}>
-            <span>${escapeHtml(c.name)}</span>
-          </label>`
-        )
-        .join("");
       return `
-        <div class="car-filter-group">
-          <div class="car-filter-group-title">${logo}<span>${escapeHtml(key || t("carFilterOtherClass"))}</span></div>
-          <div class="car-filter-items">${items}</div>
-        </div>`;
+        <tr>
+          <td class="car-filter-check-col"><input type="checkbox" data-car-name="${escapeHtml(c.name)}" ${all || selectedSet.has(c.name) ? "checked" : ""} ${all || !loaded ? "disabled" : ""}></td>
+          <td>${escapeHtml(c.name)}</td>
+          <td><span class="car-filter-class">${logo}<span>${escapeHtml(key || t("carFilterOtherClass"))}</span></span></td>
+        </tr>`;
     })
     .join("");
 
   const emptyKey = loaded ? "carFilterEmpty" : "carFilterLoadError";
-  container.innerHTML = groupsHtml || `<div class="empty-state">${escapeHtml(t(emptyKey))}</div>`;
+  container.innerHTML = filtered.length
+    ? `
+      <div class="card elev-sm" style="padding:0; overflow:hidden;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="car-filter-check-col"></th>
+              <th>${escapeHtml(t("carFilterColName"))}</th>
+              <th>${escapeHtml(t("carFilterColClass"))}</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <span class="pagination-label">${escapeHtml(tFn("mappingPageLabel", page + 1, pageCount))}</span>
+        <button type="button" class="btn btn-ghost" id="car-filter-prev-page" ${page === 0 ? "disabled" : ""}>${escapeHtml(t("mappingPrevPage"))}</button>
+        <button type="button" class="btn btn-ghost" id="car-filter-next-page" ${page >= pageCount - 1 ? "disabled" : ""}>${escapeHtml(t("mappingNextPage"))}</button>
+      </div>`
+    : `<div class="empty-state">${escapeHtml(t(emptyKey))}</div>`;
+
+  const prevBtn = document.getElementById("car-filter-prev-page");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      state.carFilterPage = Math.max(0, state.carFilterPage - 1);
+      renderCarFilterList();
+    });
+  }
+  const nextBtn = document.getElementById("car-filter-next-page");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      state.carFilterPage = Math.min(getCarFilterViewModel().pageCount - 1, state.carFilterPage + 1);
+      renderCarFilterList();
+    });
+  }
 
   container.querySelectorAll("[data-car-name]").forEach((box) => {
     box.addEventListener("change", () => {
@@ -1601,8 +1638,6 @@ function renderCarFilterSection() {
   const el = document.getElementById("car-filter-section");
   if (!el) return;
   const { all, loaded } = state.carFilter;
-  const previousList = document.getElementById("car-filter-groups");
-  const scrollTop = previousList ? previousList.scrollTop : 0;
   // Until get_car_filter() succeeded there is no car list to seed a manual
   // selection from, so every control stays disabled (a save would otherwise
   // persist all=false with an empty selection, filtering everything out).
@@ -1611,7 +1646,6 @@ function renderCarFilterSection() {
 
   el.innerHTML = `
     <div class="card elev-sm car-filter-card">
-      <h3 class="car-filter-title">${escapeHtml(t("carFilterTitle"))}</h3>
       <label class="car-filter-all">
         <input type="checkbox" id="car-filter-all" ${all ? "checked" : ""} ${lockAll}>
         <span>${escapeHtml(t("carFilterAllLabel"))}</span>
@@ -1626,12 +1660,11 @@ function renderCarFilterSection() {
         <button type="button" class="btn btn-ghost toolbar-push-end" id="car-filter-select-all" ${lockList}>${escapeHtml(t("carFilterSelectAll"))}</button>
         <button type="button" class="btn btn-ghost" id="car-filter-deselect-all" ${lockList}>${escapeHtml(t("carFilterDeselectAll"))}</button>
       </div>
-      <div class="car-filter-groups" id="car-filter-groups"></div>
     </div>
+    <div id="car-filter-groups"></div>
   `;
 
   renderCarFilterList();
-  document.getElementById("car-filter-groups").scrollTop = scrollTop;
 
   document.getElementById("car-filter-all").addEventListener("change", (e) => {
     const checked = e.target.checked;
@@ -1644,6 +1677,7 @@ function renderCarFilterSection() {
 
   document.getElementById("car-filter-search").addEventListener("input", (e) => {
     state.carFilterSearch = e.target.value;
+    state.carFilterPage = 0;
     renderCarFilterList();
   });
 
@@ -1657,6 +1691,23 @@ function renderCarFilterSection() {
       f.selected = [];
     });
   });
+}
+
+// Own sidebar view ("carfilter"): header + the section built by
+// renderCarFilterSection (toggle, toolbar, paginated car table).
+function renderCarFilterView() {
+  const el = document.getElementById("view-carfilter");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="view-header">
+      <div>
+        <h2>${escapeHtml(t("carFilterTitle"))}</h2>
+        <p>${escapeHtml(t("carFilterDesc"))}</p>
+      </div>
+    </div>
+    <div id="car-filter-section"></div>
+  `;
+  renderCarFilterSection();
 }
 
 function renderMappingView() {
@@ -1714,7 +1765,6 @@ function renderMappingView() {
         <p>${escapeHtml(t("mappingDesc"))}</p>
       </div>
     </div>
-    <div id="car-filter-section"></div>
     <div class="toolbar">
       <div class="search-field">
         ${ICONS.search}
@@ -1725,8 +1775,6 @@ function renderMappingView() {
     </div>
     ${tableHtml}
   `;
-
-  renderCarFilterSection();
 
   document.getElementById("mapping-search").addEventListener(
     "input",

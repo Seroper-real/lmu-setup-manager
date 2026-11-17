@@ -106,14 +106,13 @@ Same steps as Upload only (Dropbox app, TrackTitan tokens, **Read/Write Token**,
 
 **Download** — Shows the active mode, a **Start download** / **Stop** button and a live activity feed of everything that gets installed or uploaded as it happens. Only new and updated setups are fetched, so a second run right after the first has almost nothing to do.
 
-**Cars to download** — In the **Manual associations** tab, choose which cars to fetch from TrackTitan. By default every car is included (new ones too); untick "Download setups for all cars" and tick only the ones you drive to download and update just those.
+**Selected cars** — In the **Selected cars** tab (in the bottom group of the left sidebar, just above **Manual associations**), choose which cars to fetch from TrackTitan. By default every car is included (new ones too); untick "Download setups for all cars" and tick only the ones you drive to download and update just those.
 
 **Installed setups** — Everything this app has installed, grouped by track and car, with the car's class logo and a **Hotlap** link that opens TrackTitan's YouTube lap for that setup. Search by track or car, and delete a single setup, a whole car, everything for one track, or everything at once.
 
 **Upload Setup** — Drag in a `.zip` (or click to browse), pick the type (**GO Setups** or **HYMO**), the track and the car, and press **Upload setup**. In Direct/Install only it's installed straight into LMU; in Upload only it's published to your Dropbox for your other PCs; in Upload + Local it's both published to Dropbox and installed into LMU. The track and car are pre-guessed from the filename when possible. This is the easy way to add [GO Setups](#go-setups) archives.
 
-**Manual associations** — The track and car names you've mapped by hand (see [When a setup isn't recognized](#when-a-setup-isnt-recognized)). Searchable, paginated, and you can delete a single mapping or all of them. This tab also holds the **Cars to download** filter (see above).
-
+**Manual associations** — The track and car names you've mapped by hand (see [When a setup isn't recognized](#when-a-setup-isnt-recognized)). Searchable, paginated, and you can delete a single mapping or all of them.
 **Settings** — Language, operating mode, LMU folder, TrackTitan tokens, Dropbox credentials, plus a collapsed **Advanced settings** block (every field has an ⓘ tooltip explaining it) and a [Danger zone](#danger-zone).
 
 > There's no Save button in Settings — the app asks whether to save when you leave the tab or close the window.
