@@ -573,6 +573,6 @@ body { overflow: hidden; }
 .car-filter-name-col { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Rows are only clickable (and hoverable) while the list is editable. */
 .car-filter-table tbody tr:hover { background: transparent; }
-.car-filter-table-active tbody tr { cursor: pointer; }
+.car-filter-table-active tbody tr { cursor: pointer; user-select: none; }
 .car-filter-table-active tbody tr:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
 .car-filter-class { display: inline-flex; align-items: center; gap: 8px; text-transform: uppercase; font-size: 12.5px; font-weight: 600; }

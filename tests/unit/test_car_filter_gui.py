@@ -489,6 +489,8 @@ def test_car_filter_table_fixed_layout_and_widths():
 
 def test_pointer_and_hover_only_when_active():
     assert "cursor: pointer" in _css_rule(".car-filter-table-active tbody tr")
+    # rapid row clicks must not select the cell text
+    assert "user-select: none" in _css_rule(".car-filter-table-active tbody tr")
     assert "cursor" not in _css_rule(".car-filter-table tbody tr:hover")
     assert "transparent" in _css_rule(".car-filter-table tbody tr:hover")
     assert "cursor: pointer" not in _css_rule(".car-filter-table")
