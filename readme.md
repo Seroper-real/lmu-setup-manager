@@ -60,8 +60,9 @@ Open **Settings → Operating mode** and choose one. The choice takes effect imm
 | `full` *(default)* | **Direct** | Downloads from TrackTitan and installs straight into LMU on this PC | TrackTitan login + LMU folder |
 | `master` | **Upload only** | Downloads from TrackTitan and publishes to your own Dropbox (no local install) | TrackTitan login + Dropbox app |
 | `slave` | **Install only** | Pulls setups from your own Dropbox and installs them into LMU on this PC | Dropbox app (read-only is enough) + LMU folder |
+| `dual` | **Master + Local** | Downloads from TrackTitan, publishes to your Dropbox **and** installs into LMU on this PC from the same package (manual uploads do both too) | TrackTitan login + Dropbox app (read/write) + LMU folder |
 
-**On a single PC, use Direct.** The other two only make sense if you run Le Mans Ultimate on **more than one of your own PCs** and want to move setups between them through your own Dropbox — see [Modes in detail](#modes-in-detail).
+**On a single PC, use Direct.** The other modes only make sense if you run Le Mans Ultimate on **more than one of your own PCs** and want to move setups between them through your own Dropbox — see [Modes in detail](#modes-in-detail).
 
 ---
 
@@ -101,9 +102,11 @@ No LMU path is needed here — nothing is installed locally.
 
 **Download** — Shows the active mode, a **Start download** / **Stop** button and a live activity feed of everything that gets installed or uploaded as it happens. Only new and updated setups are fetched, so a second run right after the first has almost nothing to do.
 
+**Cars to download** — In **Settings**, choose which cars to fetch from TrackTitan. By default every car is included (new ones too); untick "all cars" and tick only the ones you drive to download and update just those.
+
 **Installed setups** — Everything this app has installed, grouped by track and car, with the car's class logo and a **Hotlap** link that opens TrackTitan's YouTube lap for that setup. Search by track or car, and delete a single setup, a whole car, everything for one track, or everything at once.
 
-**Upload Setup** — Drag in a `.zip` (or click to browse), pick the type (**GO Setups** or **HYMO**), the track and the car, and press **Upload setup**. In Direct/Install only it's installed straight into LMU; in Upload only it's published to your Dropbox for your other PCs. The track and car are pre-guessed from the filename when possible. This is the easy way to add [GO Setups](#go-setups) archives.
+**Upload Setup** — Drag in a `.zip` (or click to browse), pick the type (**GO Setups** or **HYMO**), the track and the car, and press **Upload setup**. In Direct/Install only/Master + Local it's installed straight into LMU; in Upload only it's published to your Dropbox for your other PCs. The track and car are pre-guessed from the filename when possible. This is the easy way to add [GO Setups](#go-setups) archives.
 
 **Manual associations** — The track and car names you've mapped by hand (see [When a setup isn't recognized](#when-a-setup-isnt-recognized)). Searchable, paginated, and you can delete a single mapping or all of them.
 
@@ -155,6 +158,7 @@ By default the tool runs in **Direct** mode (`full`) and does everything on one 
 If you run Le Mans Ultimate on **more than one of your own PCs**, the other two modes let you move setups through **your own Dropbox** instead of extracting tokens and hammering TrackTitan from every machine:
 
 - **Upload only** (`master`) — runs on the PC with your TrackTitan subscription. It downloads your setups, repackages them, and mirrors them into your Dropbox under `<Dropbox folder>/<Car>/<Track>/HYMO-<track>_<car>_<id>_<timestamp>.zip`. It keeps no local database: it works out what to publish by comparing TrackTitan against what's already in the folder. When a setup is updated, the new zip is uploaded first and only then the old one is deleted.
+- **Master + Local** (`dual`) — Upload only plus a local install: each package is downloaded once, published to Dropbox and installed into LMU on this PC, and the installed setups are tracked in the local database. Needs TrackTitan tokens, a read/write Dropbox credential and the LMU folder. Manual uploads are published and installed too.
 - **Install only** (`slave`) — runs on your other PCs. It lists that same folder, skips whatever the local database already has at the same version or newer, downloads the rest and installs it. It rebuilds each setup's details from a `.metadata.json` embedded in the zip, so an Install only machine ends up with exactly the same records a Direct one would.
 
 Only the TrackTitan side is rate-limited (roughly one setup every couple of seconds, so a first full run takes on the order of 20–30 minutes). Uploads to Dropbox run in parallel in the background and don't add to that time.
@@ -273,7 +277,7 @@ USER_ID=123cdvf-34fd...
 
 The setups this tool manages end to end come from TrackTitan and are published under the **HYMO** brand. **GO Setups** is a separate third-party provider that is only *compatible* with this tool: the app never talks to GO's systems and doesn't publish anything on GO's behalf. You supply the archives yourself.
 
-**Adding one:** use the **Upload Setup** tab — drop the zip, choose type **GO Setups**, pick track and car, confirm. In Direct/Install only it's installed locally; in Upload only it's published to Dropbox for your other PCs to pick up. Uploading again for the same car and track replaces the previous archive.
+**Adding one:** use the **Upload Setup** tab — drop the zip, choose type **GO Setups**, pick track and car, confirm. In Direct/Install only/Master + Local it's installed locally; in Upload only it's published to Dropbox for your other PCs to pick up. Uploading again for the same car and track replaces the previous archive.
 
 Details:
 
@@ -341,7 +345,7 @@ python src/main.py --sandbox --mode master       # sandbox, forcing a mode
 | `--mock-lmu` | Install into `sandbox/lmu/Settings/` instead of the game folder. Uses a separate database, so your real installation records are untouched |
 | `--mock-dropbox` | Use the local `sandbox/dropbox/` folder instead of Dropbox. No credentials needed |
 | `--mock-base-path PATH` | Where the sandbox lives. Defaults to `sandbox` |
-| `--mode {full,master,slave}` | Override the stored mode for this run only |
+| `--mode {full,master,slave,dual}` | Override the stored mode for this run only |
 
 Each flag also drops the matching credential requirement, so `--sandbox --mode master` then `--sandbox --mode slave` runs a full publish → install round trip with no credentials configured at all. Every sandbox run logs a `SANDBOX ACTIVE` warning so you can never mistake it for a real one. The equivalent `MOCK_TRACKTITAN` / `MOCK_LMU` / `MOCK_DROPBOX` / `MODE` environment variables work too, and `.vscode/launch.json` ships a debug profile for each combination.
 
