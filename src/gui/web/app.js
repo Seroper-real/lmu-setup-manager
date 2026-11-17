@@ -169,8 +169,8 @@ function tFn(key, ...args) {
 
 // Maps the internal mode key ("full"/"master"/"slave"/"dual" - unchanged in
 // settings.db, the CLI --mode flag and orchestration/tests) to its
-// user-facing display name (Diretta/Solo Upload/Solo installazione, or the
-// English equivalent).
+// user-facing display name (Diretta/Solo Upload/Solo installazione/Master +
+// Locale, or the English equivalent).
 const MODE_TITLE_KEYS = { full: "modeFullTitle", master: "modeMasterTitle", slave: "modeSlaveTitle", dual: "modeDualTitle" };
 function modeDisplayName(modeKey) {
   return t(MODE_TITLE_KEYS[modeKey] || modeKey);
@@ -773,10 +773,10 @@ function renderSetupEntry(s, group, ty, isFirst) {
 
 // Desc-key family for each view's compact, read-only mode-summary card
 // (renderModeSummaryCard below), keyed by mode. Download and Upload each
-// phrase the same three modes' effects differently (Download: what a Start
+// phrase the same four modes' effects differently (Download: what a Start
 // download run does; Upload: what confirming a manual upload does), so they
 // don't share Settings' own general-purpose picker copy either (see
-// renderModePickerCards's modeGeneralFullDesc/MasterDesc/SlaveDesc).
+// renderModePickerCards's modeGeneralFullDesc/MasterDesc/SlaveDesc/DualDesc).
 const DOWNLOAD_MODE_DESC_KEYS = { full: "fullDesc", master: "masterDesc", slave: "slaveDesc", dual: "dualDesc" };
 
 // Compact, read-only stand-in for the full mode picker (now in Settings, see
