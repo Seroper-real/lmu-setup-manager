@@ -189,9 +189,9 @@ Apri la tab **Permissions** e spunta:
 
 | Scope | Serve a |
 | :--- | :--- |
-| `files.metadata.read` | Solo Upload + Upload + Locale + Solo installazione (elenco della cartella) |
-| `files.content.read` | Solo installazione + Upload + Locale (download dei setup) |
-| `files.content.write` | Solo Upload + Upload + Locale (upload e sostituzione dei setup) |
+| `files.metadata.read` | Solo Upload, Upload + Locale, Solo installazione (elenco della cartella) |
+| `files.content.read` | Solo installazione, Upload + Locale (download dei setup) |
+| `files.content.write` | Solo Upload, Upload + Locale (upload e sostituzione dei setup) |
 
 Premi **Submit** in fondo alla pagina, altrimenti non viene salvato nulla.
 

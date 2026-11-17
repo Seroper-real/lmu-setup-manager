@@ -1,4 +1,4 @@
-"""DUAL mode (master + local install): publish to the share AND install locally.
+"""DUAL mode ("Upload + Local"): publish to the share AND install locally.
 Drives the real DualManager through the sandbox; only the three external
 systems are mocked."""
 import zipfile

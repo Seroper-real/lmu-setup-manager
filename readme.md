@@ -189,9 +189,9 @@ Open the **Permissions** tab and tick:
 
 | Scope | Needed by |
 | :--- | :--- |
-| `files.metadata.read` | Upload only + Upload + Local + Install only (listing the folder) |
-| `files.content.read` | Install only + Upload + Local (downloading setups) |
-| `files.content.write` | Upload only + Upload + Local (uploading and replacing setups) |
+| `files.metadata.read` | Upload only, Upload + Local, Install only (listing the folder) |
+| `files.content.read` | Install only, Upload + Local (downloading setups) |
+| `files.content.write` | Upload only, Upload + Local (uploading and replacing setups) |
 
 Press **Submit** at the bottom, otherwise nothing is saved.
 

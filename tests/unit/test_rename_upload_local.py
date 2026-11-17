@@ -2,6 +2,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 I18N = ROOT / "src" / "gui" / "web" / "i18n.js"
 OLD_NAME = "Master + Loc"
@@ -51,9 +53,6 @@ def _slugs(text):
             seen[base] = n + 1
             slugs.add(base if n == 0 else f"{base}-{n}")
     return slugs
-
-
-import pytest
 
 
 @pytest.mark.parametrize("name", ["readme.md", "readme.it.md"])
