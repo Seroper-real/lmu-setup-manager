@@ -52,7 +52,7 @@ def test_go_setup_file_extensions():
 
 def test_mode_is_valid():
     import core.config as config
-    assert config.MODE in {"full", "master", "slave"}
+    assert config.MODE in {"full", "master", "slave", "dual"}
 
 
 def test_dropbox_config_present():
@@ -315,3 +315,47 @@ def test_save_config_deep_merge_preserves_sibling_keys(load_config):
     assert after["ui"]["language"] == "en"  # untouched by the second patch
     # Untouched top-level sections survive the merge too.
     assert after["network"]["page_size"] == 64
+
+
+def test_valid_modes_includes_dual(load_config):
+    assert "dual" in load_config().VALID_MODES
+
+
+def test_mode_env_var_accepts_dual(load_config):
+    cfg = load_config(MODE="dual", MOCK_TRACKTITAN="true", MOCK_DROPBOX="true")
+    assert cfg.MODE == "dual"
+
+
+def test_check_credentials_dual_needs_both_groups(load_config, no_credentials):
+    cfg = load_config()
+    errors = cfg.check_credentials("dual", mock_tracktitan=False, mock_dropbox=False)
+    assert len(errors) == 6
+    assert sum("DROPBOX" in e for e in errors) == 3
+    assert any("ACCESS_TOKEN_LIST" in e for e in errors)
+
+
+def test_check_credentials_dual_tracktitan_only_missing_dropbox(load_config, no_credentials):
+    cfg = load_config(ACCESS_TOKEN_LIST=_LONG, ACCESS_TOKEN_DOWNLOAD=_LONG, USER_ID=_LONG)
+    errors = cfg.check_credentials("dual", mock_tracktitan=False, mock_dropbox=False)
+    assert len(errors) == 3 and all("DROPBOX" in e for e in errors)
+
+
+def test_check_credentials_dual_dropbox_only_missing_tracktitan(load_config, no_credentials):
+    cfg = load_config(DROPBOX_APP_KEY=_LONG, DROPBOX_APP_SECRET=_LONG, DROPBOX_REFRESH_TOKEN=_LONG)
+    errors = cfg.check_credentials("dual", mock_tracktitan=False, mock_dropbox=False)
+    assert len(errors) == 3 and not any("DROPBOX" in e for e in errors)
+
+
+def test_check_credentials_dual_each_group_waived_by_its_own_mock(load_config, no_credentials):
+    cfg = load_config()
+    assert len(cfg.check_credentials("dual", mock_tracktitan=True, mock_dropbox=False)) == 3
+    assert len(cfg.check_credentials("dual", mock_tracktitan=False, mock_dropbox=True)) == 3
+    assert cfg.check_credentials("dual", mock_tracktitan=True, mock_dropbox=True) == []
+
+
+def test_check_credentials_dual_passes_with_everything(load_config, no_credentials):
+    cfg = load_config(
+        ACCESS_TOKEN_LIST=_LONG, ACCESS_TOKEN_DOWNLOAD=_LONG, USER_ID=_LONG,
+        DROPBOX_APP_KEY=_LONG, DROPBOX_APP_SECRET=_LONG, DROPBOX_REFRESH_TOKEN=_LONG,
+    )
+    assert cfg.check_credentials("dual", mock_tracktitan=False, mock_dropbox=False) == []

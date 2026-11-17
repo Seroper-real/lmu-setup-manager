@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import shutil
@@ -113,6 +114,51 @@ def upload_manual_setup_to_dropbox(
         _upload_go_setup(dropbox_client, zip_path, setup)
     else:
         _upload_hymo_setup(dropbox_client, zip_path, setup)
+
+
+def publish_and_install_manual_setup(
+    dropbox_client: DropboxClientProtocol,
+    setup_manager: SetupManager,
+    zip_path: str | Path,
+    setup: Setup,
+    setup_type: str,
+) -> None:
+    """DUAL mode's manual upload: publish to the share exactly like MASTER
+    (upload_manual_setup_to_dropbox) AND install locally exactly like
+    FULL/SLAVE (install_manual_setup_locally, i.e. SetupManager.install_setup
+    plus its DB record) - both from the user's own local archive, so the
+    local half never round-trips through Dropbox.
+
+    The halves are independent: a failure in one never skips the other.
+    Afterwards the upload's error wins if both failed (it may be an AuthError
+    the GUI must turn into its re-authentication dialog); otherwise whichever
+    single error occurred is re-raised, so the Upload tab never reports
+    success for a half that didn't happen.
+    """
+    upload_error: Optional[Exception] = None
+    try:
+        upload_manual_setup_to_dropbox(dropbox_client, zip_path, setup, setup_type)
+    except Exception as e:
+        upload_error = e
+        log.exception("Manual upload (dual): Dropbox publish failed, still installing locally")
+
+    # A separate Setup for the local half: install_manual_setup_locally may
+    # swap the id for an existing local row's (and install_setup rewrites
+    # safe_car/safe_track), which must not leak back into the published one.
+    # After the upload, setup.data["id"] already holds the share's id for this
+    # car/track, so a fresh install lines up with the published package.
+    local_setup = Setup(copy.deepcopy(setup.data))
+    local_setup.safe_track = setup.safe_track
+    local_setup.safe_car = setup.safe_car
+    try:
+        install_manual_setup_locally(setup_manager, zip_path, local_setup, setup_type)
+    except Exception:
+        if upload_error is None:
+            raise
+        log.exception("Manual upload (dual): local install failed too")
+
+    if upload_error is not None:
+        raise upload_error
 
 
 def _upload_go_setup(dropbox_client: DropboxClientProtocol, zip_path: str | Path, setup: Setup) -> None:

@@ -166,6 +166,20 @@ class Sandbox:
         ).run()
         return dbx
 
+    def run_dual(self, database, base_path: Optional[Path] = None, dropbox=None):
+        """Mirrors main.run_dual: master's publish flow plus a local install."""
+        from orchestration.download_manager import DownloadManager
+        from orchestration.dual_manager import DualManager
+
+        dbx = dropbox or self.dropbox()
+        sm = self.setup_manager(database)
+        dm = DownloadManager(database=None, client=self.tracktitan(base_path))
+        manager = DualManager(
+            download_manager=dm, dropbox_client=dbx, setup_manager=sm, database=database,
+        )
+        manager.run()
+        return manager
+
     def run_slave(self, database) -> None:
         from orchestration.slave_manager import SlaveManager
         SlaveManager(

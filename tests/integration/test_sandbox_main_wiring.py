@@ -99,3 +99,33 @@ def test_run_full_installs_without_tokens_or_a_game_install_and_is_idempotent(wi
     assert EXPECTED_INSTALL <= box.installed_files()
 
 
+
+
+def test_run_dual_publishes_and_installs_through_the_factories(wired, log):
+    import main
+
+    box, real_tt, real_dbx = wired
+    main.run_dual(log)
+
+    assert len(box.share_names()) >= 3
+    assert EXPECTED_INSTALL <= box.installed_files()
+    real_tt.assert_not_called()
+    real_dbx.assert_not_called()
+
+
+def test_run_dual_is_idempotent(wired, log, mocker):
+    import main
+    from clients.mocks.mock_dropbox_client import MockDropboxClient
+    from processing.setup_manager import SetupManager
+
+    box, _, _ = wired
+    main.run_dual(log)
+    names = box.share_names()
+    upload = mocker.spy(MockDropboxClient, "upload")
+    install = mocker.spy(SetupManager, "install_setup")
+
+    main.run_dual(log)
+
+    upload.assert_not_called()
+    install.assert_not_called()
+    assert box.share_names() == names

@@ -33,9 +33,11 @@ _config = settings_db.get_config()
 # full   : TrackTitan -> install locally (DB-backed). Original behavior.
 # master : TrackTitan -> repackage -> upload to Dropbox (no DB).
 # slave  : Dropbox -> install locally (DB-backed, FULL-compatible).
+# dual   : "Master + Locale" - master's publish flow, plus a local install of
+#          every package it handles (DB-backed, FULL/SLAVE-compatible).
 # The MODE env var (set directly or via main.py's --mode flag) wins over the
 # stored config, so a local run can switch mode without touching settings.db.
-VALID_MODES: set[str] = {"full", "master", "slave"}
+VALID_MODES: set[str] = {"full", "master", "slave", "dual"}
 MODE: str = str(os.getenv("MODE") or _config.get("mode", "full")).strip().lower()
 if MODE not in VALID_MODES:
     raise RuntimeError(
@@ -134,7 +136,7 @@ REMOTE_MAPPINGS_URL=_config["remote_mappings"]["url"]
 _dropbox_cfg = _config.get("dropbox", {})
 DROPBOX_FOLDER: str = _dropbox_cfg.get("folder", "/lmu-setups")
 DROPBOX_TIMEOUT: int = _dropbox_cfg.get("timeout", 30)
-# MASTER publishes packages from a worker pool of this size. 1 restores the
+# MASTER (and DUAL) publishes packages from a worker pool of this size. 1 restores the
 # fully serial behavior.
 DROPBOX_UPLOAD_WORKERS: int = max(1, int(_dropbox_cfg.get("upload_workers", 4)))
 
@@ -175,6 +177,11 @@ def check_credentials(mode: str, mock_tracktitan: bool, mock_dropbox: bool) -> l
     A required field must be present and at least as long as its entry in
     _MIN_CREDENTIAL_LENGTHS. Returns human-readable error strings; empty = OK.
     Called only by the GUI's Api.validate_start(), never at import time.
+
+    TrackTitan tokens are needed by every mode that fetches from the API
+    (full/master/dual), Dropbox credentials by every mode that touches the
+    share (master/slave/dual) - dual therefore needs both, each waived by its
+    own MOCK_* flag.
     """
     errors: list[str] = []
 
@@ -182,12 +189,12 @@ def check_credentials(mode: str, mock_tracktitan: bool, mock_dropbox: bool) -> l
         if not value or len(value) < _MIN_CREDENTIAL_LENGTHS[label]:
             errors.append(f"Missing or invalid {label}")
 
-    if mode in {"full", "master"} and not mock_tracktitan:
+    if mode in {"full", "master", "dual"} and not mock_tracktitan:
         _require(ACCESS_TOKEN_LIST, "ACCESS_TOKEN_LIST")
         _require(ACCESS_TOKEN_DOWNLOAD, "ACCESS_TOKEN_DOWNLOAD")
         _require(USER_ID, "USER_ID")
 
-    if mode in {"master", "slave"} and not mock_dropbox:
+    if mode in {"master", "slave", "dual"} and not mock_dropbox:
         _require(DROPBOX_APP_KEY, "DROPBOX_APP_KEY")
         _require(DROPBOX_APP_SECRET, "DROPBOX_APP_SECRET")
         _require(DROPBOX_REFRESH_TOKEN, "DROPBOX_REFRESH_TOKEN")

@@ -57,3 +57,14 @@ def test_a_preexported_flag_survives_no_cli(apply, monkeypatch):
     apply([])
     # A flag only ever sets; it never clears an already-exported value.
     assert os.environ["MOCK_DROPBOX"] == "true"
+
+
+def test_mode_dual_sets_the_env_var(apply):
+    import os
+    apply(["--mode", "dual"])
+    assert os.environ["MODE"] == "dual"
+
+
+def test_unknown_mode_is_rejected(apply):
+    with pytest.raises(SystemExit):
+        apply(["--mode", "bogus"])

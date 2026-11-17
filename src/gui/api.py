@@ -15,6 +15,7 @@ from core.progress import ProgressEvent, ProgressKind
 if TYPE_CHECKING:
     from domain.setup_db import InstalledSetup
     from processing.car_manager import CarManager
+    from processing.setup_manager import SetupManager
 
 log = logging.getLogger("TrackTitanDownloader")
 
@@ -36,6 +37,11 @@ _HOT_RELOAD_MODULES: tuple[str, ...] = (
     "processing.setup_manager",
     "processing.track_manager",
     "processing.car_manager",
+    # Kept after everything they import from: DualManager subclasses
+    # MasterManager, and a reload of only the base module would leave it
+    # inheriting the stale class (bound to the old config values).
+    "orchestration.dual_manager",
+    "processing.manual_upload",
 )
 
 
@@ -168,7 +174,7 @@ class Api:
 
     def _installed_summary(self) -> tuple[bool, int]:
         # DB_PATH is not mode-conditional (core/config.py sets it regardless of
-        # MODE), so it reflects whatever full/slave runs have installed on this
+        # MODE), so it reflects whatever full/slave/dual runs have installed on this
         # machine even while the app is currently set to master - show it as-is
         # rather than hiding it, since master not writing to the DB itself is not
         # the same as there being nothing worth showing.
@@ -427,22 +433,25 @@ class Api:
 
     def upload_manual_setup(self, zip_path: str, setup_type: str, track: str, car: str) -> dict[str, object]:
         from core.errors import AuthError
-        from processing.manual_upload import build_manual_setup, install_manual_setup_locally, upload_manual_setup_to_dropbox
+        from processing.manual_upload import (
+            build_manual_setup, install_manual_setup_locally, publish_and_install_manual_setup,
+            upload_manual_setup_to_dropbox,
+        )
 
         setup = build_manual_setup(track, car)
+        mode: str = self.current_mode()
         try:
-            if self.current_mode() == "master":
+            if mode == "master":
                 from clients.protocols import build_dropbox_client
                 upload_manual_setup_to_dropbox(build_dropbox_client(), zip_path, setup, setup_type)
-            else:
-                from domain.setup_db import SetupDb
-                from processing.setup_manager import SetupManager
-                from processing.track_manager import TrackManager
-
-                setup_manager = SetupManager(
-                    track_manager=TrackManager(), car_manager=self._get_car_manager(), database=SetupDb(),
+            elif mode == "dual":
+                # Dual = master's publish + a local install of the same archive.
+                from clients.protocols import build_dropbox_client
+                publish_and_install_manual_setup(
+                    build_dropbox_client(), self._build_setup_manager(), zip_path, setup, setup_type,
                 )
-                install_manual_setup_locally(setup_manager, zip_path, setup, setup_type)
+            else:
+                install_manual_setup_locally(self._build_setup_manager(), zip_path, setup, setup_type)
             return {"ok": True}
         except AuthError as e:
             log.exception("Manual upload failed: authentication error")
@@ -450,6 +459,13 @@ class Api:
         except Exception as e:
             log.exception("Manual upload failed")
             return {"ok": False, "error": str(e), "authError": False}
+
+    def _build_setup_manager(self) -> "SetupManager":
+        from domain.setup_db import SetupDb
+        from processing.setup_manager import SetupManager
+        from processing.track_manager import TrackManager
+
+        return SetupManager(track_manager=TrackManager(), car_manager=self._get_car_manager(), database=SetupDb())
 
     def map_track(self, track: str, name: str) -> dict[str, object]:
         """Persists one track correction from the end-of-run "unmatched
@@ -517,10 +533,10 @@ class Api:
     def validate_start(self, mode: str) -> list[str]:
         from core.config import check_credentials, MOCK_TRACKTITAN, MOCK_DROPBOX, MOCK_LMU, LMU_SETUPS_BASE_PATH
         errors = check_credentials(mode, MOCK_TRACKTITAN, MOCK_DROPBOX)
-        # Only Full and Slave install setups locally, so only they depend on
-        # LMU_SETUPS_BASE_PATH existing - Master only ever uploads to Dropbox.
+        # Only Full, Slave and Dual install setups locally, so only they depend
+        # on LMU_SETUPS_BASE_PATH existing - Master only ever uploads to Dropbox.
         # Kept out of check_credentials(), which validates secrets, not paths.
-        if mode in {"full", "slave"} and not MOCK_LMU and not Path(LMU_SETUPS_BASE_PATH).exists():
+        if mode in {"full", "slave", "dual"} and not MOCK_LMU and not Path(LMU_SETUPS_BASE_PATH).exists():
             errors.append("Invalid or missing LMU_PATH")
         return errors
 
@@ -570,6 +586,7 @@ class Api:
             "full": main.run_full,
             "master": main.run_master,
             "slave": main.run_slave,
+            "dual": main.run_dual,
         }
         if mode not in run_fns:
             raise ValueError(f"Unknown mode: {mode}")
