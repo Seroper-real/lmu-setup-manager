@@ -49,3 +49,84 @@ def test_parse_go_entry_valid_three_segments():
 ])
 def test_parse_go_entry_rejects_invalid_input(name, path, segments):
     assert parse_go_entry(name, path, segments) is None
+
+
+# --- parse_go_version / filter_latest_go_version ------------------------------
+
+from pathlib import Path
+
+from domain.go_setup import filter_latest_go_version, parse_go_version
+
+
+@pytest.mark.parametrize("name, expected", [
+    pytest.param("GO V1.4.3 9X8EVO HYP MON Q Safe.svm", (1, 4, 3), id="typical"),
+    pytest.param("GO v1.4.3 x.svm", (1, 4, 3), id="lowercase_v"),
+    pytest.param("GO V1.10.0 x.svm", (1, 10, 0), id="multi_digit_component"),
+    pytest.param("GO V2 x.svm", (2,), id="single_component"),
+    pytest.param("GO V1.4 x.svm", (1, 4), id="two_components"),
+    pytest.param("GO V1.4.3.svm", (1, 4, 3), id="version_before_extension"),
+    pytest.param("GO x.svm", None, id="no_version"),
+    pytest.param("GO EVO Q Safe.svm", None, id="v_inside_word_ignored"),
+    pytest.param("GOV1.4.3.svm", None, id="v_glued_to_letters_ignored"),
+    pytest.param("", None, id="empty"),
+])
+def test_parse_go_version(name, expected):
+    assert parse_go_version(name) == expected
+
+
+def _p(*names):
+    return [Path(n) for n in names]
+
+
+def test_filter_keeps_only_highest_version():
+    files = _p("GO V1.4.3 a.svm", "GO V1.4.1 a.svm", "GO V1.3.3 a.svm")
+    assert filter_latest_go_version(files) == [files[0]]
+
+
+def test_filter_numeric_not_lexicographic():
+    files = _p("GO V1.4.3 a.svm", "GO V1.10.0 a.svm", "GO V1.9.9 a.svm")
+    assert filter_latest_go_version(files) == [files[1]]
+
+
+def test_filter_keeps_all_files_of_the_top_version_and_preserves_order():
+    files = _p("GO V1.4.3 b.svm", "GO V1.3.0 b.svm", "GO V1.4.3 a.svm", "GO V1.4.3 c.svm")
+    assert filter_latest_go_version(files) == [files[0], files[2], files[3]]
+
+
+def test_filter_is_global_variants_only_in_older_versions_dropped():
+    files = _p("GO V1.4.3 a.svm", "GO V1.3.3 onlyold.svm")
+    assert filter_latest_go_version(files) == [files[0]]
+
+
+def test_filter_zero_padding_treats_1_4_and_1_4_0_as_equal():
+    files = _p("GO V1.4 a.svm", "GO V1.4.0 b.svm", "GO V1.3.9 c.svm")
+    assert filter_latest_go_version(files) == files[:2]
+
+
+def test_filter_padding_does_not_hide_higher_patch():
+    files = _p("GO V1.4 a.svm", "GO V1.4.1 b.svm")
+    assert filter_latest_go_version(files) == [files[1]]
+
+
+def test_filter_unversioned_files_always_kept():
+    files = _p("GO V1.4.3 a.svm", "GO V1.2.0 b.svm", "notes.svm")
+    assert filter_latest_go_version(files) == [files[0], files[2]]
+
+
+def test_filter_no_versions_returns_everything():
+    files = _p("a.svm", "b.svm")
+    assert filter_latest_go_version(files) == files
+
+
+def test_filter_empty_list():
+    assert filter_latest_go_version([]) == []
+
+
+def test_filter_returns_new_list_when_no_versions():
+    files = _p("a.svm")
+    assert filter_latest_go_version(files) is not files
+
+
+def test_filter_same_name_in_different_dirs_both_kept():
+    files = [Path("x/GO V1.4.3 a.svm"), Path("y/GO V1.4.3 a.svm"), Path("x/GO V1.0.0 a.svm")]
+    assert filter_latest_go_version(files) == files[:2]

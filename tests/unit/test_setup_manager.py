@@ -312,3 +312,64 @@ def test_setup_manager_creates_a_missing_lmu_base_path_on_init(in_memory_db, moc
     assert missing.is_dir()
 
 
+
+
+# --- latest-GO-version-only install -----------------------------------------
+
+GO_ARCHIVE = {
+    "GO V1.4.3 car.svm": b"new",
+    "GO V1.4.1 car.svm": b"mid",
+    "GO V1.3.3 car.svm": b"old",
+}
+
+
+def test_copy_to_lmu_latest_go_only_installs_highest_version(sm, tmp_path, lmu_base):
+    src = tmp_path / "extracted"
+    src.mkdir()
+    for name, data in GO_ARCHIVE.items():
+        (src / name).write_bytes(data)
+    dest = lmu_base / "Spa"
+
+    copied = sm._copy_file_to_lmu(src, dest, latest_go_only=True)
+
+    assert {f.name for f in copied} == {"GO V1.4.3 car.svm"}
+    assert {f.name for f in dest.iterdir()} == {"GO V1.4.3 car.svm"}
+
+
+def test_copy_to_lmu_default_installs_every_version(sm, tmp_path, lmu_base):
+    src = tmp_path / "extracted"
+    src.mkdir()
+    for name, data in GO_ARCHIVE.items():
+        (src / name).write_bytes(data)
+    dest = lmu_base / "Spa"
+
+    copied = sm._copy_file_to_lmu(src, dest)
+
+    assert {f.name for f in copied} == set(GO_ARCHIVE)
+
+
+def test_install_setup_go_records_only_latest_version(sm, sample_setup, lmu_base, install_setup_env):
+    zip_path = install_setup_env(GO_ARCHIVE)
+
+    assert sm.install_setup(zip_path, sample_setup, setup_type="GO") is True
+
+    assert {f.name for f in (lmu_base / "Spa").iterdir()} == {"GO V1.4.3 car.svm"}
+    row = sm.database.fetch_installed_setup(sample_setup.id)
+    assert [Path(n).name for n in row.file_names] == ["GO V1.4.3 car.svm"]
+
+
+def test_install_setup_hymo_keeps_all_versions(sm, sample_setup, lmu_base, install_setup_env):
+    zip_path = install_setup_env(GO_ARCHIVE)
+
+    sm.install_setup(zip_path, sample_setup)
+
+    assert {f.name for f in (lmu_base / "Spa").iterdir()} == set(GO_ARCHIVE)
+
+
+def test_install_setup_go_without_versions_installs_everything(sm, sample_setup, lmu_base, install_setup_env):
+    names = {"a.svm": b"1", "b.svm": b"2"}
+    zip_path = install_setup_env(names)
+
+    sm.install_setup(zip_path, sample_setup, setup_type="GO")
+
+    assert {f.name for f in (lmu_base / "Spa").iterdir()} == set(names)
