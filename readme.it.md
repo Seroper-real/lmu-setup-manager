@@ -60,7 +60,7 @@ Apri **Impostazioni → Modalità di funzionamento** e scegline una. La scelta h
 | `full` *(predefinita)* | **Diretta** | Scarica da TrackTitan e installa direttamente in LMU su questo PC | Login TrackTitan + cartella LMU |
 | `master` | **Solo Upload** | Scarica da TrackTitan e pubblica sul tuo Dropbox (nessuna installazione locale) | Login TrackTitan + app Dropbox |
 | `slave` | **Solo installazione** | Prende i setup dal tuo Dropbox e li installa in LMU su questo PC | App Dropbox (basta la sola lettura) + cartella LMU |
-| `dual` | **Master + Locale** | Scarica da TrackTitan, pubblica sul tuo Dropbox **e** installa in LMU su questo PC dallo stesso pacchetto (anche i caricamenti manuali fanno entrambe le cose) | Login TrackTitan + app Dropbox (lettura/scrittura) + cartella LMU |
+| `dual` | **Upload + Locale** | Scarica da TrackTitan, pubblica sul tuo Dropbox **e** installa in LMU su questo PC dallo stesso pacchetto (anche i caricamenti manuali fanno entrambe le cose) | Login TrackTitan + app Dropbox (lettura/scrittura) + cartella LMU |
 
 **Su un solo PC usa Diretta.** Le altre hanno senso solo se usi Le Mans Ultimate su **più di un tuo PC** e vuoi spostare i setup tra di essi tramite il tuo Dropbox — vedi [Modalità nel dettaglio](#modalità-nel-dettaglio).
 
@@ -87,7 +87,7 @@ Apri **Impostazioni → Modalità di funzionamento** e scegline una. La scelta h
 
 Qui non serve il percorso LMU: non viene installato nulla in locale.
 
-### Master + Locale — il PC con l'abbonamento, se ci giochi anche tu
+### Upload + Locale — il PC con l'abbonamento, se ci giochi anche tu
 
 Gli stessi passi di Solo Upload (app Dropbox, token TrackTitan, **Token Lettura/Scrittura**, cartella Dropbox condivisa), più **Impostazioni → Cartella setup Le Mans Ultimate** come in Diretta. Ogni esecuzione pubblica su Dropbox per gli altri tuoi PC **e** installa in LMU su questo.
 
@@ -110,7 +110,7 @@ Gli stessi passi di Solo Upload (app Dropbox, token TrackTitan, **Token Lettura/
 
 **Setup installati** — Tutto ciò che l'app ha installato, raggruppato per pista e auto, con il logo della classe dell'auto e un link **Hotlap** che apre il giro su YouTube di TrackTitan per quel setup. Puoi cercare per pista o auto ed eliminare un singolo setup, un'intera auto, tutti quelli di una pista o tutti in blocco.
 
-**Carica Setup** — Trascina un `.zip` (o clicca per sceglierlo), seleziona il tipo (**GO Setups** o **HYMO**), la pista e l'auto, e premi **Carica setup**. In Diretta/Solo installazione viene installato direttamente in LMU; in Solo Upload viene pubblicato sul tuo Dropbox per gli altri PC; in Master + Locale viene sia pubblicato su Dropbox sia installato in LMU. Pista e auto vengono indovinate dal nome del file quando possibile. È il modo più semplice per aggiungere archivi [GO Setups](#setup-go).
+**Carica Setup** — Trascina un `.zip` (o clicca per sceglierlo), seleziona il tipo (**GO Setups** o **HYMO**), la pista e l'auto, e premi **Carica setup**. In Diretta/Solo installazione viene installato direttamente in LMU; in Solo Upload viene pubblicato sul tuo Dropbox per gli altri PC; in Upload + Locale viene sia pubblicato su Dropbox sia installato in LMU. Pista e auto vengono indovinate dal nome del file quando possibile. È il modo più semplice per aggiungere archivi [GO Setups](#setup-go).
 
 **Associazioni manuali** — I nomi di piste e auto che hai associato a mano (vedi [Quando un setup non viene riconosciuto](#quando-un-setup-non-viene-riconosciuto)). Ricercabili, paginati, con eliminazione singola o totale. In questa tab trovi anche il filtro **Auto da scaricare** (vedi sopra).
 
@@ -138,7 +138,7 @@ Le credenziali Dropbox invece non scadono: il refresh token si genera una volta 
 
 ### Setup aggiornati
 
-Quando TrackTitan pubblica una nuova versione di un setup che hai già, l'app se ne accorge e lo sostituisce — in LMU, e su Dropbox in Solo Upload e Master + Locale. Non devi tenere traccia delle versioni tu.
+Quando TrackTitan pubblica una nuova versione di un setup che hai già, l'app se ne accorge e lo sostituisce — in LMU, e su Dropbox in Solo Upload e Upload + Locale. Non devi tenere traccia delle versioni tu.
 
 ---
 
@@ -162,14 +162,14 @@ Per impostazione predefinita il tool gira in modalità **Diretta** (`full`) e fa
 Se usi Le Mans Ultimate su **più di un tuo PC**, le altre modalità ti permettono di spostare i setup tramite il **tuo Dropbox**, invece di estrarre i token e interrogare TrackTitan da ogni macchina:
 
 - **Solo Upload** (`master`) — gira sul PC con il tuo abbonamento TrackTitan. Scarica i setup, li reimpacchetta e li copia sul tuo Dropbox in `<cartella Dropbox>/<Auto>/<Pista>/HYMO-<pista>_<auto>_<id>_<timestamp>.zip`. Non tiene alcun database locale: capisce cosa pubblicare confrontando TrackTitan con ciò che c'è già nella cartella. Quando un setup viene aggiornato, il nuovo zip viene caricato per primo e solo dopo il vecchio viene eliminato.
-- **Master + Locale** (`dual`) — Solo Upload più l'installazione locale: ogni pacchetto viene scaricato una sola volta, pubblicato su Dropbox e installato in LMU su questo PC, e i setup installati vengono tracciati nel database locale. Servono token TrackTitan, una credenziale Dropbox in lettura/scrittura e la cartella LMU. Anche i caricamenti manuali vengono pubblicati e installati.
+- **Upload + Locale** (`dual`) — Solo Upload più l'installazione locale: ogni pacchetto viene scaricato una sola volta, pubblicato su Dropbox e installato in LMU su questo PC, e i setup installati vengono tracciati nel database locale. Servono token TrackTitan, una credenziale Dropbox in lettura/scrittura e la cartella LMU. Anche i caricamenti manuali vengono pubblicati e installati.
 - **Solo installazione** (`slave`) — gira sui tuoi altri PC. Elenca quella stessa cartella, salta ciò che il database locale ha già alla stessa versione o più recente, scarica il resto e lo installa. Ricostruisce i dettagli di ogni setup da un `.metadata.json` incluso nello zip, quindi una macchina in Solo installazione finisce con esattamente gli stessi record di una in Diretta.
 
 Solo il lato TrackTitan è soggetto a rate limit (circa un setup ogni paio di secondi, quindi una prima esecuzione completa richiede sui 20–30 minuti). I caricamenti su Dropbox avvengono in parallelo in background e non si sommano a quel tempo.
 
 ## Creare la tua app Dropbox
 
-Serve per Solo Upload, Master + Locale e Solo installazione. Circa tre minuti, una volta sola.
+Serve per Solo Upload, Upload + Locale e Solo installazione. Circa tre minuti, una volta sola.
 
 ### 1. Crea l'app
 
@@ -189,15 +189,15 @@ Apri la tab **Permissions** e spunta:
 
 | Scope | Serve a |
 | :--- | :--- |
-| `files.metadata.read` | Solo Upload + Master + Locale + Solo installazione (elenco della cartella) |
-| `files.content.read` | Solo installazione + Master + Locale (download dei setup) |
-| `files.content.write` | Solo Upload + Master + Locale (upload e sostituzione dei setup) |
+| `files.metadata.read` | Solo Upload + Upload + Locale + Solo installazione (elenco della cartella) |
+| `files.content.read` | Solo installazione + Upload + Locale (download dei setup) |
+| `files.content.write` | Solo Upload + Upload + Locale (upload e sostituzione dei setup) |
 
 Premi **Submit** in fondo alla pagina, altrimenti non viene salvato nulla.
 
 ### 3. Ottieni il refresh token
 
-Usa **Ottieni automaticamente** nelle Impostazioni dell'app, come descritto nel [Passo 3](#solo-upload--il-pc-che-ha-il-tuo-abbonamento). Scegli **Lettura/Scrittura** sul PC in Solo Upload (o Master + Locale) e **Sola Lettura** su quelli in Solo installazione: un refresh token di sola lettura non può mai essere ampliato in seguito, quindi quella macchina è fisicamente incapace di danneggiare la tua cartella.
+Usa **Ottieni automaticamente** nelle Impostazioni dell'app, come descritto nel [Passo 3](#solo-upload--il-pc-che-ha-il-tuo-abbonamento). Scegli **Lettura/Scrittura** sul PC in Solo Upload (o Upload + Locale) e **Sola Lettura** su quelli in Solo installazione: un refresh token di sola lettura non può mai essere ampliato in seguito, quindi quella macchina è fisicamente incapace di danneggiare la tua cartella.
 
 <details>
 <summary>Generare il refresh token a mano</summary>
@@ -281,7 +281,7 @@ USER_ID=123cdvf-34fd...
 
 I setup gestiti da questo tool in modo completo provengono da TrackTitan e sono pubblicati con il marchio **HYMO**. **GO Setups** è un provider di terze parti separato, solo *compatibile* con questo tool: l'app non comunica mai con i sistemi di GO e non pubblica nulla per suo conto. Gli archivi li fornisci tu.
 
-**Per aggiungerne uno:** usa la tab **Carica Setup** — trascina lo zip, scegli il tipo **GO Setups**, seleziona pista e auto, conferma. In Diretta/Solo installazione viene installato in locale; in Solo Upload viene pubblicato su Dropbox perché gli altri tuoi PC lo prendano; in Master + Locale viene sia pubblicato sia installato in locale. Un secondo caricamento per la stessa auto e pista sostituisce l'archivio precedente.
+**Per aggiungerne uno:** usa la tab **Carica Setup** — trascina lo zip, scegli il tipo **GO Setups**, seleziona pista e auto, conferma. In Diretta/Solo installazione viene installato in locale; in Solo Upload viene pubblicato su Dropbox perché gli altri tuoi PC lo prendano; in Upload + Locale viene sia pubblicato sia installato in locale. Un secondo caricamento per la stessa auto e pista sostituisce l'archivio precedente.
 
 Dettagli:
 
