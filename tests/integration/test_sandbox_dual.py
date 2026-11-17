@@ -251,3 +251,77 @@ def test_install_event_emitted_once_per_setup(sandbox, in_memory_db):
     ).run()
 
     assert [e.kind for e in events].count(ProgressKind.INSTALL) == 1
+
+
+def test_failed_install_leaves_no_staged_copy_or_extraction_behind(sandbox, in_memory_db, mocker):
+    _one(sandbox)
+    from processing.setup_manager import SetupManager
+
+    def _explode(self, downloaded_path, setup, **kwargs):
+        # Simulate a crash midway through extraction.
+        (sandbox.downloads / setup.id).mkdir(parents=True, exist_ok=True)
+        raise RuntimeError("corrupt archive")
+
+    mocker.patch.object(SetupManager, "install_setup", _explode)
+
+    sandbox.run_dual(in_memory_db)
+
+    assert sandbox.share_names() == {_name(V1)}
+    assert list(sandbox.downloads.iterdir()) == []
+
+
+def test_install_rewriting_safe_names_does_not_move_the_upload(sandbox, in_memory_db, mocker):
+    _one(sandbox)
+    from processing.setup_manager import SetupManager
+    real_install = SetupManager.install_setup
+
+    def _install_and_scribble(self, downloaded_path, setup, **kwargs):
+        result = real_install(self, downloaded_path, setup, **kwargs)
+        setup.safe_car = "Scribbled Car"
+        setup.safe_track = "Scribbled Track"
+        return result
+
+    mocker.patch.object(SetupManager, "install_setup", _install_and_scribble)
+
+    sandbox.run_dual(in_memory_db)
+
+    pkg = next(sandbox.share.glob("**/*.zip"))
+    assert pkg.relative_to(sandbox.share).parts[:2] == ("Porsche 963", "Spa")
+    assert sandbox.installed_files() == {"Spa/q_v1.svm"}
+
+
+def test_cancel_stops_both_halves_for_later_setups(sandbox, in_memory_db):
+    import threading
+    from core.progress import ProgressKind
+    from orchestration.download_manager import DownloadManager
+    from orchestration.dual_manager import DualManager
+
+    sandbox.write_catalog([
+        make_setup(SID, "Spa", car="Porsche 963", ts=V1),
+        make_setup(SID2, "Monza", car="Porsche 963", ts=V1),
+    ])
+    sandbox.add_archive(SID, {"q_v1.svm": "q_v1.svm"})
+    sandbox.add_archive(SID2, {"m_v1.svm": "m_v1.svm"})
+    cancel = threading.Event()
+    events = []
+
+    def _on_progress(event):
+        events.append(event)
+        # Stop as soon as the first setup starts: it still completes, the second never begins.
+        if event.kind == ProgressKind.START:
+            cancel.set()
+
+    manager = DualManager(
+        download_manager=DownloadManager(database=None, client=sandbox.tracktitan(), cancel_event=cancel),
+        dropbox_client=sandbox.dropbox(),
+        setup_manager=sandbox.setup_manager(in_memory_db),
+        database=in_memory_db,
+        on_progress=_on_progress,
+        cancel_event=cancel,
+    )
+    manager.run()
+
+    assert len(sandbox.share_names()) == 1
+    assert len(sandbox.installed_files()) == 1
+    assert manager.installed_count == 1
+    assert events[-1].kind == ProgressKind.STOPPED

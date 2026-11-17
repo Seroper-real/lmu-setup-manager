@@ -38,6 +38,7 @@ def sandbox(tmp_path, mocker) -> Sandbox:
         mocker.patch(f"{module}.DOWNLOAD_PATH", box.downloads)
 
     mocker.patch("orchestration.master_manager.CLEAN_DOWNLOAD", clean_download)
+    mocker.patch("orchestration.dual_manager.CLEAN_DOWNLOAD", clean_download)
     mocker.patch("orchestration.master_manager.SETUP_FILE_EXTENSIONS", extensions)
 
     mocker.patch("processing.setup_manager.CLEAN_DOWNLOAD", clean_download)

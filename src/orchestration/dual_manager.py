@@ -7,7 +7,7 @@ from typing import Optional
 
 from clients.protocols import DropboxClientProtocol
 from core.archive import sha256_file
-from core.config import DOWNLOAD_PATH
+from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH
 from core.errors import AuthError
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from domain.setup import RemoteSetup, Setup
@@ -142,6 +142,7 @@ class DualManager(MasterManager):
         except Exception as e:
             self.install_failed_count += 1
             log.error(f"Failed to install {setup.id} locally - {setup.track} - {setup.car}: {e}")
+            self._discard_failed_install(archive, setup)
             return False
         finally:
             setup.safe_car = saved_car
@@ -156,6 +157,21 @@ class DualManager(MasterManager):
         if emit:
             self._emit(ProgressEvent(ProgressKind.INSTALL, setup.title, meta=f"{setup.track} - {setup.car}"))
         return True
+
+    def _discard_failed_install(self, archive: Path, setup: Setup) -> None:
+        """install_setup raised midway, so its own cleanup never ran: drop the
+        half-extracted DOWNLOAD_PATH/<id> folder and, with CLEAN_DOWNLOAD, the
+        archive - always this manager's own staged copy or share download, never
+        the original the publish worker needs. Safe on the producer thread: this
+        id has not been submitted to the pool yet, so no worker extracts there."""
+        extraction_path: Path = Path(DOWNLOAD_PATH) / setup.id
+        try:
+            if extraction_path.exists():
+                shutil.rmtree(extraction_path)
+            if CLEAN_DOWNLOAD:
+                archive.unlink(missing_ok=True)
+        except OSError as e:
+            log.warning(f"Failed to clean up after the failed local install of {setup.id}: {e}")
 
     def _report(self, pending: list[tuple[Setup, "Future[bool]"]]) -> None:
         super()._report(pending)
