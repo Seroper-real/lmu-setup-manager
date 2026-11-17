@@ -165,7 +165,8 @@ class MasterManager:
 
         existing: Optional[RemoteSetup] = remote.get(setup.id)
         if existing and existing.ts >= setup.last_updated:
-            self._relocate_if_stale_path(setup, existing)
+            current_path: str = self._relocate_if_stale_path(setup, existing)
+            self._on_share_up_to_date(setup, existing, current_path)
             return
 
         original_zip = self.download_manager.download(setup)
@@ -173,14 +174,35 @@ class MasterManager:
             log.warning(f"No download produced for {setup.id}. Skipping.")
             return
 
+        # Runs on the producer thread, before the package is handed to the pool:
+        # the worker's _cleanup may delete original_zip as soon as it is submitted.
+        self._before_publish(setup, original_zip)
+
         self._dispatched.add(setup.id)
         slots.acquire()
         pending.append((setup, pool.submit(self._publish, setup, existing, original_zip, slots)))
 
-    def _relocate_if_stale_path(self, setup: Setup, existing: RemoteSetup) -> None:
+    def _on_share_up_to_date(self, setup: Setup, existing: RemoteSetup, current_path: str) -> None:
+        """Hook for subclasses (see orchestration.dual_manager.DualManager): called
+        on the producer thread when the share already holds a current copy of
+        `setup`, so nothing is downloaded or uploaded. `current_path` is where
+        that copy lives now (after any relocation). No-op in plain MASTER."""
+
+    def _before_publish(self, setup: Setup, original_zip: Path) -> None:
+        """Hook for subclasses (see orchestration.dual_manager.DualManager): called
+        on the producer thread with the freshly downloaded TrackTitan archive,
+        right before it is submitted to the publish pool. Must not consume or
+        delete `original_zip` - the publish worker still needs it. No-op in
+        plain MASTER."""
+
+    def _relocate_if_stale_path(self, setup: Setup, existing: RemoteSetup) -> str:
         """The setup's content is already current (caller checked existing.ts),
         but it may still sit at an old-layout path - relocate it with a cheap
         server-side move instead of a full re-publish.
+
+        Returns the share path the setup's package lives at afterwards: the
+        new layout path on success (or when already there), the old one when
+        the move failed.
 
         The target keeps existing.name verbatim rather than rebuilding it from
         setup.remote_filename: when the API's last_updated has rolled back below
@@ -192,10 +214,11 @@ class MasterManager:
         target_path = self.dropbox_client.remote_path(target_relative)
         if existing.path_lower.lower() == target_path.lower():
             log.info("Already up to date on share. Skipping.")
-            return
+            return existing.path_lower
         try:
             self.dropbox_client.move(existing.path_lower, target_path)
             log.info(f"Relocated {setup.id} to the unified car/track layout: {target_path}")
+            return target_path
         except AuthError:
             # Let this propagate: a swallowed AuthError here (e.g. a token
             # missing the scope files_move_v2 needs) would otherwise never
@@ -204,6 +227,7 @@ class MasterManager:
             raise
         except Exception as e:
             log.error(f"Failed to relocate {setup.id} to {target_path}: {e}")
+            return existing.path_lower
 
     def _publish(
         self,

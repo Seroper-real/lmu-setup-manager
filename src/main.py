@@ -26,7 +26,7 @@ def _apply_cli_env(argv: Optional[list[str]] = None) -> None:
     parser.add_argument("--mock-lmu", action="store_true", help="install into the sandbox folder instead of the game")
     parser.add_argument("--mock-dropbox", action="store_true", help="use a local folder instead of Dropbox")
     parser.add_argument("--mock-base-path", metavar="PATH", help="root for the sandbox directories (default: sandbox)")
-    parser.add_argument("--mode", choices=sorted({"full", "master", "slave"}), help="override the mode from config.json")
+    parser.add_argument("--mode", choices=sorted({"full", "master", "slave", "dual"}), help="override the mode from config.json")
     args = parser.parse_args(argv)
 
     if args.sandbox or args.mock_tracktitan:
@@ -223,6 +223,45 @@ def run_master(
         client_factory=build_dropbox_client,
         car_manager=CarManager(),
         track_manager=TrackManager(),
+        on_progress=on_progress,
+        cancel_event=cancel_event,
+        unmatched=UnmatchedTracker(),
+    ).run()
+
+
+def run_dual(
+    log: logging.Logger,
+    *,
+    on_progress: Optional[ProgressCallback] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> None:
+    """"Master + Locale": run_master's publish flow, plus a local install of
+    every package it handles (see orchestration.dual_manager.DualManager)."""
+    from domain.setup_db import SetupDb
+    from domain.unmatched import UnmatchedTracker
+    from orchestration.download_manager import DownloadManager
+    from orchestration.dual_manager import DualManager
+    from processing.car_manager import CarManager
+    from processing.setup_manager import SetupManager
+    from processing.track_manager import TrackManager
+    from clients.protocols import build_dropbox_client, build_track_titan_client
+
+    # The DB is deliberately NOT handed to the DownloadManager: like master, the
+    # publish half reconciles against the share listing, not the DB. The DB only
+    # drives the independent local-install decision inside DualManager.
+    database = SetupDb()
+    track_manager = TrackManager()
+    car_manager = CarManager()
+    download_manager = DownloadManager(database=None, client=build_track_titan_client(), cancel_event=cancel_event)
+    setup_manager = SetupManager(track_manager=track_manager, car_manager=car_manager, database=database)
+    DualManager(
+        download_manager=download_manager,
+        dropbox_client=build_dropbox_client(),
+        setup_manager=setup_manager,
+        database=database,
+        client_factory=build_dropbox_client,
+        car_manager=car_manager,
+        track_manager=track_manager,
         on_progress=on_progress,
         cancel_event=cancel_event,
         unmatched=UnmatchedTracker(),

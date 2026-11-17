@@ -26,6 +26,14 @@
             "args": ["--sandbox", "--mode", "slave"]
         },
         {
+            "name": "Dual — sandbox (all mocked)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "console": "integratedTerminal",
+            "args": ["--sandbox", "--mode", "dual"]
+        },
+        {
             "name": "Master — mock TrackTitan + LMU, real Dropbox",
             "type": "debugpy",
             "request": "launch",
