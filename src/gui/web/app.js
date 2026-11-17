@@ -24,6 +24,10 @@ const state = {
   manualMappings: [],
   mappingSearch: "",
   mappingPage: 0,
+  // "Cars to download" section of the mapping tab: mirrors api.get_car_filter()
+  // ({all, selected, cars:[{name, carClass}]}) plus the section's own search box.
+  carFilter: { all: true, selected: [], cars: [] },
+  carFilterSearch: "",
   // { kind: "row", id, name } | { kind: "all" } | null.
   mappingDeleteTarget: null,
   // Track cards default to collapsed (perf: >400 setups rendered fully expanded
@@ -295,6 +299,15 @@ async function refreshMappings() {
   state.manualMappings = await api().list_manual_mappings();
 }
 
+async function refreshCarFilter() {
+  try {
+    const data = await api().get_car_filter();
+    state.carFilter = { all: !!data.all, selected: data.selected || [], cars: data.cars || [] };
+  } catch (err) {
+    showToast(t("carFilterLoadError"), "error");
+  }
+}
+
 // ----- progress push channel (Python -> JS) -----------------------------------
 
 window.onProgress = function onProgress(event) {
@@ -439,7 +452,7 @@ function goToView(target) {
   } else if (state.view === "upload") {
     ensureUploadOptions().then(() => renderUploadView());
   } else if (state.view === "mapping") {
-    refreshMappings().then(() => renderMappingView());
+    Promise.all([refreshMappings(), refreshCarFilter()]).then(() => renderMappingView());
   }
 }
 
@@ -1458,6 +1471,138 @@ function focusMappingSearchInput() {
   }
 }
 
+// ----- Cars to download (car filter) -------------------------------------------
+
+const CAR_CLASS_ORDER = ["hypercar", "lmp2", "lmp3", "lmgt3", "lmgte"];
+
+function carClassRank(carClass) {
+  const idx = CAR_CLASS_ORDER.indexOf(String(carClass || "").toLowerCase());
+  return idx === -1 ? CAR_CLASS_ORDER.length : idx;
+}
+
+// Optimistic save: the caller already updated the local state; on a backend
+// error the previous filter is restored and a toast is shown.
+async function saveCarFilter(previous) {
+  try {
+    await api().set_car_filter(state.carFilter.all, state.carFilter.selected);
+  } catch (err) {
+    state.carFilter.all = previous.all;
+    state.carFilter.selected = previous.selected;
+    showToast(t("carFilterSaveError"), "error");
+    renderCarFilterSection();
+  }
+}
+
+function changeCarFilter(mutate) {
+  const previous = { all: state.carFilter.all, selected: state.carFilter.selected.slice() };
+  mutate(state.carFilter);
+  renderCarFilterSection();
+  return saveCarFilter(previous);
+}
+
+function renderCarFilterSection() {
+  const el = document.getElementById("car-filter-section");
+  if (!el) return;
+  const { all, selected, cars } = state.carFilter;
+  const selectedSet = new Set(selected);
+  const search = state.carFilterSearch.trim().toLowerCase();
+  const visible = cars.filter((c) => !search || c.name.toLowerCase().includes(search));
+
+  const groups = new Map();
+  visible.forEach((c) => {
+    const key = c.carClass || "";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  });
+  const groupKeys = [...groups.keys()].sort((a, b) => carClassRank(a) - carClassRank(b));
+
+  const groupsHtml = groupKeys
+    .map((key) => {
+      const logo = key
+        ? `<img class="car-class-logo" src="assets/class-logos/${encodeURIComponent(key)}.png" alt="${escapeHtml(key)}">`
+        : "";
+      const items = groups
+        .get(key)
+        .map(
+          (c) => `
+          <label class="car-filter-item">
+            <input type="checkbox" data-car-name="${escapeHtml(c.name)}" ${all || selectedSet.has(c.name) ? "checked" : ""} ${all ? "disabled" : ""}>
+            <span>${escapeHtml(c.name)}</span>
+          </label>`
+        )
+        .join("");
+      return `
+        <div class="car-filter-group">
+          <div class="car-filter-group-title">${logo}<span>${escapeHtml(key || t("carFilterOtherClass"))}</span></div>
+          <div class="car-filter-items">${items}</div>
+        </div>`;
+    })
+    .join("");
+
+  const selectedCount = cars.filter((c) => all || selectedSet.has(c.name)).length;
+
+  el.innerHTML = `
+    <div class="card elev-sm car-filter-card">
+      <h3 class="car-filter-title">${escapeHtml(t("carFilterTitle"))}</h3>
+      <label class="car-filter-all">
+        <input type="checkbox" id="car-filter-all" ${all ? "checked" : ""}>
+        <span>${escapeHtml(t("carFilterAllLabel"))}</span>
+      </label>
+      <p class="text-muted car-filter-hint">${escapeHtml(t(all ? "carFilterHintAll" : "carFilterHintSelected"))}</p>
+      <div class="toolbar">
+        <div class="search-field">
+          ${ICONS.search}
+          <input type="text" class="input" id="car-filter-search" placeholder="${escapeHtml(t("carFilterSearchPlaceholder"))}" value="${escapeHtml(state.carFilterSearch)}" ${all ? "disabled" : ""}>
+        </div>
+        <span class="tag tag-outline results-count" id="car-filter-count">${escapeHtml(tFn("carFilterCounter", selectedCount, cars.length))}</span>
+        <button type="button" class="btn btn-ghost toolbar-push-end" id="car-filter-select-all" ${all ? "disabled" : ""}>${escapeHtml(t("carFilterSelectAll"))}</button>
+        <button type="button" class="btn btn-ghost" id="car-filter-deselect-all" ${all ? "disabled" : ""}>${escapeHtml(t("carFilterDeselectAll"))}</button>
+      </div>
+      <div class="car-filter-groups">${groupsHtml || `<div class="empty-state">${escapeHtml(t("carFilterEmpty"))}</div>`}</div>
+    </div>
+  `;
+
+  document.getElementById("car-filter-all").addEventListener("change", (e) => {
+    const checked = e.target.checked;
+    changeCarFilter((f) => {
+      f.all = checked;
+      // Switching to a manual selection starts with every car checked.
+      if (!checked && f.selected.length === 0) f.selected = f.cars.map((c) => c.name);
+    });
+  });
+
+  document.getElementById("car-filter-search").addEventListener("input", (e) => {
+    state.carFilterSearch = e.target.value;
+    renderCarFilterSection();
+    const fresh = document.getElementById("car-filter-search");
+    if (fresh) {
+      fresh.focus();
+      const pos = fresh.value.length;
+      fresh.setSelectionRange(pos, pos);
+    }
+  });
+
+  document.getElementById("car-filter-select-all").addEventListener("click", () => {
+    changeCarFilter((f) => {
+      f.selected = f.cars.map((c) => c.name);
+    });
+  });
+  document.getElementById("car-filter-deselect-all").addEventListener("click", () => {
+    changeCarFilter((f) => {
+      f.selected = [];
+    });
+  });
+
+  el.querySelectorAll("[data-car-name]").forEach((box) => {
+    box.addEventListener("change", () => {
+      const name = box.dataset.carName;
+      changeCarFilter((f) => {
+        f.selected = box.checked ? [...f.selected.filter((n) => n !== name), name] : f.selected.filter((n) => n !== name);
+      });
+    });
+  });
+}
+
 function renderMappingView() {
   const el = document.getElementById("view-mapping");
   if (!el) return;
@@ -1513,6 +1658,7 @@ function renderMappingView() {
         <p>${escapeHtml(t("mappingDesc"))}</p>
       </div>
     </div>
+    <div id="car-filter-section"></div>
     <div class="toolbar">
       <div class="search-field">
         ${ICONS.search}
@@ -1523,6 +1669,8 @@ function renderMappingView() {
     </div>
     ${tableHtml}
   `;
+
+  renderCarFilterSection();
 
   document.getElementById("mapping-search").addEventListener(
     "input",
