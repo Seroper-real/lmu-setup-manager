@@ -208,10 +208,11 @@ def test_process_selected_car_still_installs(sm):
     setup_manager.install_setup.assert_called_once()
 
 
-def test_process_checks_only_the_first_resolving_candidate(sm):
+def test_process_checks_each_distinct_resolved_car_then_metadata(sm):
     manager, dbx, setup_manager = sm
     manager._process(_remote("HYMO-Spa_Porsche_963_id1_1000.zip"))
-    assert setup_manager.car_manager.is_car_selected.call_count == 1
+    # One pre-download check (single distinct resolved car) + one post-metadata check.
+    assert setup_manager.car_manager.is_car_selected.call_count == 2
 
 
 def test_process_with_unresolvable_zip_name_and_no_filter_still_installs(sm):
@@ -220,7 +221,41 @@ def test_process_with_unresolvable_zip_name_and_no_filter_still_installs(sm):
 
     manager._process(_remote("HYMO-Spa_Weird_id1_1000.zip"))
 
-    setup_manager.car_manager.is_car_selected.assert_not_called()
+    # Only the post-metadata check runs, on the official name.
+    setup_manager.car_manager.is_car_selected.assert_called_once_with("Porsche 963")
+    setup_manager.install_setup.assert_called_once()
+
+
+def test_process_unresolvable_zip_name_filtered_after_metadata(sm, mocker):
+    mocker.patch("orchestration.slave_manager.CLEAN_DOWNLOAD", True)
+    manager, dbx, setup_manager = sm
+    setup_manager.car_manager.get_car_name.side_effect = lambda c: "Porsche 963" if c == "Porsche 963" else None
+    setup_manager.car_manager.is_car_selected.return_value = False
+
+    manager._process(_remote("HYMO-Spa_Weird_id1_1000.zip"))
+
+    dbx.download_to.assert_called_once()
+    setup_manager.car_manager.is_car_selected.assert_called_once_with("Porsche 963")
+    setup_manager.install_setup.assert_not_called()
+    assert manager.unmatched.serialize() is None
+    local_zip = Path(dbx.download_to.call_args.args[1])
+    assert not local_zip.exists()
+
+
+def test_process_pre_check_never_skips_when_any_resolved_car_is_selected(sm):
+    """A longer candidate can mis-resolve to another car via track text; the
+    pre-download check must not skip as long as one resolved car is selected."""
+    manager, dbx, setup_manager = sm
+    setup_manager.car_manager.get_car_name.side_effect = lambda c: {
+        "Spa_Porsche_963": "Other Car",
+        "Porsche_963": "Porsche 963",
+        "Porsche 963": "Porsche 963",
+    }.get(c)
+    setup_manager.car_manager.is_car_selected.side_effect = lambda n: n == "Porsche 963"
+
+    manager._process(_remote("HYMO-Spa_Porsche_963_id1_1000.zip"))
+
+    dbx.download_to.assert_called_once()
     setup_manager.install_setup.assert_called_once()
 
 
