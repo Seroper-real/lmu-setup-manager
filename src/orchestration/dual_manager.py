@@ -23,7 +23,7 @@ log = logging.getLogger("TrackTitanDownloader")
 
 
 class DualManager(MasterManager):
-    """DUAL ("Master + Locale"): MASTER's publish flow, plus a local install of
+    """DUAL ("Upload + Locale"): MASTER's publish flow, plus a local install of
     every package it handles, recorded in the DB exactly like FULL/SLAVE.
 
     The two halves are decided independently: the share listing drives the

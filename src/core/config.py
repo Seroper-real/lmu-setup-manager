@@ -33,7 +33,7 @@ _config = settings_db.get_config()
 # full   : TrackTitan -> install locally (DB-backed). Original behavior.
 # master : TrackTitan -> repackage -> upload to Dropbox (no DB).
 # slave  : Dropbox -> install locally (DB-backed, FULL-compatible).
-# dual   : "Master + Locale" - master's publish flow, plus a local install of
+# dual   : "Upload + Locale" - master's publish flow, plus a local install of
 #          every package it handles (DB-backed, FULL/SLAVE-compatible).
 # The MODE env var (set directly or via main.py's --mode flag) wins over the
 # stored config, so a local run can switch mode without touching settings.db.

@@ -235,7 +235,7 @@ def run_dual(
     on_progress: Optional[ProgressCallback] = None,
     cancel_event: Optional[threading.Event] = None,
 ) -> None:
-    """"Master + Locale": run_master's publish flow, plus a local install of
+    """"Upload + Locale": run_master's publish flow, plus a local install of
     every package it handles (see orchestration.dual_manager.DualManager)."""
     from domain.setup_db import SetupDb
     from domain.unmatched import UnmatchedTracker

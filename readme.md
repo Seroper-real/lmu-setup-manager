@@ -60,7 +60,7 @@ Open **Settings → Operating mode** and choose one. The choice takes effect imm
 | `full` *(default)* | **Direct** | Downloads from TrackTitan and installs straight into LMU on this PC | TrackTitan login + LMU folder |
 | `master` | **Upload only** | Downloads from TrackTitan and publishes to your own Dropbox (no local install) | TrackTitan login + Dropbox app |
 | `slave` | **Install only** | Pulls setups from your own Dropbox and installs them into LMU on this PC | Dropbox app (read-only is enough) + LMU folder |
-| `dual` | **Master + Local** | Downloads from TrackTitan, publishes to your Dropbox **and** installs into LMU on this PC from the same package (manual uploads do both too) | TrackTitan login + Dropbox app (read/write) + LMU folder |
+| `dual` | **Upload + Local** | Downloads from TrackTitan, publishes to your Dropbox **and** installs into LMU on this PC from the same package (manual uploads do both too) | TrackTitan login + Dropbox app (read/write) + LMU folder |
 
 **On a single PC, use Direct.** The other modes only make sense if you run Le Mans Ultimate on **more than one of your own PCs** and want to move setups between them through your own Dropbox — see [Modes in detail](#modes-in-detail).
 
@@ -87,7 +87,7 @@ Open **Settings → Operating mode** and choose one. The choice takes effect imm
 
 No LMU path is needed here — nothing is installed locally.
 
-### Master + Local — the subscription PC, if you also play on it
+### Upload + Local — the subscription PC, if you also play on it
 
 Same steps as Upload only (Dropbox app, TrackTitan tokens, **Read/Write Token**, shared Dropbox folder), plus **Settings → Le Mans Ultimate setup folder** as in Direct. Every run publishes to Dropbox for your other PCs **and** installs into LMU on this one.
 
@@ -110,7 +110,7 @@ Same steps as Upload only (Dropbox app, TrackTitan tokens, **Read/Write Token**,
 
 **Installed setups** — Everything this app has installed, grouped by track and car, with the car's class logo and a **Hotlap** link that opens TrackTitan's YouTube lap for that setup. Search by track or car, and delete a single setup, a whole car, everything for one track, or everything at once.
 
-**Upload Setup** — Drag in a `.zip` (or click to browse), pick the type (**GO Setups** or **HYMO**), the track and the car, and press **Upload setup**. In Direct/Install only it's installed straight into LMU; in Upload only it's published to your Dropbox for your other PCs; in Master + Local it's both published to Dropbox and installed into LMU. The track and car are pre-guessed from the filename when possible. This is the easy way to add [GO Setups](#go-setups) archives.
+**Upload Setup** — Drag in a `.zip` (or click to browse), pick the type (**GO Setups** or **HYMO**), the track and the car, and press **Upload setup**. In Direct/Install only it's installed straight into LMU; in Upload only it's published to your Dropbox for your other PCs; in Upload + Local it's both published to Dropbox and installed into LMU. The track and car are pre-guessed from the filename when possible. This is the easy way to add [GO Setups](#go-setups) archives.
 
 **Manual associations** — The track and car names you've mapped by hand (see [When a setup isn't recognized](#when-a-setup-isnt-recognized)). Searchable, paginated, and you can delete a single mapping or all of them. This tab also holds the **Cars to download** filter (see above).
 
@@ -138,7 +138,7 @@ Dropbox credentials don't expire: the refresh token is generated once and renews
 
 ### Setups being updated
 
-When TrackTitan publishes a new version of a setup you already have, the app notices and replaces it — in LMU, and on Dropbox for Upload only and Master + Local. You don't have to track versions yourself.
+When TrackTitan publishes a new version of a setup you already have, the app notices and replaces it — in LMU, and on Dropbox for Upload only and Upload + Local. You don't have to track versions yourself.
 
 ---
 
@@ -162,14 +162,14 @@ By default the tool runs in **Direct** mode (`full`) and does everything on one 
 If you run Le Mans Ultimate on **more than one of your own PCs**, the other modes let you move setups through **your own Dropbox** instead of extracting tokens and hammering TrackTitan from every machine:
 
 - **Upload only** (`master`) — runs on the PC with your TrackTitan subscription. It downloads your setups, repackages them, and mirrors them into your Dropbox under `<Dropbox folder>/<Car>/<Track>/HYMO-<track>_<car>_<id>_<timestamp>.zip`. It keeps no local database: it works out what to publish by comparing TrackTitan against what's already in the folder. When a setup is updated, the new zip is uploaded first and only then the old one is deleted.
-- **Master + Local** (`dual`) — Upload only plus a local install: each package is downloaded once, published to Dropbox and installed into LMU on this PC, and the installed setups are tracked in the local database. Needs TrackTitan tokens, a read/write Dropbox credential and the LMU folder. Manual uploads are published and installed too.
+- **Upload + Local** (`dual`) — Upload only plus a local install: each package is downloaded once, published to Dropbox and installed into LMU on this PC, and the installed setups are tracked in the local database. Needs TrackTitan tokens, a read/write Dropbox credential and the LMU folder. Manual uploads are published and installed too.
 - **Install only** (`slave`) — runs on your other PCs. It lists that same folder, skips whatever the local database already has at the same version or newer, downloads the rest and installs it. It rebuilds each setup's details from a `.metadata.json` embedded in the zip, so an Install only machine ends up with exactly the same records a Direct one would.
 
 Only the TrackTitan side is rate-limited (roughly one setup every couple of seconds, so a first full run takes on the order of 20–30 minutes). Uploads to Dropbox run in parallel in the background and don't add to that time.
 
 ## Creating your Dropbox app
 
-Needed for Upload only, Master + Local and Install only. About three minutes, once.
+Needed for Upload only, Upload + Local and Install only. About three minutes, once.
 
 ### 1. Create the app
 
@@ -189,15 +189,15 @@ Open the **Permissions** tab and tick:
 
 | Scope | Needed by |
 | :--- | :--- |
-| `files.metadata.read` | Upload only + Master + Local + Install only (listing the folder) |
-| `files.content.read` | Install only + Master + Local (downloading setups) |
-| `files.content.write` | Upload only + Master + Local (uploading and replacing setups) |
+| `files.metadata.read` | Upload only, Upload + Local, Install only (listing the folder) |
+| `files.content.read` | Install only, Upload + Local (downloading setups) |
+| `files.content.write` | Upload only, Upload + Local (uploading and replacing setups) |
 
 Press **Submit** at the bottom, otherwise nothing is saved.
 
 ### 3. Get the refresh token
 
-Use **Get automatically** in the app's Settings, as described in [Step 3](#upload-only--the-pc-that-has-your-subscription). Pick **Read/Write** on the Upload only (or Master + Local) PC and **Read Only** on the Install only ones — a read-only refresh token can never be widened later, so that machine physically cannot damage your folder.
+Use **Get automatically** in the app's Settings, as described in [Step 3](#upload-only--the-pc-that-has-your-subscription). Pick **Read/Write** on the Upload only (or Upload + Local) PC and **Read Only** on the Install only ones — a read-only refresh token can never be widened later, so that machine physically cannot damage your folder.
 
 <details>
 <summary>Generating the refresh token by hand</summary>
@@ -281,7 +281,7 @@ USER_ID=123cdvf-34fd...
 
 The setups this tool manages end to end come from TrackTitan and are published under the **HYMO** brand. **GO Setups** is a separate third-party provider that is only *compatible* with this tool: the app never talks to GO's systems and doesn't publish anything on GO's behalf. You supply the archives yourself.
 
-**Adding one:** use the **Upload Setup** tab — drop the zip, choose type **GO Setups**, pick track and car, confirm. In Direct/Install only it's installed locally; in Upload only it's published to Dropbox for your other PCs to pick up; in Master + Local it's both published and installed locally. Uploading again for the same car and track replaces the previous archive.
+**Adding one:** use the **Upload Setup** tab — drop the zip, choose type **GO Setups**, pick track and car, confirm. In Direct/Install only it's installed locally; in Upload only it's published to Dropbox for your other PCs to pick up; in Upload + Local it's both published and installed locally. Uploading again for the same car and track replaces the previous archive.
 
 Details:
 
