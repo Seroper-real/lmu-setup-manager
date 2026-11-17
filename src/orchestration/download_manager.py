@@ -70,7 +70,7 @@ class DownloadManager:
     def download(self, setup: Setup) -> Path | None:
         if self.database and self.database.is_setup_installed_last_version(setup):
             log.info(f"Setup already installed. Skipping")
-            return #Setup già scaricato
+            return None  # This version is already installed: nothing to download.
         
         path = Path(f"{DOWNLOAD_PATH}/HYMO-{setup.safe_track}-{setup.id}.zip")
 
@@ -82,7 +82,6 @@ class DownloadManager:
         self.track_titan_client.throttle()
         data = self.track_titan_client.download_link(setup.id)
         download_url = data["url"]
-        # Scaricare il file
         file_resp = self.track_titan_client.download(download_url)
         with open(path, "wb") as f:
             f.write(file_resp.content)
