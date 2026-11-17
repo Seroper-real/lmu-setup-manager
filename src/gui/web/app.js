@@ -1577,8 +1577,8 @@ function renderCarFilterList() {
       return `
         <tr>
           <td class="car-filter-check-col"><input type="checkbox" data-car-name="${escapeHtml(c.name)}" ${all || selectedSet.has(c.name) ? "checked" : ""} ${all || !loaded ? "disabled" : ""}></td>
-          <td>${escapeHtml(c.name)}</td>
-          <td><span class="car-filter-class">${logo}<span>${escapeHtml(key || t("carFilterOtherClass"))}</span></span></td>
+          <td class="car-filter-name-col" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td>
+          <td class="car-filter-class-col"><span class="car-filter-class">${logo}<span>${escapeHtml(key || t("carFilterOtherClass"))}</span></span></td>
         </tr>`;
     })
     .join("");
@@ -1587,12 +1587,12 @@ function renderCarFilterList() {
   container.innerHTML = filtered.length
     ? `
       <div class="card elev-sm" style="padding:0; overflow:hidden;">
-        <table class="table">
+        <table class="table car-filter-table${all || !loaded ? "" : " car-filter-table-active"}">
           <thead>
             <tr>
               <th class="car-filter-check-col"></th>
-              <th>${escapeHtml(t("carFilterColName"))}</th>
-              <th>${escapeHtml(t("carFilterColClass"))}</th>
+              <th class="car-filter-name-col">${escapeHtml(t("carFilterColName"))}</th>
+              <th class="car-filter-class-col">${escapeHtml(t("carFilterColClass"))}</th>
             </tr>
           </thead>
           <tbody>${rowsHtml}</tbody>
@@ -1630,6 +1630,17 @@ function renderCarFilterList() {
         const rest = f.selected.filter((n) => n !== name);
         f.selected = checked ? [...rest, name] : rest;
       }, false);
+    });
+  });
+
+  // Whole-row toggle: delegate to the checkbox's own click so its change
+  // handler (and the serialized save) runs exactly once. Clicks on the
+  // checkbox itself are left to the browser to avoid a double toggle.
+  container.querySelectorAll(".car-filter-table-active tbody tr").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      const box = row.querySelector("[data-car-name]");
+      if (!box || box.disabled || e.target === box) return;
+      box.click();
     });
   });
 }
