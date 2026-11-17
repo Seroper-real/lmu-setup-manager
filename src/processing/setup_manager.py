@@ -5,6 +5,7 @@ import shutil
 from core.archive import find_files_recursive, unzip_recursive
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, OVERWRITE, SETUP_FILE_EXTENSIONS, LMU_SETUPS_BASE_PATH, DELETE_PREVIOUS_VERSION
 from domain.setup import Setup
+from domain.go_setup import filter_latest_go_version
 from processing.car_manager import CarManager
 from processing.track_manager import TrackManager
 from core.utils import get_path
@@ -72,7 +73,9 @@ class SetupManager:
         extraction_path = Path(DOWNLOAD_PATH / setup.id)
         if extraction_path.exists(): shutil.rmtree(extraction_path) #To clean previous interrupted elaborations and prevent duplicate file name in extraction
         self._unzip_recursive(downloaded_path, extraction_path)
-        extracted_files: list[Path] = self._copy_file_to_lmu(extraction_path, setup_installation_dir, extensions)
+        extracted_files: list[Path] = self._copy_file_to_lmu(
+            extraction_path, setup_installation_dir, extensions, latest_go_only=(setup_type == "GO"),
+        )
         installed: bool = len(extracted_files) > 0
         if not installed: log.warning(f"Setup not installed! Not deleting download for manual installation: {setup.id} - {setup.track} - {setup.car}")
         else:
@@ -96,10 +99,14 @@ class SetupManager:
         return (self.lmu_setups_base_path / track_folder_name) if track_folder_name else None
 
 
-    def _copy_file_to_lmu(self, extraction_path: str | Path, setup_installation_dir: Path, extensions: Optional[set[str]] = None) -> list[Path]:
+    def _copy_file_to_lmu(self, extraction_path: str | Path, setup_installation_dir: Path, extensions: Optional[set[str]] = None, latest_go_only: bool = False) -> list[Path]:
         extraction_path = get_path(extraction_path)
         exts = extensions if extensions is not None else SETUP_FILE_EXTENSIONS
         files : list[Path] = self._find_files_recursive(extraction_path, exts)
+        if latest_go_only:
+            # GO archives may bundle several versions; install (and record in the
+            # DB) only the highest one. The uploaded Dropbox zip stays untouched.
+            files = filter_latest_go_version(files)
 
         setup_installation_dir.mkdir(parents=True, exist_ok=True) 
 
