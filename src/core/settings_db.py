@@ -60,6 +60,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "dropbox": {"folder": "/lmu-setups", "timeout": 30, "upload_workers": 4},
     "ui": {"language": "it", "hymo_warning_dismissed": False},
+    # Car filter: all=True means no filtering at all (new cars are implicitly
+    # selected); all=False restricts to the official names listed in "selected".
+    # get_config() deep-merges this default under any older stored row.
+    "cars": {"all": True, "selected": []},
 }
 
 

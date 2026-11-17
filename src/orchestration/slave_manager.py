@@ -11,7 +11,7 @@ from clients.protocols import DropboxClientProtocol
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, GO_SETUP_FILE_EXTENSIONS
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from domain.go_setup import RemoteGoSetup
-from domain.setup import RemoteSetup, Setup
+from domain.setup import RemoteSetup, Setup, parse_remote_zip_car_candidates
 from domain.setup_db import SetupDb
 from domain.unmatched import UnmatchedTracker
 from processing.setup_manager import SetupManager
@@ -69,6 +69,18 @@ class SlaveManager:
             log.info("Already installed (latest version). Skipping.")
             return
 
+        # Car filter, applied before the download using the car recovered from
+        # the zip name. If no candidate resolves, fall through to the existing
+        # behavior (the metadata-based match below).
+        car_manager = self.setup_manager.car_manager
+        for candidate in parse_remote_zip_car_candidates(remote.name):
+            resolved = car_manager.get_car_name(candidate)
+            if resolved is not None:
+                if not car_manager.is_car_selected(resolved):
+                    log.info(f"Car filtered out, skipping: {remote.name} ({resolved})")
+                    return
+                break
+
         local_zip = Path(DOWNLOAD_PATH) / remote.name
         self.dropbox_client.download_to(remote.path_lower, local_zip)
         sha256 = sha256_file(local_zip)
@@ -125,6 +137,9 @@ class SlaveManager:
             self.unmatched.record(
                 remote.track, remote.car, track_matched=track is not None, car_matched=car is not None,
             )
+            return
+        if not self.setup_manager.car_manager.is_car_selected(car):
+            log.info(f"Car filtered out, skipping GO setup: {track} - {car}")
             return
         label = f"{track} - {car} Setup"
 

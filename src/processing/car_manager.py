@@ -86,6 +86,16 @@ class CarManager:
                 return name
         return None
 
+    def is_car_selected(self, official_name: Optional[str]) -> bool:
+        """Car-filter check against the live settings.db value (so a GUI change
+        applies without a restart). all=True -> always True; otherwise the
+        official name must be in the selected list. A None name is not
+        selected under an active filter."""
+        cfg: dict = settings_db.get_config().get("cars", {})
+        if cfg.get("all", True):
+            return True
+        return official_name is not None and official_name in cfg.get("selected", [])
+
     def get_car_class(self, name: str) -> Optional[str]:
         return self.car_classes.get(name)
 

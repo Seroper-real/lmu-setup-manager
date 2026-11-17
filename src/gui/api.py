@@ -367,6 +367,24 @@ class Api:
         from processing.track_manager import TrackManager
         return TrackManager().get_known_track_names()
 
+    def get_car_filter(self) -> dict[str, object]:
+        from core.settings_db import get_config
+        cfg: dict[str, object] = get_config().get("cars", {})  # type: ignore[assignment]
+        return {
+            "all": bool(cfg.get("all", True)),
+            "selected": list(cfg.get("selected", [])),  # type: ignore[call-overload]
+            "cars": self._get_car_manager().get_all_cars(),
+        }
+
+    def set_car_filter(self, all_cars: bool, selected: list[str]) -> None:
+        from core.config import save_config
+        if not isinstance(all_cars, bool):
+            raise ValueError("all_cars must be a bool")
+        if not isinstance(selected, list) or not all(isinstance(s, str) for s in selected):
+            raise ValueError("selected must be a list of strings")
+        save_config({"cars": {"all": all_cars, "selected": list(dict.fromkeys(selected))}})
+        self._reload_config()
+
     def get_car_options(self) -> list[dict[str, object]]:
         return self._get_car_manager().get_all_cars()
 

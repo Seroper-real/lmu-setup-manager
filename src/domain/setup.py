@@ -19,6 +19,22 @@ def parse_remote_zip_name(name: str) -> Optional[tuple[str, int]]:
     return match.group("id"), int(match.group("ts"))
 
 
+def parse_remote_zip_car_candidates(name: str) -> list[str]:
+    """Best-effort car-name candidates from a share zip filename.
+
+    The name is HYMO-{track}_{car}_{id}_{ts}.zip with sanitized segments, and
+    track/car may themselves contain underscores, so the split point is
+    ambiguous. Returns every underscore-suffix of the "{track}_{car}" part
+    (longest first), underscores kept as-is; callers try each against the car
+    matcher and use the first that resolves."""
+    match = _REMOTE_NAME_RE.match(name)
+    if not match:
+        return []
+    middle: str = name[len("HYMO-"):match.start("id") - 1]
+    parts: list[str] = middle.split("_")
+    return ["_".join(parts[i:]) for i in range(len(parts)) if parts[i:]]
+
+
 def sanitize_identity(value: str) -> str:
     """Strip the real path-breaking characters (spaces are left alone). Shared
     by Setup.safe_car/safe_track (Dropbox folder naming) and by SetupDb, which

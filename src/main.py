@@ -188,6 +188,10 @@ def run_full(
                 )
                 continue
 
+            if not car_manager.is_car_selected(car_name):
+                log.info(f"Car filtered out, skipping: {setup.track} - {car_name}")
+                continue
+
             path = download_manager.download(setup)
 
             if path:

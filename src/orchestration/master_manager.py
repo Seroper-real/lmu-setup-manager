@@ -150,6 +150,10 @@ class MasterManager:
             )
             return
 
+        if not self.car_manager.is_car_selected(car_name):
+            log.info(f"Car filtered out, skipping publish: {track_name} - {car_name}")
+            return
+
         setup.safe_car = car_name
         setup.safe_track = track_name
 
