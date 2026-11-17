@@ -1624,8 +1624,8 @@ function renderCarFilterList() {
     box.addEventListener("change", () => {
       const name = box.dataset.carName;
       const checked = box.checked;
-      // The checkbox already shows the new value: skip the re-render so the
-      // list keeps its scroll position.
+      // The checkbox already shows the new value: skip the re-render (only
+      // the counter is updated) so keyboard focus stays on the checkbox.
       changeCarFilter((f) => {
         const rest = f.selected.filter((n) => n !== name);
         f.selected = checked ? [...rest, name] : rest;
