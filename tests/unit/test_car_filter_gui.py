@@ -409,3 +409,96 @@ def test_all_literal_i18n_keys_used_in_app_exist_in_both_languages(all_langs):
         defined = set(re.findall(r"(?:^|[,{])\s*(\w+):", text, re.M))
         missing = sorted(k for k in used if k not in defined)
         assert not missing, (lang, missing)
+
+
+# ---------------------------------------------------------------------------
+# Clickable rows + fixed column widths
+# ---------------------------------------------------------------------------
+STYLES_CSS = (WEB / "styles.css").read_text(encoding="utf-8")
+
+
+def _css_rule(selector: str) -> str:
+    m = re.search(r"^%s\s*\{([^}]*)\}" % re.escape(selector), STYLES_CSS, re.M)
+    assert m, f"CSS rule {selector} not found"
+    return m.group(1)
+
+
+def _row_click_block() -> str:
+    src = _function_source("renderCarFilterList")
+    i = src.index('.car-filter-table-active tbody tr")')
+    return src[i:]
+
+
+def test_row_click_handler_only_on_active_table():
+    src = _function_source("renderCarFilterList")
+    assert 'querySelectorAll(".car-filter-table-active tbody tr")' in src
+    assert 'addEventListener("click"' in _row_click_block()
+
+
+def test_active_class_only_when_editable():
+    src = _function_source("renderCarFilterList")
+    # inert when all=true or not loaded
+    assert re.search(r'all \|\| !loaded \? "" : " car-filter-table-active"', src)
+    assert 'class="table car-filter-table' in src
+
+
+def test_row_click_delegates_to_checkbox_not_state():
+    block = _row_click_block()
+    assert "box.click()" in block
+    assert "state.carFilter" not in block
+    assert "selected" not in block
+    assert "saveCarFilter" not in block  # saving only via the change handler
+
+
+def test_row_click_skips_checkbox_target_and_disabled():
+    block = _row_click_block()
+    assert "e.target === box" in block
+    assert "box.disabled" in block
+
+
+def test_checkbox_change_handler_still_goes_through_change_car_filter():
+    src = _function_source("renderCarFilterList")
+    assert "changeCarFilter(" in src
+    assert "saveCarFilter(" in _function_source("changeCarFilter")
+    # nothing else in the list renderer mutates the selection directly
+    assert "saveCarFilter(" not in src
+    assert len(re.findall(r"\.selected\s*=", src)) == 1  # inside the changeCarFilter callback
+    assert src.index("changeCarFilter(") < src.index(".selected =")
+
+
+def test_name_cell_has_title_and_ellipsis():
+    src = _function_source("renderCarFilterList")
+    assert re.search(r'<td class="car-filter-name-col" title="\$\{escapeHtml\(c\.name\)\}"', src)
+    rule = _css_rule(".car-filter-name-col")
+    assert "text-overflow: ellipsis" in rule
+    assert "overflow: hidden" in rule
+    assert "white-space: nowrap" in rule
+
+
+def test_car_filter_table_fixed_layout_and_widths():
+    assert "table-layout: fixed" in _css_rule(".car-filter-table")
+    check = re.search(r"width:\s*(\d+)px", _css_rule(".car-filter-check-col"))
+    cls = re.search(r"width:\s*(\d+)px", _css_rule(".car-filter-class-col"))
+    assert check and int(check.group(1)) == 40
+    assert cls and int(cls.group(1)) >= 120
+    # header and body cells share the same column classes
+    src = _function_source("renderCarFilterList")
+    for c in ("car-filter-check-col", "car-filter-name-col", "car-filter-class-col"):
+        assert src.count(f'class="{c}"') >= 2, c
+
+
+def test_pointer_and_hover_only_when_active():
+    assert "cursor: pointer" in _css_rule(".car-filter-table-active tbody tr")
+    # rapid row clicks must not select the cell text
+    assert "user-select: none" in _css_rule(".car-filter-table-active tbody tr")
+    assert "cursor" not in _css_rule(".car-filter-table tbody tr:hover")
+    assert "transparent" in _css_rule(".car-filter-table tbody tr:hover")
+    assert "cursor: pointer" not in _css_rule(".car-filter-table")
+
+
+def test_generic_and_mapping_table_css_untouched():
+    assert "width: 100%; border-collapse: collapse;" in _css_rule(".table")
+    assert "table-layout" not in _css_rule(".table")
+    # fixed layout must not leak to any selector other than the car-filter one
+    for m in re.finditer(r"^([^{}\n]+)\{([^}]*table-layout[^}]*)\}", STYLES_CSS, re.M):
+        assert m.group(1).strip() == ".car-filter-table", m.group(1)
