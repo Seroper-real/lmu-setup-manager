@@ -20,11 +20,13 @@ CAR_KEYS = [
     "carFilterSearchPlaceholder", "carFilterSelectAll", "carFilterDeselectAll",
     "carFilterCounter", "carFilterEmpty", "carFilterOtherClass",
     "carFilterLoadError", "carFilterSaveError",
+    "carFilterDesc", "carFilterColName", "carFilterColClass",
 ]
 FUNCTION_KEYS = {"carFilterCounter"}
 CAR_FUNCS = [
     "refreshCarFilter", "saveCarFilter", "changeCarFilter", "carClassRank", "carFilterCountText",
     "updateCarFilterCount", "renderCarFilterList", "renderCarFilterSection",
+    "renderCarFilterView", "getCarFilterViewModel",
 ]
 
 
@@ -206,14 +208,15 @@ def test_app_css_classes_defined():
     css = (WEB / "styles.css").read_text(encoding="utf-8")
     classes = set(re.findall(r"\b(car-filter-[\w-]+)", APP_JS)) - {
         "car-filter-all", "car-filter-search", "car-filter-count", "car-filter-select-all",
-        "car-filter-deselect-all", "car-filter-section",
+        "car-filter-deselect-all", "car-filter-section", "car-filter-groups",
+        "car-filter-prev-page", "car-filter-next-page",
     }
     assert classes
     for cls in classes:
         assert f".{cls}" in css, cls
 
 
-def test_app_refresh_wired_next_to_refresh_mappings():
+def test_app_refresh_wired_on_view_entry():
     assert re.search(r"refreshCarFilter\(\)", APP_JS)
     assert APP_JS.count("refreshCarFilter()") >= 2  # definition + at least one call
 
@@ -301,3 +304,108 @@ def test_deselect_all_is_empty_selection_not_all(api):
 def test_set_car_filter_rejects_bad_shapes(api, bad):
     with pytest.raises(ValueError):
         api.set_car_filter(*bad)
+
+
+# ----- dedicated "Selected cars" view ----------------------------------------
+
+VIEW_KEYS = ["navCarFilter", "carFilterDesc", "carFilterColName", "carFilterColClass",
+             "carFilterTitle", "mappingPageLabel", "mappingPrevPage", "mappingNextPage"]
+
+
+def _all_lang_text(lang: str) -> str:
+    """TRANSLATIONS + EXTRA blocks of one language."""
+    parts = []
+    for m in re.finditer(r"^  %s: \{" % lang, I18N_JS, re.M):
+        nxt = re.search(r"^  \},?\s*$", I18N_JS[m.end():], re.M)
+        assert nxt
+        parts.append(I18N_JS[m.end():m.end() + nxt.start()])
+    assert parts
+    return "\n".join(parts)
+
+
+@pytest.fixture(scope="module")
+def all_langs():
+    return {"it": _all_lang_text("it"), "en": _all_lang_text("en")}
+
+
+def _nonempty_in(text: str, key: str) -> bool:
+    pat = r"(?:^|[,{])\s*%s:\s*(\"[^\"]+\"|'[^']+'|`[^`]+`|\([^)]*\)\s*=>)" % key
+    return bool(re.search(pat, text, re.M))
+
+
+@pytest.mark.parametrize("lang", ["it", "en"])
+@pytest.mark.parametrize("key", VIEW_KEYS)
+def test_view_i18n_keys_nonempty(all_langs, lang, key):
+    assert _nonempty_in(all_langs[lang], key), (lang, key)
+
+
+def test_nav_carfilter_before_mapping_in_bottom_nav():
+    m = re.search(r"navBottom\.innerHTML\s*=(.*?)bindNavItemClicks\(navBottom\)", APP_JS, re.S)
+    assert m
+    views = re.findall(r'view:\s*"(\w+)"', m.group(1))
+    assert views == ["carfilter", "mapping", "settings"]
+    assert "icon: ICONS.navCarFilter" in m.group(1) and 't("navCarFilter")' in m.group(1)
+    assert re.search(r"^  navCarFilter: `<svg", APP_JS, re.M)
+
+
+def test_view_container_in_index_html_before_mapping():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    assert 'id="view-carfilter"' in html
+    assert html.index('id="view-carfilter"') < html.index('id="view-mapping"')
+    assert 'id="nav-bottom"' in html
+
+
+def test_view_wiring_render_and_go_to_view():
+    assert "renderCarFilterView();" in _function_source("render")
+    go = _function_source("goToView")
+    m = re.search(r'state\.view === "carfilter"\)\s*\{(.*?)\n  \}', go, re.S)
+    assert m, "goToView has no carfilter branch"
+    assert "refreshCarFilter()" in m.group(1) and "renderCarFilterView()" in m.group(1)
+    assert "view-${state.view}" in _function_source("applyActiveView")
+    view = _function_source("renderCarFilterView")
+    assert 'getElementById("view-carfilter")' in view
+    assert 'id="car-filter-section"' in view and "renderCarFilterSection()" in view
+    assert "carFilterTitle" in view and "carFilterDesc" in view
+
+
+def test_mapping_view_has_no_car_filter_code():
+    src = _function_source("renderMappingView")
+    assert not re.search(r"car-?filter", src, re.I)
+    assert "CarFilter" not in _function_source("refreshMappings")
+    go = _function_source("goToView")
+    m = re.search(r'state\.view === "mapping"\)\s*\{(.*?)\n  \}', go, re.S)
+    assert m and "CarFilter" not in m.group(1)
+
+
+def test_pagination_constants_and_ids():
+    assert "const MAPPING_PAGE_SIZE = 8;" in APP_JS
+    assert re.search(r"^\s*carFilterPage: 0,", APP_JS, re.M)
+    vm = _function_source("getCarFilterViewModel")
+    assert "MAPPING_PAGE_SIZE" in vm and "state.carFilterPage" in vm and "pageCount" in vm
+    lst = _function_source("renderCarFilterList")
+    for dom_id in ["car-filter-prev-page", "car-filter-next-page"]:
+        assert f'id="{dom_id}"' in lst and f'getElementById("{dom_id}")' in lst
+    assert 'getElementById("car-filter-groups")' in lst
+    assert 'id="car-filter-groups"' in _function_source("renderCarFilterSection")
+    for k in ["mappingPageLabel", "mappingPrevPage", "mappingNextPage"]:
+        assert f'"{k}"' in lst, k
+    assert "state.carFilterPage = 0" in _function_source("renderCarFilterSection")
+
+
+def test_save_car_filter_robustness_markers_kept():
+    fn = _function_source("saveCarFilter")
+    for marker in ["carFilterConfirmed", "carFilterSaveSeq", "carFilterSaveError", "catch",
+                   "renderCarFilterSection()"]:
+        assert marker in fn, marker
+    assert "if (!state.carFilter.loaded) return" in _function_source("changeCarFilter")
+    assert "loaded: true" in _function_source("refreshCarFilter")
+    assert "await carFilterSaveChain" in _function_source("refreshCarFilter")
+
+
+def test_all_literal_i18n_keys_used_in_app_exist_in_both_languages(all_langs):
+    used = set(re.findall(r'\bt(?:Fn)?\(\s*"(\w+)"', APP_JS))
+    assert used
+    for lang, text in all_langs.items():
+        defined = set(re.findall(r"(?:^|[,{])\s*(\w+):", text, re.M))
+        missing = sorted(k for k in used if k not in defined)
+        assert not missing, (lang, missing)

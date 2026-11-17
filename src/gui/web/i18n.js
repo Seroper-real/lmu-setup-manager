@@ -11,7 +11,7 @@
 
 const TRANSLATIONS = {
   it: {
-    navSetups: "Setup installati", navDownload: "Download", navUpload: "Carica Setup", navMapping: "Associazioni manuali", navSettings: "Impostazioni",
+    navSetups: "Setup installati", navDownload: "Download", navUpload: "Carica Setup", navCarFilter: "Auto Selezionate", navMapping: "Associazioni manuali", navSettings: "Impostazioni",
     mappingTitle: "Associazioni manuali",
     mappingDesc: "Corrispondenze pista/auto aggiunte manualmente, servono quando non vengono riconosciute dall'associazione automatica.",
     mappingColType: "Tipo", mappingColName: "Nome", mappingColMatcher: "Matcher", mappingColActions: "Azioni",
@@ -140,7 +140,7 @@ const TRANSLATIONS = {
     validationGoSettings: "Vai alle Impostazioni", validationClose: "Chiudi",
   },
   en: {
-    navSetups: "Installed setups", navDownload: "Download", navUpload: "Upload Setup", navMapping: "Manual associations", navSettings: "Settings",
+    navSetups: "Installed setups", navDownload: "Download", navUpload: "Upload Setup", navCarFilter: "Selected cars", navMapping: "Manual associations", navSettings: "Settings",
     mappingTitle: "Manual mapping",
     mappingDesc: "Manually added track/car matches, used as a fallback when a setup doesn't match mapping.json.",
     mappingColType: "Type", mappingColName: "Name", mappingColMatcher: "Matcher", mappingColActions: "Actions",
@@ -332,7 +332,10 @@ const EXTRA = {
     manualUploadInvalidFileToast: "È supportato solo il formato .zip.",
     dangerCleanupProgress: (n) => `Eliminazione in corso: eliminati ${n} setups`,
     dangerCleanupFoldersProgress: "Pulizia cartelle in corso...",
-    carFilterTitle: "Auto da scaricare",
+    carFilterTitle: "Auto Selezionate",
+    carFilterDesc: "Scegli di quali auto scaricare e aggiornare i setup da TrackTitan.",
+    carFilterColName: "Auto",
+    carFilterColClass: "Classe",
     carFilterAllLabel: "Scarica i setup per tutte le auto",
     carFilterHintAll: "Tutte le auto sono incluse, comprese quelle aggiunte in futuro.",
     carFilterHintSelected: "Verranno scaricati e aggiornati solo i setup delle auto selezionate.",
@@ -405,7 +408,10 @@ const EXTRA = {
     manualUploadInvalidFileToast: "Only the .zip format is supported.",
     dangerCleanupProgress: (n) => `Deletion in progress: ${n} setups deleted`,
     dangerCleanupFoldersProgress: "Cleaning up folders...",
-    carFilterTitle: "Cars to download",
+    carFilterTitle: "Selected cars",
+    carFilterDesc: "Choose which cars to download and update setups for from TrackTitan.",
+    carFilterColName: "Car",
+    carFilterColClass: "Class",
     carFilterAllLabel: "Download setups for all cars",
     carFilterHintAll: "All cars are included, including any added in the future.",
     carFilterHintSelected: "Only setups for the selected cars will be downloaded and updated.",
