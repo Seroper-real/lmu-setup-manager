@@ -167,11 +167,11 @@ function tFn(key, ...args) {
   return extra[key](...args);
 }
 
-// Maps the internal mode key ("full"/"master"/"slave" - unchanged in
+// Maps the internal mode key ("full"/"master"/"slave"/"dual" - unchanged in
 // settings.db, the CLI --mode flag and orchestration/tests) to its
-// user-facing display name (Diretta/Solo Upload/Solo installazione, or the
-// English equivalent).
-const MODE_TITLE_KEYS = { full: "modeFullTitle", master: "modeMasterTitle", slave: "modeSlaveTitle" };
+// user-facing display name (Diretta/Solo Upload/Solo installazione/Master +
+// Locale, or the English equivalent).
+const MODE_TITLE_KEYS = { full: "modeFullTitle", master: "modeMasterTitle", slave: "modeSlaveTitle", dual: "modeDualTitle" };
 function modeDisplayName(modeKey) {
   return t(MODE_TITLE_KEYS[modeKey] || modeKey);
 }
@@ -773,11 +773,11 @@ function renderSetupEntry(s, group, ty, isFirst) {
 
 // Desc-key family for each view's compact, read-only mode-summary card
 // (renderModeSummaryCard below), keyed by mode. Download and Upload each
-// phrase the same three modes' effects differently (Download: what a Start
+// phrase the same four modes' effects differently (Download: what a Start
 // download run does; Upload: what confirming a manual upload does), so they
 // don't share Settings' own general-purpose picker copy either (see
-// renderModePickerCards's modeGeneralFullDesc/MasterDesc/SlaveDesc).
-const DOWNLOAD_MODE_DESC_KEYS = { full: "fullDesc", master: "masterDesc", slave: "slaveDesc" };
+// renderModePickerCards's modeGeneralFullDesc/MasterDesc/SlaveDesc/DualDesc).
+const DOWNLOAD_MODE_DESC_KEYS = { full: "fullDesc", master: "masterDesc", slave: "slaveDesc", dual: "dualDesc" };
 
 // Compact, read-only stand-in for the full mode picker (now in Settings, see
 // renderModePickerCards) - shows the active mode + a shortcut back to Settings
@@ -907,7 +907,7 @@ async function onStartStopClick() {
 
 // ----- Carica Setup / manual upload ---------------------------------------
 
-const UPLOAD_MODE_DESC_KEYS = { full: "uploadFullDesc", master: "uploadMasterDesc", slave: "uploadSlaveDesc" };
+const UPLOAD_MODE_DESC_KEYS = { full: "uploadFullDesc", master: "uploadMasterDesc", slave: "uploadSlaveDesc", dual: "uploadDualDesc" };
 
 // Lazy-fetched once: both lists are static per mapping.json load, so a first
 // visit to the Upload tab is the only time either needs an IPC round trip.
@@ -1270,7 +1270,9 @@ async function onConfirmManualUpload() {
   showToast(t("manualUploadSuccessToast"), "success");
 
   // Master never installs locally, so the Setup installati list has nothing
-  // new to show - only refresh it for the modes that actually write to the DB.
+  // new to show. Every other mode (full, slave and dual - dual installs the
+  // uploaded package locally as well as publishing it) writes to the DB, so
+  // refresh the list for them.
   if (state.selectedMode !== "master") {
     await refreshInstalled();
     renderSetupsView();
@@ -1418,7 +1420,7 @@ function copyField(id, label, value, type, titleAction) {
   `;
 }
 
-// The full, clickable 3-mode picker - lives here (rather than Download/Upload,
+// The full, clickable 4-mode picker - lives here (rather than Download/Upload,
 // which now only show renderModeSummaryCard's compact read-only stand-in)
 // since the mode is an app-wide setting, not something specific to either of
 // those workflows.
@@ -1427,6 +1429,7 @@ function renderModePickerCards() {
     { key: "full", title: t("modeFullTitle"), desc: t("modeGeneralFullDesc") },
     { key: "master", title: t("modeMasterTitle"), desc: t("modeGeneralMasterDesc") },
     { key: "slave", title: t("modeSlaveTitle"), desc: t("modeGeneralSlaveDesc") },
+    { key: "dual", title: t("modeDualTitle"), desc: t("modeGeneralDualDesc") },
   ];
   return modes
     .map(
