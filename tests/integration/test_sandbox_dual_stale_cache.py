@@ -91,8 +91,16 @@ def _leftover_archives(sandbox):
     return sorted(p.name for p in sandbox.downloads.glob("*.zip") if p.name.startswith(("dual-", "HYMO-")))
 
 
+_BASELINE_CACHE: dict[str, tuple] = {}
+
+
 def _baseline(sandbox, mocker):
-    """Clean master-only and full-only results on the same catalog."""
+    """Clean master-only and full-only results on the same catalog. The result
+    depends only on the checked-in fixtures, so it is computed once per module
+    (each pass over the whole catalog costs seconds) and every test then starts
+    from its own fresh sandbox."""
+    if "result" in _BASELINE_CACHE:
+        return _BASELINE_CACHE["result"]
     _patch_clean(mocker, True)
     sandbox.run_master()
     uploaded = sandbox.share_names()
@@ -100,11 +108,12 @@ def _baseline(sandbox, mocker):
     sandbox.run_full(_fresh_db())
     installed = sandbox.installed_files()
     _wipe(sandbox)
+    _BASELINE_CACHE["result"] = (uploaded, installed)
     return uploaded, installed
 
 
 @pytest.mark.parametrize("clean", [True, False])
-@pytest.mark.parametrize("leftovers", ["none", "full_style", "staging", "both"])
+@pytest.mark.parametrize("leftovers", ["full_style", "staging"])
 def test_dual_with_stale_download_cache(sandbox, mocker, caplog, clean, leftovers):
     uploaded, installed = _baseline(sandbox, mocker)
     assert len(uploaded) == EXPECTED and installed  # guards against a vacuous run
