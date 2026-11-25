@@ -102,7 +102,7 @@ class SlaveManager:
         # placeholder "-HYMO" name - recorded for the end-of-run correction
         # dialog instead. Checked before START is even emitted, so a fully
         # ignored setup never appears in the activity log at all.
-        car_name: Optional[str] = self.setup_manager.car_manager.get_car_name(setup.car)
+        car_name: Optional[str] = self.setup_manager.car_manager.get_car_name(setup.car, f"{setup.track} {setup.title}")
         car_matched: bool = car_name is not None
         track_matched = self.setup_manager.track_manager.get_track_folder_name(setup.track) is not None
         if not car_matched or not track_matched:

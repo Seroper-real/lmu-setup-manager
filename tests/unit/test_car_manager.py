@@ -311,3 +311,24 @@ def test_add_or_update_mapping_needs_refresh_to_take_effect(local_manager):
 
     local_manager.refresh()
     assert local_manager.get_car_name("Stuttgart GTP Racer") == "Porsche 963"
+
+
+def test_elms_in_context_prefers_elms_variant(monkeypatch: "pytest.MonkeyPatch") -> None:
+    """TrackTitan marks ELMS in the track name, not the car: car "Oreca 07"
+    with track "Paul Ricard - ELMS" must resolve to "Oreca 07 (ELMS)"."""
+    from processing.car_manager import CarManager
+    mgr = CarManager()
+    assert mgr.get_car_name("Oreca 07") == "Oreca 07"
+    assert mgr.get_car_name("Oreca 07", "Paul Ricard - ELMS") == "Oreca 07 (ELMS)"
+    assert mgr.get_car_name("Oreca 07", "Spa - WEC") == "Oreca 07"
+    assert mgr.get_car_name("Porsche 963", "Paul Ricard - ELMS") == "Porsche 963"
+
+
+def test_elms_only_in_title_resolves_to_elms_variant() -> None:
+    """Real TrackTitan data: ELMS setups can have a plain car name and carry
+    ELMS only in the title."""
+    from processing.car_manager import CarManager
+    mgr = CarManager()
+    ctx = "Daytona International Speedway Road Course Oreca ELMS LMP2 Daytona E-Sports Setup"
+    assert mgr.get_car_name("Oreca 07", ctx) == "Oreca 07 (ELMS)"
+    assert mgr.get_car_name("Oreca 07 Gibson 2024", "Silverstone Oreca WEC LMP2 Silverstone E-Sports Setup") == "Oreca 07"

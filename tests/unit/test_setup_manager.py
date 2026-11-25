@@ -323,14 +323,14 @@ GO_ARCHIVE = {
 }
 
 
-def test_copy_to_lmu_latest_go_only_installs_highest_version(sm, tmp_path, lmu_base):
+def test_copy_to_lmu_latest_only_installs_highest_version(sm, tmp_path, lmu_base):
     src = tmp_path / "extracted"
     src.mkdir()
     for name, data in GO_ARCHIVE.items():
         (src / name).write_bytes(data)
     dest = lmu_base / "Spa"
 
-    copied = sm._copy_file_to_lmu(src, dest, latest_go_only=True)
+    copied = sm._copy_file_to_lmu(src, dest, latest_only=True)
 
     assert {f.name for f in copied} == {"GO V1.4.3 car.svm"}
     assert {f.name for f in dest.iterdir()} == {"GO V1.4.3 car.svm"}
@@ -358,12 +358,31 @@ def test_install_setup_go_records_only_latest_version(sm, sample_setup, lmu_base
     assert [Path(n).name for n in row.file_names] == ["GO V1.4.3 car.svm"]
 
 
-def test_install_setup_hymo_keeps_all_versions(sm, sample_setup, lmu_base, install_setup_env):
-    zip_path = install_setup_env(GO_ARCHIVE)
+HYMO_ARCHIVE: dict[str, bytes] = {
+    "HYMO 1.3.3 TR010 IMO CQ.svm": b"new",
+    "HYMO 1.3.3 TR010 IMO CR.svm": b"new",
+    "HYMO 1.2.9 TR010 IMO CQ.svm": b"old",
+    "HYMO 1.10.0 TR010 IMO CQ.svm": b"newest",
+}
+
+
+def test_install_setup_hymo_records_only_latest_version(sm, sample_setup, lmu_base, install_setup_env):
+    zip_path = install_setup_env(HYMO_ARCHIVE)
 
     sm.install_setup(zip_path, sample_setup)
 
-    assert {f.name for f in (lmu_base / "Spa").iterdir()} == set(GO_ARCHIVE)
+    assert {f.name for f in (lmu_base / "Spa").iterdir()} == {"HYMO 1.10.0 TR010 IMO CQ.svm"}
+    row = sm.database.fetch_installed_setup(sample_setup.id)
+    assert [Path(n).name for n in row.file_names] == ["HYMO 1.10.0 TR010 IMO CQ.svm"]
+
+
+def test_install_setup_hymo_single_version_installs_everything(sm, sample_setup, lmu_base, install_setup_env):
+    names = {k: v for k, v in HYMO_ARCHIVE.items() if "1.3.3" in k}
+    zip_path = install_setup_env(names)
+
+    sm.install_setup(zip_path, sample_setup)
+
+    assert {f.name for f in (lmu_base / "Spa").iterdir()} == set(names)
 
 
 def test_install_setup_go_without_versions_installs_everything(sm, sample_setup, lmu_base, install_setup_env):
@@ -373,3 +392,45 @@ def test_install_setup_go_without_versions_installs_everything(sm, sample_setup,
     sm.install_setup(zip_path, sample_setup, setup_type="GO")
 
     assert {f.name for f in (lmu_base / "Spa").iterdir()} == set(names)
+
+
+def _flag_delete_previous(mocker, value: bool = True) -> None:
+    mocker.patch("processing.setup_manager.DELETE_PREVIOUS_VERSION", value)
+
+
+def _installed(sm, sample_setup, install_setup_env, setup_id: str, files: dict[str, bytes]) -> None:
+    sample_setup.data["id"] = setup_id
+    sm.install_setup(install_setup_env(files), sample_setup)
+
+
+def test_new_id_same_layout_removes_older_version(sm, sample_setup, lmu_base, install_setup_env, mocker):
+    _flag_delete_previous(mocker)
+    _installed(sm, sample_setup, install_setup_env, "old-id", {"HYMO 1.2.4 BMWHY PR CQ.svm": b"o"})
+    _installed(sm, sample_setup, install_setup_env, "new-id", {"HYMO 1.4.3 BMWHY PR CQ.svm": b"n"})
+
+    assert {f.name for f in (lmu_base / "Spa").iterdir()} == {"HYMO 1.4.3 BMWHY PR CQ.svm"}
+    assert sm.database.fetch_installed_setup("old-id") is None
+
+
+def test_new_id_different_layout_keeps_both(sm, sample_setup, lmu_base, install_setup_env, mocker):
+    _flag_delete_previous(mocker)
+    _installed(sm, sample_setup, install_setup_env, "a", {"HYMO 1.4.1 BMWHY PR1A-V2 CQ.svm": b"a"})
+    _installed(sm, sample_setup, install_setup_env, "b", {"HYMO 1.4.3 BMWHY PR CQ.svm": b"b"})
+
+    assert len(list((lmu_base / "Spa").iterdir())) == 2
+    assert sm.database.fetch_installed_setup("a") is not None
+
+
+def test_older_version_does_not_replace_newer_installed(sm, sample_setup, lmu_base, install_setup_env, mocker):
+    _flag_delete_previous(mocker)
+    _installed(sm, sample_setup, install_setup_env, "new-id", {"HYMO 1.4.3 BMWHY PR CQ.svm": b"n"})
+    _installed(sm, sample_setup, install_setup_env, "old-id", {"HYMO 1.2.4 BMWHY PR CQ.svm": b"o"})
+
+    assert {f.name for f in (lmu_base / "Spa").iterdir()} == {"HYMO 1.4.3 BMWHY PR CQ.svm"}
+
+
+def test_cross_id_cleanup_respects_delete_previous_flag(sm, sample_setup, lmu_base, install_setup_env):
+    _installed(sm, sample_setup, install_setup_env, "old-id", {"HYMO 1.2.4 BMWHY PR CQ.svm": b"o"})
+    _installed(sm, sample_setup, install_setup_env, "new-id", {"HYMO 1.4.3 BMWHY PR CQ.svm": b"n"})
+
+    assert len(list((lmu_base / "Spa").iterdir())) == 2

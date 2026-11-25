@@ -220,6 +220,26 @@ class SetupDb:
         finally:
             cursor.close()
 
+    def fetch_other_setups_in_folder(
+        self, setup_id: str, installation_base_path: str, installation_folder: str, setup_type: str,
+    ) -> list[InstalledSetup]:
+        """Rows other than `setup_id` installed into the same LMU folder with the
+        same setup_type - used to retire superseded versions of a setup whose
+        TrackTitan id changed (a new id for the same car/track/layout)."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT * FROM installed_setups WHERE setup_id != ? AND installation_base_path = ? "
+                "AND installation_folder = ? AND setup_type = ?",
+                (setup_id, installation_base_path, installation_folder, setup_type),
+            )
+            return [InstalledSetup.from_row(row) for row in cursor.fetchall()]
+        except Exception as e:
+            log.error(f"Error fetching setups in {installation_folder}: {e}")
+            return []
+        finally:
+            cursor.close()
+
     def delete_installed_setup(self, setup_id: str) -> None:
         with self.conn:
             self.conn.execute("DELETE FROM installed_setups WHERE setup_id = ?", (setup_id,))

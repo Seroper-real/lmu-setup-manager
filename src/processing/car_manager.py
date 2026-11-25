@@ -70,7 +70,19 @@ class CarManager:
         custom_entries = [{"name": m["name"], "matcher": [m["matcher"]]} for m in settings_db.get_manual_mappings("car")]
         self.custom_car_patterns = compile_patterns(custom_entries, pattern_key="matcher", name_key="name")
 
-    def get_car_name(self, car: Optional[str]) -> str | None:
+    def get_car_name(self, car: Optional[str], context: Optional[str] = None) -> str | None:
+        """Resolve the official car name. `context` is extra setup text (track
+        name / title): TrackTitan often marks ELMS only there (e.g. track
+        "Paul Ricard - ELMS" with car plain "Oreca 07"), so when the context
+        mentions ELMS and an "<name> (ELMS)" variant exists, prefer it."""
+        name = self._match_car_name(car)
+        if name is not None and context and re.search(r"\belms\b", context, re.IGNORECASE):
+            variant = f"{name} (ELMS)"
+            if variant in self._car_raw_classes:
+                return variant
+        return name
+
+    def _match_car_name(self, car: Optional[str]) -> str | None:
         # Some TrackTitan catalog entries omit the car entirely (e.g. certain
         # e-sports/event setups) - Setup.car surfaces that as None rather than
         # raising, so this must treat it as "no match" instead of crashing on

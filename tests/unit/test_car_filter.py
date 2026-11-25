@@ -177,7 +177,7 @@ def sm(mocker, tmp_path):
     cm = setup_manager.car_manager
     # Only the exact string "Porsche_963" resolves, so the candidate loop has
     # to walk past "Spa_Porsche_963" to reach it.
-    cm.get_car_name.side_effect = lambda c: "Porsche 963" if c in ("Porsche_963", "Porsche 963") else None
+    cm.get_car_name.side_effect = lambda c, *_: "Porsche 963" if c in ("Porsche_963", "Porsche 963") else None
     cm.is_car_selected.return_value = True
     setup_manager.track_manager.get_track_folder_name.side_effect = lambda t: t
     setup_manager.track_manager.get_official_track_name.side_effect = lambda t: t
@@ -217,7 +217,7 @@ def test_process_checks_each_distinct_resolved_car_then_metadata(sm):
 
 def test_process_with_unresolvable_zip_name_and_no_filter_still_installs(sm):
     manager, dbx, setup_manager = sm
-    setup_manager.car_manager.get_car_name.side_effect = lambda c: "Porsche 963" if c == "Porsche 963" else None
+    setup_manager.car_manager.get_car_name.side_effect = lambda c, *_: "Porsche 963" if c == "Porsche 963" else None
 
     manager._process(_remote("HYMO-Spa_Weird_id1_1000.zip"))
 
@@ -229,7 +229,7 @@ def test_process_with_unresolvable_zip_name_and_no_filter_still_installs(sm):
 def test_process_unresolvable_zip_name_filtered_after_metadata(sm, mocker):
     mocker.patch("orchestration.slave_manager.CLEAN_DOWNLOAD", True)
     manager, dbx, setup_manager = sm
-    setup_manager.car_manager.get_car_name.side_effect = lambda c: "Porsche 963" if c == "Porsche 963" else None
+    setup_manager.car_manager.get_car_name.side_effect = lambda c, *_: "Porsche 963" if c == "Porsche 963" else None
     setup_manager.car_manager.is_car_selected.return_value = False
 
     manager._process(_remote("HYMO-Spa_Weird_id1_1000.zip"))
@@ -246,7 +246,7 @@ def test_process_pre_check_never_skips_when_any_resolved_car_is_selected(sm):
     """A longer candidate can mis-resolve to another car via track text; the
     pre-download check must not skip as long as one resolved car is selected."""
     manager, dbx, setup_manager = sm
-    setup_manager.car_manager.get_car_name.side_effect = lambda c: {
+    setup_manager.car_manager.get_car_name.side_effect = lambda c, *_: {
         "Spa_Porsche_963": "Other Car",
         "Porsche_963": "Porsche 963",
         "Porsche 963": "Porsche 963",
@@ -269,7 +269,7 @@ def test_process_already_installed_skips_before_the_filter(sm):
 def test_process_go_filtered_does_not_download_nor_record_unmatched(sm):
     from domain.go_setup import RemoteGoSetup
     manager, dbx, setup_manager = sm
-    setup_manager.car_manager.get_car_name.side_effect = lambda c: c
+    setup_manager.car_manager.get_car_name.side_effect = lambda c, *_: c
     setup_manager.car_manager.is_car_selected.return_value = False
 
     manager._process_go(RemoteGoSetup(name="GO.zip", path_lower="/a/b/go.zip", car="Oreca 07", track="Imola"))

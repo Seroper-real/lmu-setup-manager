@@ -5,7 +5,7 @@ import shutil
 from core.archive import find_files_recursive, unzip_recursive
 from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, OVERWRITE, SETUP_FILE_EXTENSIONS, LMU_SETUPS_BASE_PATH, DELETE_PREVIOUS_VERSION
 from domain.setup import Setup
-from domain.go_setup import filter_latest_go_version
+from domain.go_setup import compare_versions, filter_latest_go_version, version_key
 from processing.car_manager import CarManager
 from processing.track_manager import TrackManager
 from core.utils import get_path
@@ -59,7 +59,7 @@ class SetupManager:
         run_full/SlaveManager ignore the return value; install_manual_setup_locally
         relies on it to surface a failed manual upload instead of reporting success."""
         setup_installation_dir = self._calculate_setup_installation_dir(setup.track)
-        car_name = self.car_manager.get_car_name(setup.car)
+        car_name = self.car_manager.get_car_name(setup.car, f"{setup.track} {setup.title}")
         if setup_installation_dir is None or car_name is None:
             log.warning(f"Setup not matched, skipping: {setup.track} - {setup.car}")
             if CLEAN_DOWNLOAD:
@@ -74,13 +74,14 @@ class SetupManager:
         if extraction_path.exists(): shutil.rmtree(extraction_path) #To clean previous interrupted elaborations and prevent duplicate file name in extraction
         self._unzip_recursive(downloaded_path, extraction_path)
         extracted_files: list[Path] = self._copy_file_to_lmu(
-            extraction_path, setup_installation_dir, extensions, latest_go_only=(setup_type == "GO"),
+            extraction_path, setup_installation_dir, extensions, latest_only=True,
         )
         installed: bool = len(extracted_files) > 0
         if not installed: log.warning(f"Setup not installed! Not deleting download for manual installation: {setup.id} - {setup.track} - {setup.car}")
         else:
             if DELETE_PREVIOUS_VERSION:
                 self._cleanup_old(self.database.fetch_setup_files(setup.id),setup_installation_dir, extracted_files)
+                extracted_files = self._retire_superseded_versions(setup, setup_type, setup_installation_dir, extracted_files)
             self.database.add_installed_setup(
                 setup, extracted_files, True, setup_installation_dir, track_folder_name,
                 setup_type=setup_type, sha256=sha256,
@@ -99,13 +100,13 @@ class SetupManager:
         return (self.lmu_setups_base_path / track_folder_name) if track_folder_name else None
 
 
-    def _copy_file_to_lmu(self, extraction_path: str | Path, setup_installation_dir: Path, extensions: Optional[set[str]] = None, latest_go_only: bool = False) -> list[Path]:
+    def _copy_file_to_lmu(self, extraction_path: str | Path, setup_installation_dir: Path, extensions: Optional[set[str]] = None, latest_only: bool = False) -> list[Path]:
         extraction_path = get_path(extraction_path)
         exts = extensions if extensions is not None else SETUP_FILE_EXTENSIONS
         files : list[Path] = self._find_files_recursive(extraction_path, exts)
-        if latest_go_only:
-            # GO archives may bundle several versions; install (and record in the
-            # DB) only the highest one. The uploaded Dropbox zip stays untouched.
+        if latest_only:
+            # GO/HYMO archives may bundle several versions; install (and record in
+            # the DB) only the highest one. The uploaded Dropbox zip stays untouched.
             files = filter_latest_go_version(files)
 
         setup_installation_dir.mkdir(parents=True, exist_ok=True) 
@@ -145,6 +146,48 @@ class SetupManager:
             if old_setup_path.exists():
                 old_setup_path.unlink()
                 log.info(f"Deleted previous setup: {old_setup_path}")
+
+    def _retire_superseded_versions(
+        self, setup: Setup, setup_type: str, setup_installation_dir: Path, new_files: list[Path],
+    ) -> list[Path]:
+        """Same car/track/layout can be republished under a NEW TrackTitan id
+        (e.g. v1.2.4 then v1.4.3), so _cleanup_old (same id only) never sees the
+        old copy. Match files across ids in the same LMU folder by their
+        version-less name: the lower version is deleted from disk and from its
+        DB row (the row goes too once empty). If a HIGHER version is already
+        installed, the file just copied is discarded instead and dropped from
+        the returned list. Different layouts have different keys and are kept."""
+        rows = self.database.fetch_other_setups_in_folder(
+            setup.id, str(setup_installation_dir.parent), setup_installation_dir.name, setup_type,
+        )
+        kept: list[Path] = []
+        for new_file in new_files:
+            new_key = version_key(new_file.name)
+            superseded = False
+            if new_key is not None:
+                for row in rows:
+                    for old_name in list(row.file_names):
+                        old_key = version_key(old_name)
+                        if old_key is None or old_key[0] != new_key[0] or old_name == new_file.name:
+                            continue
+                        order = compare_versions(old_key[1], new_key[1])
+                        if order < 0:
+                            (setup_installation_dir / old_name).unlink(missing_ok=True)
+                            row.file_names.remove(old_name)
+                            log.info(f"Deleted superseded setup: {setup_installation_dir / old_name}")
+                        elif order > 0:
+                            superseded = True
+            if superseded:
+                (setup_installation_dir / new_file.name).unlink(missing_ok=True)
+                log.info(f"Newer version already installed, discarded: {new_file.name}")
+            else:
+                kept.append(new_file)
+        for row in rows:
+            if not row.file_names:
+                self.database.delete_installed_setup(row.setup_id)
+            else:
+                self.database.update_installed_setup(row)
+        return kept
 
     def delete_setup(self, setup_id: str) -> bool:
         setup = self.database.fetch_installed_setup(setup_id)

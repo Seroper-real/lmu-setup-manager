@@ -52,7 +52,7 @@ def mm(mocker, tmp_path):
     # unmatched one) overrides .side_effect (not .return_value - side_effect
     # takes priority over it once set) below.
     car_manager = MagicMock()
-    car_manager.get_car_name.side_effect = lambda car: car
+    car_manager.get_car_name.side_effect = lambda car, *_: car
     track_manager = MagicMock()
     track_manager.get_official_track_name.side_effect = lambda track: track
     manager = MasterManager(
@@ -174,7 +174,7 @@ def test_unmatched_setup_is_never_downloaded_or_published(mm, break_track, break
     if break_track:
         manager.track_manager.get_official_track_name.side_effect = lambda track: None
     if break_car:
-        manager.car_manager.get_car_name.side_effect = lambda car: None
+        manager.car_manager.get_car_name.side_effect = lambda car, *_: None
     _pages(dm, [_setup(id="id1", ts=2000)])
 
     manager.run()
@@ -185,7 +185,7 @@ def test_unmatched_setup_is_never_downloaded_or_published(mm, break_track, break
 
 def test_unmatched_setup_is_recorded_with_raw_track_and_car(mm):
     manager, dm, dbx, tmp = mm
-    manager.car_manager.get_car_name.side_effect = lambda car: None
+    manager.car_manager.get_car_name.side_effect = lambda car, *_: None
     _pages(dm, [_setup(id="id1", ts=2000, track="Mystery Circuit", car="Mystery Car")])
 
     manager.run()
@@ -235,7 +235,7 @@ def test_setup_missing_track_recorded_as_unmatched_using_the_title(mm):
 
 def test_unmatched_setups_are_deduped_across_the_run(mm):
     manager, dm, dbx, tmp = mm
-    manager.car_manager.get_car_name.side_effect = lambda car: None
+    manager.car_manager.get_car_name.side_effect = lambda car, *_: None
     _pages(dm, [
         _setup(id="id1", ts=2000, track="Mystery Circuit", car="Mystery Car"),
         _setup(id="id2", ts=2000, track="Mystery Circuit", car="Mystery Car"),
@@ -248,7 +248,7 @@ def test_unmatched_setups_are_deduped_across_the_run(mm):
 
 def test_finish_event_carries_the_unmatched_list(mm):
     manager, dm, dbx, tmp = mm
-    manager.car_manager.get_car_name.side_effect = lambda car: None
+    manager.car_manager.get_car_name.side_effect = lambda car, *_: None
     _pages(dm, [_setup(id="id1", ts=2000, track="Mystery Circuit", car="Mystery Car")])
     events = []
     manager.on_progress = events.append
@@ -283,7 +283,7 @@ def test_a_shared_unmatched_tracker_can_be_injected(mocker, tmp_path):
     dbx = MagicMock()
     dbx.list_setups.return_value = []
     car_manager = MagicMock()
-    car_manager.get_car_name.side_effect = lambda car: None
+    car_manager.get_car_name.side_effect = lambda car, *_: None
     track_manager = MagicMock()
     track_manager.get_official_track_name.side_effect = lambda track: track
     tracker = UnmatchedTracker()
@@ -325,7 +325,7 @@ def test_upload_publishes_under_the_officialized_car_and_track_names(mm, mocker)
     raw "Oreca 07 Gibson 2024 (ELMS)" catalog car must publish under Dropbox's
     "Oreca 07 (ELMS)" folder, not its own sanitized raw text."""
     manager, dm, dbx, tmp = mm
-    manager.car_manager.get_car_name.side_effect = lambda car: "Oreca 07 (ELMS)"
+    manager.car_manager.get_car_name.side_effect = lambda car, *_: "Oreca 07 (ELMS)"
     manager.track_manager.get_official_track_name.side_effect = lambda track: "Spa"
     setup = _setup(id="id1", ts=2000, car="Oreca 07 Gibson 2024 (ELMS)")
     _pages(dm, [setup])
@@ -334,7 +334,7 @@ def test_upload_publishes_under_the_officialized_car_and_track_names(mm, mocker)
 
     manager.run()
 
-    manager.car_manager.get_car_name.assert_called_once_with("Oreca 07 Gibson 2024 (ELMS)")
+    manager.car_manager.get_car_name.assert_called_once()
     manager.track_manager.get_official_track_name.assert_called_once_with("Spa")
     dbx.upload.assert_called_once()
     _, name_arg = dbx.upload.call_args[0]
@@ -344,7 +344,7 @@ def test_upload_publishes_under_the_officialized_car_and_track_names(mm, mocker)
 
 def test_relocate_target_uses_the_officialized_car_and_track_names(mm):
     manager, dm, dbx, tmp = mm
-    manager.car_manager.get_car_name.side_effect = lambda car: "Oreca 07 (ELMS)"
+    manager.car_manager.get_car_name.side_effect = lambda car, *_: "Oreca 07 (ELMS)"
     dbx.list_setups.return_value = [
         _remote("Oreca 07 Gibson 2024 (ELMS)/Spa/HYMO-Spa_Oreca_07_Gibson_2024__ELMS__id1_1000.zip", "id1", 1000)
     ]
@@ -538,3 +538,50 @@ def test_cancel_event_set_before_run_dispatches_nothing(mm, mocker):
 
     dm.download.assert_not_called()
     dbx.upload.assert_not_called()
+
+
+def _old_zip(tmp, names):
+    p = tmp / "old.zip"
+    with zipfile.ZipFile(p, "w") as zf:
+        for n in names:
+            zf.writestr(n, "x")
+    return p
+
+
+def _publish_with_old_sibling(mm, mocker, old_names, new_names):
+    manager, dm, dbx, tmp = mm
+    dbx.list_setups.return_value = [_remote("Porsche 963/Spa/HYMO-Spa_Porsche_963_oldid_1000.zip", "oldid", 1000)]
+    old = _old_zip(tmp, old_names)
+    dbx.download_to.side_effect = lambda path, local: (Path(local).write_bytes(old.read_bytes()), Path(local))[1]
+    _pages(manager.download_manager, [_setup(id="newid", ts=2000)])
+    _downloadable(manager.download_manager, tmp)
+    _fake_extraction(mocker, [_svm(tmp, n) for n in new_names])
+    manager.run()
+    return dbx
+
+
+def test_new_id_same_layout_deletes_older_share_zip(mm, mocker):
+    dbx = _publish_with_old_sibling(
+        mm, mocker, ["HYMO 1.2.4 BMWHY PR CQ.svm"], ["HYMO 1.4.3 BMWHY PR CQ.svm"],
+    )
+    dbx.upload.assert_called_once()
+    dbx.delete_if_exists.assert_called_once_with("/lmu-setups/porsche 963/spa/hymo-spa_porsche_963_oldid_1000.zip")
+
+
+def test_new_id_different_layout_keeps_older_share_zip(mm, mocker):
+    dbx = _publish_with_old_sibling(
+        mm, mocker, ["HYMO 1.4.1 BMWHY PR1A-V2 CQ.svm"], ["HYMO 1.4.3 BMWHY PR CQ.svm"],
+    )
+    dbx.upload.assert_called_once()
+    dbx.delete_if_exists.assert_not_called()
+
+
+def test_older_share_zip_kept_when_upload_fails(mm, mocker):
+    manager, dm, dbx, tmp = mm
+    dbx.upload.side_effect = RuntimeError("boom")
+    dbx.list_setups.return_value = [_remote("Porsche 963/Spa/HYMO-Spa_Porsche_963_oldid_1000.zip", "oldid", 1000)]
+    _pages(dm, [_setup(id="newid", ts=2000)])
+    _downloadable(dm, tmp)
+    _fake_extraction(mocker, [_svm(tmp, "HYMO 1.4.3 BMWHY PR CQ.svm")])
+    manager.run()
+    dbx.delete_if_exists.assert_not_called()

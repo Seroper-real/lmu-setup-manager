@@ -65,7 +65,7 @@ def sm(mocker, tmp_path):
     # manager.unmatched) on an unmatched car/track rather than installing
     # under a placeholder name. A test that wants the unmatched path sets
     # one of these to a `lambda _: None` side_effect instead.
-    setup_manager.car_manager.get_car_name.side_effect = lambda car: car
+    setup_manager.car_manager.get_car_name.side_effect = lambda car, *_: car
     setup_manager.track_manager.get_track_folder_name.side_effect = lambda track: track
     setup_manager.track_manager.get_official_track_name.side_effect = lambda track: track
     database = MagicMock()
@@ -119,7 +119,7 @@ def test_process_skips_unmatched_setup_and_records_it(sm):
     manager, dbx, setup_manager, database, tmp = sm
     database.is_installed_last_version.return_value = False
     dbx.download_to.side_effect = _fake_download
-    setup_manager.car_manager.get_car_name.side_effect = lambda car: None
+    setup_manager.car_manager.get_car_name.side_effect = lambda car, *_: None
 
     manager._process(_remote())
 

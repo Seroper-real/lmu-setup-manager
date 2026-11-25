@@ -130,3 +130,12 @@ def test_filter_returns_new_list_when_no_versions():
 def test_filter_same_name_in_different_dirs_both_kept():
     files = [Path("x/GO V1.4.3 a.svm"), Path("y/GO V1.4.3 a.svm"), Path("x/GO V1.0.0 a.svm")]
     assert filter_latest_go_version(files) == files[:2]
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("HYMO 1.3.3 TR010 IMO CQ.svm", (1, 3, 3)),
+    ("hymo 1.10.0 x.svm", (1, 10, 0)),
+    ("HYMO TR010 IMO CQ.svm", None),
+])
+def test_parse_hymo_version(name, expected):
+    assert parse_go_version(name) == expected

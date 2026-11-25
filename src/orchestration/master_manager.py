@@ -13,6 +13,7 @@ from core.config import CLEAN_DOWNLOAD, DOWNLOAD_PATH, DROPBOX_UPLOAD_WORKERS, S
 from core.errors import AuthError
 from core.progress import ProgressCallback, ProgressEvent, ProgressKind
 from orchestration.download_manager import DownloadManager
+from domain.go_setup import compare_versions, version_key
 from domain.setup import RemoteSetup, Setup
 from domain.unmatched import UnmatchedTracker
 from processing.car_manager import CarManager
@@ -62,6 +63,9 @@ class MasterManager:
         self.track_manager = track_manager if track_manager is not None else TrackManager()
         self._local = threading.local()
         self._dispatched: set[str] = set()
+        # Share paths already deleted as superseded (other-id) versions, shared by workers.
+        self._retired: set[str] = set()
+        self._retired_lock = threading.Lock()
         self.on_progress = on_progress
         self.cancel_event = cancel_event
         self.unmatched = unmatched if unmatched is not None else UnmatchedTracker()
@@ -135,7 +139,7 @@ class MasterManager:
         # field, so a missing field gets the same best-effort match attempt as
         # a present one instead of skipping outright (see
         # domain.setup.Setup.car/track).
-        car_name = self.car_manager.get_car_name(setup.car)
+        car_name = self.car_manager.get_car_name(setup.car, f"{setup.track} {setup.title}")
         track_name = self.track_manager.get_official_track_name(setup.track)
 
         # Unmatched car/track: ignored outright, never uploaded under a raw/
@@ -180,7 +184,8 @@ class MasterManager:
 
         self._dispatched.add(setup.id)
         slots.acquire()
-        pending.append((setup, pool.submit(self._publish, setup, existing, original_zip, slots)))
+        siblings: list[RemoteSetup] = self._sibling_shares(setup, remote)
+        pending.append((setup, pool.submit(self._publish, setup, existing, original_zip, slots, siblings)))
 
     def _on_share_up_to_date(self, setup: Setup, existing: RemoteSetup, current_path: str) -> None:
         """Hook for subclasses (see orchestration.dual_manager.DualManager): called
@@ -235,6 +240,7 @@ class MasterManager:
         existing: Optional[RemoteSetup],
         original_zip: Path,
         slots: threading.Semaphore,
+        siblings: Optional[list[RemoteSetup]] = None,
     ) -> bool:
         """Runs on a worker: repackage and publish. Returns whether an upload happened."""
         extraction_path = Path(DOWNLOAD_PATH) / setup.id
@@ -256,11 +262,65 @@ class MasterManager:
             if existing and existing.name != setup.remote_filename:
                 client.delete(existing.path_lower)
                 log.info(f"[{tag}] Deleted previous share version: {existing.name}")
+            if siblings:
+                self._retire_superseded_shares(client, svm_files, siblings, tag)
             self._emit(ProgressEvent(ProgressKind.INSTALL, setup.title, meta=f"{setup.track} - {setup.car}"))
             return True
         finally:
             self._cleanup(original_zip, extraction_path, package_path)
             slots.release()
+
+    def _sibling_shares(self, setup: Setup, remote: dict[str, RemoteSetup]) -> list[RemoteSetup]:
+        """Zips of OTHER ids already sitting in this setup's car/track share
+        folder: candidates for being an older version of the same setup (see
+        _retire_superseded_shares). Snapshot taken on the producer thread."""
+        folder: str = self.dropbox_client.remote_path(f"{setup.safe_car}/{setup.safe_track}").lower()
+        return [
+            r for r in remote.values()
+            if r.setup_id != setup.id and r.path_lower.rsplit("/", 1)[0] == folder
+        ]
+
+    def _retire_superseded_shares(
+        self, client: DropboxClientProtocol, svm_files: list[Path], siblings: list[RemoteSetup], tag: str,
+    ) -> None:
+        """A republished setup can come back under a NEW TrackTitan id, so the
+        same-id delete in _publish never removes the old zip. Treat it as the
+        same setup: a sibling zip is deleted when every versioned file in it has
+        a counterpart in the new package (same version-less name = same layout)
+        with a strictly higher version. A zip holding anything else (another
+        layout, an unversioned file) is kept. Runs only after a successful
+        upload, and never fails the publish."""
+        newest: dict[str, tuple[int, ...]] = {}
+        for svm in svm_files:
+            parsed = version_key(svm.name)
+            if parsed is not None and (parsed[0] not in newest or compare_versions(parsed[1], newest[parsed[0]]) > 0):
+                newest[parsed[0]] = parsed[1]
+        if not newest:
+            return
+        for sibling in siblings:
+            with self._retired_lock:
+                if sibling.path_lower in self._retired:
+                    continue
+            local = Path(DOWNLOAD_PATH) / f"sibling-{sibling.setup_id}.zip"
+            try:
+                client.download_to(sibling.path_lower, local)
+                with zipfile.ZipFile(local) as zf:
+                    names = [Path(n).name for n in zf.namelist() if Path(n).suffix.lower() in SETUP_FILE_EXTENSIONS]
+                keys = [version_key(n) for n in names]
+                if not names or any(
+                    k is None or k[0] not in newest or compare_versions(k[1], newest[k[0]]) >= 0 for k in keys
+                ):
+                    continue
+                client.delete_if_exists(sibling.path_lower)
+                with self._retired_lock:
+                    self._retired.add(sibling.path_lower)
+                log.info(f"[{tag}] Deleted superseded share version (other id): {sibling.name}")
+            except AuthError:
+                raise
+            except Exception as e:
+                log.warning(f"[{tag}] Could not check/retire {sibling.name}: {e}")
+            finally:
+                local.unlink(missing_ok=True)
 
     def _worker_client(self) -> DropboxClientProtocol:
         """One Dropbox client per worker thread: the SDK wraps a requests.Session,

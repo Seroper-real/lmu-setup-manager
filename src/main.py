@@ -178,7 +178,7 @@ def run_full(
             # when TrackTitan's pagination API omits the field, so a missing
             # field gets the same best-effort match attempt as a present one
             # instead of skipping outright (see domain.setup.Setup.car/track).
-            car_name = car_manager.get_car_name(setup.car)
+            car_name = car_manager.get_car_name(setup.car, f"{setup.track} {setup.title}")
             track_name = track_manager.get_official_track_name(setup.track)
             if car_name is None or track_name is None:
                 log.warning(f"Setup not matched, skipping: {setup.track} - {setup.car}")
